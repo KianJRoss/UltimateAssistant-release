@@ -1,0 +1,40 @@
+name: Publication checks
+on:
+  push:
+    branches: [main]
+    paths: ["apps/**", "components/**", "tools/**", "README.md", "RELEASE-NOTES.md", "preview-release.json", "SHA256SUMS.txt"]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - name: Check selected Python source and installer inventory
+        run: |
+          python - <<'PY'
+          import ast, re
+          from pathlib import Path
+          for root in ('apps', 'components', 'tools'):
+              for path in Path(root).rglob('*.py'):
+                  ast.parse(path.read_text(encoding='utf-8-sig'), filename=str(path))
+          for path in ('apps/assistant/Install-UltimateAssistant.cmd', 'apps/assistant/Install-UltimateAssistant.ps1', 'apps/assistant/VERSION', 'components/herald/LICENSE', 'apps/assistant/models/kokoro/LICENSE-Apache-2.0.txt'):
+              assert Path(path).is_file(), path
+          version = Path('apps/assistant/VERSION').read_text().strip()
+          assert re.fullmatch(r'\d+\.\d+\.\d+', version)
+          builder = Path('apps/assistant/build-installer.ps1').read_text(encoding='utf-8-sig')
+          assert f'[string]$Version = "{version}"' in builder
+          print('Source syntax and installer inventory passed')
+          PY
+      - name: Check public source archive
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          HERALD_PRIVATE_MARKERS: ${{ secrets.HERALD_PRIVATE_MARKERS }}
+        run: |
+          git archive --format=zip HEAD --output="$RUNNER_TEMP/public-source.zip"
+          python tools/check_publication_artifacts.py --require-private-markers "$RUNNER_TEMP/public-source.zip"
