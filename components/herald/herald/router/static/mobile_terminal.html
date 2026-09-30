@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07111f">
+  <title>Herald Advanced Terminal</title>
+  <link rel="stylesheet" href="/static/herald-ui.css">
+  <style>
+    :root { color-scheme: dark; --bg:#07111f; --panel:#0d1b2a; --line:#26384c; --text:#e7edf5; --muted:#8492a6; --accent:#52d6ff; }
+    * { box-sizing:border-box; }
+    html,body { height:100%; margin:0; overflow:hidden; background:var(--bg); color:var(--text); font-family:Inter,system-ui,sans-serif; }
+    body { display:grid; grid-template-rows:auto auto 1fr; min-height:100dvh; }
+    header { padding:max(10px,env(safe-area-inset-top)) 12px 8px; border-bottom:1px solid var(--line); background:#091522; }
+    .brand { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+    .brand strong { color:var(--accent); font-family:var(--hz-font-display,ui-monospace,monospace); letter-spacing:.12em; font-size:14px; }
+    #connection { color:var(--muted); font-size:12px; }
+    #sessions { display:flex; gap:7px; overflow-x:auto; padding-top:9px; scrollbar-width:none; }
+    #sessions button { border:1px solid var(--line); border-radius:999px; background:#132235; color:var(--text); font-family:var(--hz-font-display,ui-monospace,monospace); font-size:12px; font-weight:600; padding:8px 12px; white-space:nowrap; }
+    #sessions button.active { border-color:var(--accent); background:#0e5263; }
+    #sessions button.offline { opacity:.55; }
+    #composer { background:var(--panel); border-bottom:1px solid var(--line); padding:8px 10px; }
+    #composer label { color:var(--accent); display:block; font-size:12px; font-weight:700; letter-spacing:.08em; margin-bottom:5px; }
+    textarea { width:100%; min-height:58px; max-height:150px; resize:vertical; border:1px solid #3a5068; border-radius:8px; background:#050b12; color:#fff; font:16px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace; padding:9px; outline:none; }
+    textarea:focus { border-color:var(--accent); box-shadow:0 0 0 2px #52d6ff28; }
+    .controls { display:flex; gap:6px; overflow-x:auto; padding-top:7px; scrollbar-width:none; }
+    .controls button { min-height:36px; flex:0 0 auto; border:1px solid #41566e; border-radius:7px; background:#17283b; color:#fff; font-family:var(--hz-font-display,ui-monospace,monospace); font-size:12.5px; padding:6px 11px; font-weight:650; }
+    .controls .send { background:#08758b; border-color:#52d6ff; min-width:78px; }
+    #viewport { min-height:0; overflow:auto; overscroll-behavior:contain; padding:8px 9px max(12px,env(safe-area-inset-bottom)); }
+    #screen { margin:0; min-height:100%; color:#d9e2ec; font:13px/1.25 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap; overflow-wrap:anywhere; tab-size:4; }
+    #empty { color:var(--muted); padding:24px 10px; text-align:center; }
+    @media (min-width:800px) { body { max-width:1100px; margin:auto; border-inline:1px solid var(--line); } #screen { font-size:14px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand"><strong>◆ HERALD MOBILE</strong><span id="connection">connecting…</span></div>
+    <nav id="sessions" aria-label="CLI sessions"></nav>
+  </header>
+  <section id="composer">
+    <label for="prompt">TYPE OR EDIT HERE — THEN SEND</label>
+    <textarea id="prompt" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" enterkeyhint="send" placeholder="Try /usage, /settings, or a normal prompt"></textarea>
+    <div class="controls">
+      <button class="send" data-action="send">Send</button>
+      <button data-key="tab">Tab</button><button data-key="escape">Esc</button>
+      <button data-key="interrupt">Ctrl-C</button><button data-key="up">↑</button>
+      <button data-key="down">↓</button><button data-key="left">←</button>
+      <button data-key="right">→</button><button data-key="backspace">⌫</button>
+    </div>
+  </section>
+  <main id="viewport"><pre id="screen"></pre><div id="empty">Choose a session above.</div></main>
+  <script>
+    const sessionsEl=document.getElementById('sessions'), promptEl=document.getElementById('prompt');
+    const screenEl=document.getElementById('screen'), emptyEl=document.getElementById('empty');
+    const viewport=document.getElementById('viewport'), connection=document.getElementById('connection');
+    let active=localStorage.getItem('herald-mobile-session')||'herald', timer=null, sending=false;
+    const api=async(path,options={})=>{const r=await fetch(path,options);const body=await r.json();if(!r.ok)throw new Error(body.detail||`HTTP ${r.status}`);return body};
+    const post=(path,body)=>api(path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+    async function loadSessions(){
+      const data=await api('/mobile/api/sessions'); sessionsEl.replaceChildren();
+      for(const row of data.sessions){const b=document.createElement('button');b.textContent=row.label;b.dataset.id=row.id;
+        b.classList.toggle('active',row.id===active);b.classList.toggle('offline',!row.running);b.title=row.description;
+        b.onclick=()=>selectSession(row.id);sessionsEl.append(b)}
+      connection.textContent='router online';
+    }
+    async function selectSession(id){active=id;localStorage.setItem('herald-mobile-session',id);await post(`/mobile/api/sessions/${id}/start`,{});await loadSessions();await refresh(true);promptEl.focus()}
+    async function refresh(forceBottom=false){
+      if(!active||sending)return;const nearBottom=viewport.scrollHeight-viewport.scrollTop-viewport.clientHeight<80;
+      try{const data=await api(`/mobile/api/sessions/${active}/screen?lines=400`);screenEl.textContent=data.screen||'';emptyEl.hidden=!!data.screen;connection.textContent=`${data.label} · live`;if(forceBottom||nearBottom)viewport.scrollTop=viewport.scrollHeight}
+      catch(e){connection.textContent=e.message}
+    }
+    async function send(){const text=promptEl.value;if(!text)return;sending=true;try{await post(`/mobile/api/sessions/${active}/input`,{text,submit:true});promptEl.value='';promptEl.blur();await refresh(true)}finally{sending=false}}
+    document.querySelector('.controls').onclick=async e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.action==='send')await send();else if(b.dataset.key){await post(`/mobile/api/sessions/${active}/key`,{key:b.dataset.key});await refresh(true)}};
+    promptEl.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}};
+    (async()=>{try{await loadSessions();await selectSession(active);timer=setInterval(refresh,700)}catch(e){connection.textContent=e.message}})();
+  </script>
+</body>
+</html>

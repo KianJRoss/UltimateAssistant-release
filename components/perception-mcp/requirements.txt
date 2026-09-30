@@ -1,0 +1,6 @@
+mcp>=1.28,<2
+mss>=9.0.1
+pillow>=10.0.0
+rapidocr-onnxruntime>=1.2.3
+numpy>=1.26.0
+requests>=2.31.0

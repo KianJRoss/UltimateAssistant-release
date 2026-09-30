@@ -1,0 +1,143 @@
+{
+  "_README": {
+    "description": "Model metadata for Mistral AI API access.",
+    "documentation": "https://github.com/BeehiveInnovations/pal-mcp-server/blob/main/docs/custom_models.md",
+    "usage": "Models listed here are exposed directly through the Mistral AI provider. Aliases are case-insensitive.",
+    "field_notes": "Matches providers/shared/model_capabilities.py.",
+    "setup_instructions": {
+      "1_get_api_key": "Get your Mistral API key from https://console.mistral.ai/",
+      "2_set_env_var": "Set MISTRAL_API_KEY=your_api_key_here in .env file",
+      "3_optional_config": "Optionally set MISTRAL_MODELS_CONFIG_PATH to use custom model definitions"
+    },
+    "pricing_note": "Mistral offers competitive pricing compared to OpenAI/Anthropic. Check https://mistral.ai/pricing for current rates."
+  },
+  "models": [
+    {
+      "model_name": "mistral-large-latest",
+      "friendly_name": "Mistral Large (Latest)",
+      "aliases": [
+        "mistral-large",
+        "large",
+        "ml"
+      ],
+      "intelligence_score": 16,
+      "description": "Mistral Large (128K context) - Flagship model with advanced reasoning and multilingual capabilities",
+      "context_window": 128000,
+      "max_output_tokens": 64000,
+      "supports_extended_thinking": false,
+      "supports_system_prompts": true,
+      "supports_streaming": true,
+      "supports_function_calling": true,
+      "supports_json_mode": true,
+      "supports_images": false,
+      "supports_temperature": true,
+      "max_image_size_mb": 0.0
+    },
+    {
+      "model_name": "mistral-medium-latest",
+      "friendly_name": "Mistral Medium (Latest)",
+      "aliases": [
+        "mistral-medium",
+        "medium",
+        "mm"
+      ],
+      "intelligence_score": 14,
+      "description": "Mistral Medium (32K context) - Balanced performance and cost for general tasks",
+      "context_window": 32768,
+      "max_output_tokens": 16384,
+      "supports_extended_thinking": false,
+      "supports_system_prompts": true,
+      "supports_streaming": true,
+      "supports_function_calling": true,
+      "supports_json_mode": true,
+      "supports_images": false,
+      "supports_temperature": true,
+      "max_image_size_mb": 0.0
+    },
+    {
+      "model_name": "mistral-small-latest",
+      "friendly_name": "Mistral Small (Latest)",
+      "aliases": [
+        "mistral-small",
+        "small",
+        "ms"
+      ],
+      "intelligence_score": 12,
+      "description": "Mistral Small (32K context) - Fast and cost-effective for simple tasks",
+      "context_window": 32768,
+      "max_output_tokens": 16384,
+      "supports_extended_thinking": false,
+      "supports_system_prompts": true,
+      "supports_streaming": true,
+      "supports_function_calling": true,
+      "supports_json_mode": true,
+      "supports_images": false,
+      "supports_temperature": true,
+      "max_image_size_mb": 0.0
+    },
+    {
+      "model_name": "codestral-latest",
+      "friendly_name": "Codestral (Latest)",
+      "aliases": [
+        "codestral",
+        "code",
+        "mc"
+      ],
+      "intelligence_score": 15,
+      "description": "Codestral (32K context) - Specialized coding model with advanced code generation",
+      "context_window": 32768,
+      "max_output_tokens": 16384,
+      "supports_extended_thinking": false,
+      "supports_system_prompts": true,
+      "supports_streaming": true,
+      "supports_function_calling": true,
+      "supports_json_mode": true,
+      "supports_images": false,
+      "supports_temperature": true,
+      "max_image_size_mb": 0.0,
+      "allow_code_generation": true
+    },
+    {
+      "model_name": "pixtral-large-latest",
+      "friendly_name": "Pixtral Large (Latest)",
+      "aliases": [
+        "pixtral-large",
+        "pixtral",
+        "vision"
+      ],
+      "intelligence_score": 16,
+      "description": "Pixtral Large (128K context) - Multimodal model with vision capabilities",
+      "context_window": 128000,
+      "max_output_tokens": 64000,
+      "supports_extended_thinking": false,
+      "supports_system_prompts": true,
+      "supports_streaming": true,
+      "supports_function_calling": true,
+      "supports_json_mode": true,
+      "supports_images": true,
+      "supports_temperature": true,
+      "max_image_size_mb": 20.0
+    },
+    {
+      "model_name": "ministral-8b-latest",
+      "friendly_name": "Ministral 8B (Latest)",
+      "aliases": [
+        "ministral-8b",
+        "ministral",
+        "m8b"
+      ],
+      "intelligence_score": 10,
+      "description": "Ministral 8B (128K context) - Lightweight model for edge and high-throughput applications",
+      "context_window": 128000,
+      "max_output_tokens": 64000,
+      "supports_extended_thinking": false,
+      "supports_system_prompts": true,
+      "supports_streaming": true,
+      "supports_function_calling": true,
+      "supports_json_mode": true,
+      "supports_images": false,
+      "supports_temperature": true,
+      "max_image_size_mb": 0.0
+    }
+  ]
+}

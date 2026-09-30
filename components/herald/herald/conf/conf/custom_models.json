@@ -1,0 +1,187 @@
+{
+  "_README": {
+    "description": "Model metadata for local/self-hosted OpenAI-compatible endpoints (Custom provider).",
+    "documentation": "https://github.com/BeehiveInnovations/pal-mcp-server/blob/main/docs/custom_models.md",
+    "usage": "Each entry will be advertised by the Custom provider. Aliases are case-insensitive.",
+    "field_notes": "Matches providers/shared/model_capabilities.py.",
+    "field_descriptions": {
+      "model_name": "The model identifier e.g., 'llama3.2'",
+      "aliases": "Array of short names users can type instead of the full model name",
+      "context_window": "Total number of tokens the model can process (input + output combined)",
+      "max_output_tokens": "Maximum number of tokens the model can generate in a single response",
+      "supports_extended_thinking": "Whether the model supports extended reasoning tokens",
+      "supports_json_mode": "Whether the model can guarantee valid JSON output",
+      "supports_function_calling": "Whether the model supports function/tool calling",
+      "supports_images": "Whether the model can process images/visual input",
+      "max_image_size_mb": "Maximum total size in MB for all images combined (capped at 40MB max for custom models)",
+      "supports_temperature": "Whether the model accepts temperature parameter in API calls (set to false for O3/O4 reasoning models)",
+      "temperature_constraint": "Type of temperature constraint: 'fixed' (fixed value), 'range' (continuous range), 'discrete' (specific values), or omit for default range",
+      "description": "Human-readable description of the model",
+      "intelligence_score": "1-20 human rating used as the primary signal for auto-mode model ordering"
+    }
+  },
+  "models": [
+    {
+      "model_name": "deepseek-v3.1:671b-cloud",
+      "friendly_name": "DeepSeek V3.1 671B (Ollama Cloud)",
+      "aliases": [
+        "deepseek",
+        "deepseek-v3.1",
+        "deepseek-v3"
+      ],
+      "context_window": 128000,
+      "max_output_tokens": 64000,
+      "supports_extended_thinking": false,
+      "supports_json_mode": true,
+      "supports_function_calling": false,
+      "supports_images": false,
+      "max_image_size_mb": 0.0,
+      "description": "DeepSeek V3.1 671B - Cloud-backed via Ollama (671B params, FP8 quantization)",
+      "intelligence_score": 19
+    },
+    {
+      "model_name": "gpt-oss:120b-cloud",
+      "friendly_name": "GPT-OSS 120B (Ollama Cloud)",
+      "aliases": [
+        "gpt-oss-120b",
+        "gptoss120b"
+      ],
+      "context_window": 128000,
+      "max_output_tokens": 64000,
+      "supports_extended_thinking": false,
+      "supports_json_mode": true,
+      "supports_function_calling": false,
+      "supports_images": false,
+      "max_image_size_mb": 0.0,
+      "description": "GPT-OSS 120B - Cloud-backed via Ollama (116.8B params, MXFP4 quantization)",
+      "intelligence_score": 17
+    },
+    {
+      "model_name": "llama3.2:latest",
+      "friendly_name": "Llama 3.2 (Ollama Local)",
+      "aliases": [
+        "llama3.2",
+        "llama",
+        "local-llama"
+      ],
+      "context_window": 128000,
+      "max_output_tokens": 64000,
+      "supports_extended_thinking": false,
+      "supports_json_mode": false,
+      "supports_function_calling": false,
+      "supports_images": false,
+      "max_image_size_mb": 0.0,
+      "description": "Llama 3.2 - Local via Ollama (3.2B params, Q4_K_M quantization, 2GB)",
+      "intelligence_score": 8
+    },
+    {
+      "model_name": "all-minilm:latest",
+      "friendly_name": "All-MiniLM (Ollama Local)",
+      "aliases": [
+        "all-minilm",
+        "minilm",
+        "embeddings"
+      ],
+      "context_window": 512,
+      "max_output_tokens": 0,
+      "supports_extended_thinking": false,
+      "supports_json_mode": false,
+      "supports_function_calling": false,
+      "supports_images": false,
+      "max_image_size_mb": 0.0,
+      "description": "All-MiniLM - Embeddings via Ollama (23M params, F16, 46MB)",
+      "intelligence_score": 5
+    },
+    {
+      "model_name": "fuseo1-deepseekr1-qwen2.5-coder-32b-preview",
+      "friendly_name": "FuseO1 DeepSeek R1 Qwen 32B (LM Studio)",
+      "aliases": [
+        "lms-fuseo1",
+        "fuseo1",
+        "deepseek-coder"
+      ],
+      "context_window": 128000,
+      "max_output_tokens": 64000,
+      "supports_extended_thinking": false,
+      "supports_json_mode": true,
+      "supports_function_calling": true,
+      "supports_images": false,
+      "max_image_size_mb": 0.0,
+      "description": "FuseO1 DeepSeek R1 Qwen 2.5 Coder 32B via LM Studio - Advanced coding model (128K context)",
+      "intelligence_score": 18
+    },
+    {
+      "model_name": "qwen/qwen2.5-coder-32b",
+      "friendly_name": "Qwen 2.5 Coder 32B (LM Studio)",
+      "aliases": [
+        "lms-qwen-coder",
+        "qwen-coder",
+        "qwen-coder-32b"
+      ],
+      "context_window": 128000,
+      "max_output_tokens": 64000,
+      "supports_extended_thinking": false,
+      "supports_json_mode": true,
+      "supports_function_calling": true,
+      "supports_images": false,
+      "max_image_size_mb": 0.0,
+      "description": "Qwen 2.5 Coder 32B via LM Studio - Specialized coding model (128K context)",
+      "intelligence_score": 16
+    },
+    {
+      "model_name": "openai/gpt-oss-20b",
+      "friendly_name": "GPT-OSS 20B (LM Studio)",
+      "aliases": [
+        "lms-gpt-oss",
+        "gpt-oss",
+        "gpt-oss-20b"
+      ],
+      "context_window": 100000,
+      "max_output_tokens": 50000,
+      "supports_extended_thinking": false,
+      "supports_json_mode": true,
+      "supports_function_calling": false,
+      "supports_images": false,
+      "max_image_size_mb": 0.0,
+      "description": "GPT-OSS 20B via LM Studio - Open source GPT model (100K context)",
+      "intelligence_score": 12
+    },
+    {
+      "model_name": "text-embedding-nomic-embed-text-v1.5",
+      "friendly_name": "Nomic Embed v1.5 (LM Studio)",
+      "aliases": [
+        "lms-nomic",
+        "nomic-embed"
+      ],
+      "context_window": 8192,
+      "max_output_tokens": 0,
+      "supports_extended_thinking": false,
+      "supports_json_mode": false,
+      "supports_function_calling": false,
+      "supports_images": false,
+      "max_image_size_mb": 0.0,
+      "description": "Nomic Embed Text v1.5 - Embedding model via LM Studio (8K context)",
+      "intelligence_score": 5
+    },
+    {
+      "model_name": "qwen2.5-coder-7b-instruct",
+      "friendly_name": "Qwen 2.5 Coder 7B (LM Studio)",
+      "aliases": [
+        "qwen7b",
+        "qwen-fast",
+        "coder7b",
+        "fast-coder",
+        "qwen-7b"
+      ],
+      "context_window": 32768,
+      "max_output_tokens": 16384,
+      "supports_extended_thinking": false,
+      "supports_json_mode": true,
+      "supports_function_calling": true,
+      "supports_images": false,
+      "max_image_size_mb": 0.0,
+      "description": "Qwen 2.5 Coder 7B via LM Studio - Ultra-fast coding model (60-80 tok/sec, SOTA for size)",
+      "intelligence_score": 17
+    }
+  ]
+}

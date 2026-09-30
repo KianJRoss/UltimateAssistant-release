@@ -1,0 +1,1447 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="app-token" content="__APP_TOKEN__">
+  <title>Ultimate Assistant</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, "Segoe UI", sans-serif; background: #101319; color: #eef1f7; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at top, #20283a 0, #101319 58%); }
+    .shell { width: min(900px, 100%); height: 100vh; min-height: 520px; margin: auto; padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 4px 2px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .mark { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 14px; background: linear-gradient(145deg, #7b8cff, #a57aff); font-size: 22px; box-shadow: 0 8px 28px #7886ff30; }
+    h1 { font-size: 17px; margin: 0 0 3px; letter-spacing: .2px; }
+    .sub { color: #929db1; font-size: 12px; }
+    .controls { display: flex; align-items: center; gap: 10px; }
+    select, button, textarea { font: inherit; }
+    select { max-width: 220px; padding: 9px 30px 9px 11px; border-radius: 10px; border: 1px solid #303848; background: #191e28; color: #e8ebf2; }
+    .status { color: #aab5c8; font-size: 12px; min-width: 80px; text-align: right; }
+    .chat { flex: 1; overflow: auto; padding: 22px clamp(10px, 5vw, 54px); border: 1px solid #272e3a; border-radius: 22px; background: #151922d9; box-shadow: 0 20px 70px #0003; }
+    .welcome { max-width: 520px; margin: 12vh auto 0; text-align: center; }
+    .welcome-icon { font-size: 34px; margin-bottom: 10px; }
+    .welcome h2 { font-size: 22px; margin: 0 0 8px; }
+    .welcome p { color: #9ca7ba; line-height: 1.55; }
+    .message { display: flex; margin: 17px 0; }
+    .message.user { justify-content: flex-end; }
+    .bubble { max-width: min(680px, 90%); padding: 12px 15px; border-radius: 17px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .assistant .bubble { background: #202633; border: 1px solid #30394a; border-bottom-left-radius: 5px; }
+    .user .bubble { background: #596be0; color: white; border-bottom-right-radius: 5px; }
+    .message.error .bubble { border-color: #a54b58; color: #ffc3ca; }
+    .composer { padding: 13px; border: 1px solid #303847; border-radius: 20px; background: #191e28; box-shadow: 0 12px 40px #0003; }
+    .attachment-row { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; color: #aab4c6; font-size: 12px; }
+    .attachment-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 9px; background: #282f3e; }
+    .attachment-chip button { background: transparent; color: #c3ccdc; padding: 0 2px; }
+    textarea { display: block; width: 100%; min-height: 58px; max-height: 150px; resize: vertical; padding: 8px; border: 0; outline: 0; color: #eef1f7; background: transparent; line-height: 1.45; }
+    textarea::placeholder { color: #7f8a9d; }
+    .composer-bottom { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-top: 8px; }
+    .options, .actions { display: flex; align-items: center; gap: 13px; color: #aab4c6; font-size: 12px; }
+    label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+    input[type=checkbox] { accent-color: #8793ff; }
+    button { cursor: pointer; border: 0; color: white; }
+    .icon-button { width: 40px; height: 40px; border-radius: 13px; background: #282f3e; font-size: 17px; }
+    .icon-button:hover { background: #353e51; }
+    #mic.listening { background: #a33e53; animation: pulse 1.3s infinite; }
+    #send { min-width: 86px; height: 40px; padding: 0 16px; border-radius: 13px; background: #6d7bf0; font-weight: 600; }
+    #send:hover { background: #7c89ff; }
+    #send:disabled { opacity: .5; cursor: wait; }
+    .privacy { color: #778296; font-size: 11px; line-height: 1.4; text-align: center; padding: 0 8px; }
+    .voice-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 0 4px; color: #aab4c6; font-size: 12px; }
+    .integrations { color: #aab4c6; font-size: 12px; padding: 0 4px; }
+    .integrations summary { cursor: pointer; }
+    .integrations ul { margin: 8px 0 0; padding-left: 20px; line-height: 1.6; }
+    .connector-list { display: grid; gap: 8px; margin-top: 10px; }
+    .connector-card { padding: 10px; border: 1px solid #303847; border-radius: 12px; background: #191e28; }
+    .connector-card strong { color: #eef1f7; }
+    .connector-card button { margin-top: 8px; padding: 7px 10px; border-radius: 9px; background: #30394a; }
+    .connector-form { display: grid; gap: 7px; margin-top: 8px; max-width: 440px; }
+    .connector-form input { padding: 8px; border: 1px solid #303848; border-radius: 8px; color: #eef1f7; background: #101319; }
+    .portal { display: grid; gap: 8px; padding: 10px; border: 1px solid #303847; border-radius: 14px; background: #191e28; }
+    .portal-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+    .portal input { flex: 1; min-width: 220px; padding: 9px; border: 1px solid #303848; border-radius: 9px; color: #eef1f7; background: #101319; }
+    .portal button { padding: 8px 11px; border-radius: 9px; background: #30394a; }
+    .portal-output { max-height: 230px; overflow: auto; color: #aab4c6; font-size: 12px; white-space: pre-wrap; }
+    .tasks { display: grid; gap: 9px; padding: 12px; border: 1px solid #303847; border-radius: 14px; background: #191e28; }
+    .tasks h2 { margin: 0; font-size: 14px; }
+    .task-add { display: flex; flex-wrap: wrap; gap: 7px; }
+    .task-add input, .task-add select { flex: 1; min-width: 120px; padding: 8px; border: 1px solid #303848; border-radius: 9px; color: #eef1f7; background: #101319; }
+    .task-add button, .task-item button { padding: 7px 10px; border-radius: 9px; background: #30394a; }
+    .math-output { display: grid; gap: 8px; margin-top: 8px; color: #aab4c6; font-size: 12px; }
+    .math-output img { width: min(100%, 520px); border-radius: 10px; background: white; }
+    .task-list { display: grid; gap: 6px; }
+    .task-item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 10px; background: #222a37; }
+    .task-item input[type=date] { padding: 6px; border: 1px solid #303848; border-radius: 8px; color: #eef1f7; background: #101319; }
+    .task-info { min-width: 0; }
+    .task-title { overflow-wrap: anywhere; }
+    .task-meta { color: #9da8bb; font-size: 11px; margin-top: 3px; }
+    .task-empty { color: #9da8bb; font-size: 12px; }
+    .voice-settings input[type=text] { width: 110px; padding: 8px; border: 1px solid #303848; border-radius: 9px; color: #eef1f7; background: #191e28; }
+    .voice-settings select { max-width: 250px; }
+    #micDevice { max-width: 230px; }
+    .typing { color: #9da8bb; font-size: 12px; padding: 5px 13px; }
+    @keyframes pulse { 50% { box-shadow: 0 0 0 7px #a33e5333; } }
+    @media(max-width: 620px) { .shell { padding: 12px; gap: 10px; } .controls { flex-direction: column; align-items: flex-end; gap: 5px; } select { max-width: 175px; } .chat { padding: 16px 9px; border-radius: 17px; } .options { flex-wrap: wrap; gap: 7px; } .composer { padding: 10px; } }
+
+    [hidden] { display:none !important; }
+    .setup-active .shell > :not(header):not(#setupWizard) { display:none !important; }
+    .setup-active header .controls { display:none; }
+    .setup-active .shell { height:auto; min-height:100vh; }
+    #setupWizard { width:min(640px,100%); margin:clamp(24px,7vh,80px) auto; padding:clamp(22px,4vw,40px); background:#191e28; border:1px solid #394357; border-radius:24px; box-shadow:0 20px 70px #0003; }
+    #setupWizard h2:focus { outline:none; }
+    #setupWizard h2 { font-size:28px; line-height:1.25; margin:8px 0 16px; }
+    #setupWizard p { color:#bac4d6; line-height:1.6; }
+    #setupWizard .eyebrow { color:#a9afff; font-size:13px; }
+    #setupWizard button { padding:13px 18px; border-radius:12px; background:#30394a; font:inherit; text-align:left; }
+    #setupWizard button.primary { background:#6d7bf0; text-align:center; }
+    #setupWizard button:disabled { opacity:.5; cursor:wait; }
+    #setupWizard .choices { display:grid; gap:12px; margin:24px 0; }
+    #setupWizard .choices button { padding:20px; border:1px solid #47536a; }
+    #setupWizard .choices strong,#setupWizard .choices small { display:block; }
+    #setupWizard .choices small { color:#c2cbdc; margin-top:7px; line-height:1.5; }
+    #setupWizard label { display:grid; gap:8px; margin:16px 0; cursor:default; }
+    #setupWizard input,#setupWizard select { width:100%; max-width:none; font:inherit; color:#eef1f7; padding:12px; border:1px solid #485268; border-radius:10px; background:#111620; }
+    #setupWizard a { color:#b8c0ff; }
+    #setupWizard .error { color:#ffc2cb; }
+    #setupWizard .back { background:transparent; padding-left:0; color:#b4bfda; }
+    #setupWizard details { margin-top:20px; color:#aab5ca; font-size:13px; }
+    #setupWizard pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:160px; overflow:auto; }
+    .account-manage { align-self:flex-start; background:#30394a; padding:10px 16px; border-radius:10px; }
+  </style>
+</head>
+<body class="setup-active">
+  <main class="shell">
+    <header>
+      <div class="brand"><div class="mark" aria-hidden="true">✦</div><div><h1>Ultimate Assistant</h1><div class="sub">A voice-first companion, powered by Herald</div></div></div>
+      <div class="controls"><select id="model" aria-label="Active model"></select><button id="newChat" class="icon-button" title="Start a separate conversation; saved memories remain available">New chat</button><button id="clearHistory" class="icon-button" title="Delete this conversation only; durable memories remain">Clear chat</button><div id="status" class="status">Connecting</div></div>
+    </header>
+    <section id="setupWizard" aria-live="polite" aria-label="Connect your AI account"><p>Getting ready...</p></section>
+    <button id="manageAccounts" class="account-manage">Connect another account</button>
+    <details id="providerPanel" class="integrations">
+      <summary>Advanced account settings</summary>
+      <div id="providerActive" role="status">Checking your local Router…</div>
+      <div class="connector-card">
+        <label>Subscription CLI or profile <select id="providerChoice"><option value="antigravity">Google Antigravity</option></select></label>
+        <label>Account name (optional) <input id="providerName" maxlength="120" placeholder="Use the existing account, or name a new one"></label>
+        <button id="installProvider">Install provider</button>
+        <button id="connectProvider">Use this provider</button>
+        <button id="loginProvider">Sign in</button>
+        <button id="cancelProviderLogin">Cancel sign-in</button>
+        <button id="checkProvider">Check sign-in</button>
+        <button id="verifyProvider">Verify active account</button>
+        <a id="accountConsole" target="_blank" rel="noopener noreferrer">Open Herald Account Console</a>
+        <div class="sub">Verify sends one small provider request and may use your quota. Choose a connected account using the active model selector above.</div>
+        <div class="sub">Sign-in uses Herald's provider flow. Complete OAuth or MFA in your browser. Starting a new Codex login can replace its existing session.</div>
+        <pre id="providerLoginOutput" class="portal-output" aria-live="polite"></pre>
+        <form id="providerCodeForm"><input id="providerCode" type="password" autocomplete="off" aria-label="Provider authorization code" placeholder="Authorization code, only if prompted"><button>Submit code</button></form>
+        <button id="startAssistantSetup" disabled>Continue setup with assistant</button>
+        <div class="sub">Setup continues in this saved conversation after account steps. Your local Router starts with this app.</div>
+      </div>
+      <details class="connector-card"><summary>Connect an API key</summary>
+        <form id="apiKeyForm" autocomplete="off">
+          <label>Account name <input id="apiAccountName" required maxlength="120"></label>
+          <label>Provider <select id="apiProvider"><option value="openai">OpenAI</option><option value="gemini">Google Gemini API</option><option value="anthropic">Anthropic</option><option value="openrouter">OpenRouter</option><option value="deepseek">DeepSeek</option><option value="xai">xAI</option><option value="custom">Other OpenAI-compatible API</option></select></label>
+          <label>Model ID <input id="apiModel" required maxlength="160" placeholder="Model ID from your provider"></label>
+          <label>API base URL (optional for listed providers) <input id="apiBaseURL" maxlength="2048" placeholder="https://your-api.example/v1"></label>
+          <label>API key <input id="apiSecret" type="password" required autocomplete="off" maxlength="4096"></label>
+          <button type="submit">Save encrypted key and connect</button>
+        </form>
+        <div class="sub">The key stays in this device's encrypted Herald vault. Never paste it into chat. Verify the active account above after saving.</div>
+        <div id="apiKeyStatus" role="status"></div>
+      </details>
+      <details class="connector-card"><summary>g4f accounts and browser sessions</summary>
+        <form id="g4fAccountForm">
+          <label>Account name <input id="g4fName" required maxlength="120"></label>
+          <label>Installed g4f provider <select id="g4fProvider"></select></label>
+          <label>Model ID <input id="g4fModel" required maxlength="160" placeholder="Model supported by the chosen provider"></label>
+          <label>ChatGPT email or masked email (for protected capture) <input id="g4fEmail" maxlength="320"></label>
+          <button type="submit">Create local g4f account</button>
+        </form>
+        <label>Saved account <select id="g4fAccount"></select></label>
+        <div class="sub">Each account has its own local g4f process. Provider support and session requirements vary; a saved session is unverified until a provider request succeeds.</div>
+        <button id="g4fCapture">Capture ChatGPT session through Kapture</button><button id="g4fCancel">Cancel capture</button>
+        <div class="sub">Protected capture currently supports ChatGPT. Sign in to the intended ChatGPT tab, connect its Kapture extension, start capture here, then send a short message in that tab. Other g4f providers can use their native g4f UI or a local session export.</div>
+        <label>HAR or cookie JSON export <input id="g4fSessionFile" type="file" accept=".har,.json"></label>
+        <button id="g4fImport">Import session locally</button><button id="g4fRestart">Restart / retry local g4f</button>
+        <button id="g4fVerify">Verify selected g4f account</button>
+        <div id="g4fStatus" role="status"></div>
+        <ul id="g4fAccountList"></ul>
+      </details>
+    </details>
+    <section id="chat" class="chat" aria-live="polite">
+      <div class="welcome" id="welcome"><div class="welcome-icon">✦</div><h2>What can I help with?</h2><p>Tap the microphone to talk, or type below. I’ll show the transcript and reply here.</p></div>
+    </section>
+    <section class="composer">
+      <input id="fileInput" type="file" hidden multiple accept=".txt,.md,.csv,.tsv,.json,.html,.htm,.xml,.pdf,.docx,.pptx,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.bmp">
+      <div class="attachment-row"><button id="attachFile" class="icon-button" title="Attach a document or image">Attach file</button><div id="attachmentList"></div><span>Documents and images; text extraction/OCR runs locally.</span></div>
+      <textarea id="message" aria-label="Message" placeholder="Message your assistant… (Enter to send, Shift+Enter for a new line)"></textarea>
+      <div class="composer-bottom">
+        <div class="options">
+          <label title="Search the web before answering"><input id="web" type="checkbox"> Web search</label>
+          <label title="Read the reply aloud using a voice on this device"><input id="speak" type="checkbox" checked> Speak replies</label>
+        </div>
+        <div class="actions"><button id="mic" class="icon-button" title="Start voice input" aria-label="Start voice input">🎙</button><button id="send">Send</button></div>
+      </div>
+    </section>
+    <section class="voice-settings" aria-label="Voice settings">
+      <label>Microphone <select id="micDevice" aria-label="Microphone input device"><option value="default">System default</option></select></label>
+      <button id="refreshMics" class="icon-button" title="Refresh microphone devices and request microphone access">↻ Mic</button>
+      <label>Assistant name <input id="wakeName" type="text" maxlength="30" value="Herald"></label>
+      <label>Speech engine <select id="ttsProvider"><option value="device">Device voice</option><option value="elevenlabs">ElevenLabs</option><option value="kokoro">Kokoro (local)</option></select></label>
+      <label>Reply voice <select id="voice"><option value="">System default</option></select></label>
+      <label>Speed <input id="rate" type="range" min="0.75" max="1.2" step="0.05" value="1"></label>
+      <button id="previewVoice" class="icon-button" title="Play a short sample using the selected speech engine and voice">Preview voice</button>
+      <button id="wake" class="icon-button" aria-pressed="false">Enable wake listening</button>
+    </section>
+    <details class="integrations">
+      <summary>App updates</summary>
+      <label><input id="automaticUpdates" type="checkbox"> Automatically check and install verified releases at launch</label>
+      <div class="sub">Public releases include this app and its bundled Herald Router. No GitHub account, token, Git, or GitHub CLI is required.</div>
+      <button id="checkUpdate">Check for update</button><button id="installUpdate">Install update</button><button id="rollbackUpdate">Use previous version</button>
+      <div id="updateStatus" role="status"></div>
+    </details>
+    <details id="integrationsPanel" class="integrations">
+      <summary>Connected Herald tools</summary>
+      <div class="sub" id="workspaceStatus">Workspace tools are loading…</div>
+      <label><input id="desktopVision" type="checkbox"> Enable desktop vision (screen capture, OCR, and perception tools)</label>
+      <div class="sub" id="visionStatus">Desktop vision is off for this assistant.</div>
+      <label><input id="desktopControl" type="checkbox"> Enable desktop control (focus, type, hotkeys, launch/close apps)</label>
+      <div class="sub" id="controlStatus">Desktop control is off for this assistant.</div>
+      <ul id="integrationList"><li>Loading scoped integrations…</li></ul>
+    </details>
+    <details id="connectorPanel" class="integrations">
+      <summary>Connect apps and MCPs</summary>
+      <div class="sub">The assistant leads setup: it checks what is already installed, does the safe machine-side work with the selected CLI’s native tools, connects and verifies what it can, then guides you through only account-specific steps. The list is examples, not a whitelist. Google sign-in, MFA, API keys, and local app plugins stay under your control; never paste secrets into chat.</div>
+      <div class="connector-card">
+        <strong>Set up a school portal</strong>
+        <div class="sub">Works with your school’s actual site; the assistant will help identify it, open it, and learn its pages with you. You handle sign-in and MFA.</div>
+        <button id="schoolOnboarding" type="button">Set up my school</button>
+      </div>
+      <form id="appOnboarding" class="task-add">
+        <input id="appOnboardingName" type="text" maxlength="120" placeholder="Another app, MCP, or service" aria-label="App or service to set up" required>
+        <button type="submit">Set it up with assistant</button>
+      </form>
+      <div id="connectorList" class="connector-list">Loading connector options…</div>
+      <div class="connector-card">
+        <strong>Browser access: Kapture and Playwright MCP</strong>
+        <div class="sub">Use either or both. Kapture reads and controls tabs in your existing Chrome or Chromium browser. Playwright automates a separate browser profile. Vision is optional.</div>
+        <a href="https://chromewebstore.google.com/detail/kapture-mcp-browser-autom/ejfnegenodbdcodemkibocefmajjjjbn" target="_blank" rel="noopener noreferrer">Install required Kapture extension in Chrome or a Chromium browser</a>
+        <div class="sub">In your browser, open the Kapture extension and turn on the connection toggle for the tab you want to share. Then verify below.</div>
+        <button id="setupKapture">Connect Kapture</button><button id="verifyKapture">Verify Kapture after extension setup</button>
+        <button id="setupPlaywright">Connect Playwright</button><button id="verifyPlaywright">Verify Playwright</button>
+        <button id="disconnectKapture">Disconnect Kapture</button><button id="disconnectPlaywright">Disconnect Playwright</button>
+        <div id="browserSetupStatus" role="status"></div>
+      </div>
+    </details>
+    <details id="memoryPanel" class="integrations">
+      <summary>Memory across conversations</summary>
+      <div class="sub">Saved rules/preferences and useful context are shared across chats. Clearing chat does not erase these memories. Embedding search uses local Ollama only when configured; otherwise keyword matching is used.</div>
+      <form id="memoryForm" class="task-add">
+        <select id="memoryCategory" aria-label="Memory type"><option value="rule">Rule</option><option value="preference">Preference</option><option value="context">Ongoing context</option><option value="episode">Past event</option></select>
+        <input id="memoryTitle" type="text" maxlength="200" placeholder="Short label (optional)" aria-label="Memory label">
+        <input id="memoryContent" type="text" maxlength="4000" placeholder="What should the assistant remember?" aria-label="Memory content" required>
+        <button type="submit">Remember</button>
+      </form>
+      <div class="task-add"><input id="memoryEmbeddingModel" type="text" maxlength="120" placeholder="Optional local Ollama embedding model (e.g. nomic-embed-text)" aria-label="Ollama embedding model"><button id="saveMemoryEmbedding" type="button">Set vector model</button></div>
+      <div id="memoryVectorStatus" class="sub">Checking memory search mode…</div>
+      <div id="persistentMemoryList" class="task-list" aria-live="polite">Loading saved memories…</div>
+      <details><summary>This conversation's carry-forward summary</summary><div id="memorySummary">No summary stored yet; recent conversation remains verbatim.</div></details>
+    </details>
+    <details class="integrations">
+      <summary>Math graphing</summary>
+      <div class="sub">Plot a function locally and inspect its intercepts, critical points, and inflection points.</div>
+      <form id="mathGraphForm" class="portal-controls">
+        <input id="mathFunction" type="text" maxlength="512" placeholder="e.g. x^3 - 3x" aria-label="Function of x" required>
+        <input id="mathXMin" type="number" value="-10" min="-10000" max="10000" step="any" aria-label="Graph minimum x">
+        <input id="mathXMax" type="number" value="10" min="-10000" max="10000" step="any" aria-label="Graph maximum x">
+        <button type="submit">Plot</button>
+      </form>
+      <div id="mathGraphResult" class="math-output" aria-live="polite"></div>
+    </details>
+    <section class="tasks" aria-label="Tasks and commitments">
+      <h2>Tasks &amp; commitments</h2>
+      <form id="taskForm" class="task-add">
+        <input id="taskTitle" type="text" maxlength="300" placeholder="Add an assignment, shift, or task" aria-label="Task title" required>
+        <input id="taskDue" type="date" aria-label="Due date (optional)">
+        <select id="taskDomain" aria-label="Task category"><option value="academic">College</option><option value="work">Work</option><option value="personal">Personal</option></select>
+        <select id="taskKind" aria-label="Commitment type"><option value="commitment">Commitment</option><option value="study_recovery">Study recovery</option></select>
+        <input id="taskEstimate" type="number" min="1" max="1440" placeholder="Minutes" aria-label="Estimated minutes (optional)">
+        <button type="submit">Add</button>
+      </form>
+      <div id="taskList" class="task-list" aria-live="polite"><div class="task-empty">Loading your tasks…</div></div>
+    </section>
+    <section class="portal" aria-label="Academic portal discovery">
+      <div class="portal-controls"><input id="portalUrl" type="url" placeholder="https://your-school-portal.example" aria-label="School portal URL"><button id="portalOpen">Open portal in Edge</button><button id="portalDemo">Open fake school</button><button id="portalInspect">Inspect page</button><button id="portalClose">Close portal</button></div>
+      <div class="portal-controls"><input id="portalGoal" type="text" maxlength="1000" placeholder="Find my current courses, assignments, and due dates" aria-label="Portal discovery goal"><button id="portalExplore">AI explore</button></div>
+      <div id="portalOutput" class="portal-output">Open your school site in Edge, sign in and complete MFA yourself, then choose Inspect. Page text is sent to your configured Herald model only when you request inspection.</div>
+    </section>
+    <div class="privacy">Choose a microphone and tap the mic to record; tap again to send the clip to the configured Herald Router for transcription. Wake listening uses browser speech recognition and may process audio externally; the selected microphone applies to recorded push-to-talk, not wake-word detection. Press Alt+Space to start or stop recording.</div>
+  </main>
+  <script>
+    const token = document.querySelector('meta[name="app-token"]').content;
+    const chat = document.getElementById('chat');
+    const message = document.getElementById('message');
+    const sendButton = document.getElementById('send');
+    const micButton = document.getElementById('mic');
+    const wakeButton = document.getElementById('wake');
+    const wakeNameInput = document.getElementById('wakeName');
+    const voiceSelect = document.getElementById('voice');
+    const ttsProviderSelect = document.getElementById('ttsProvider');
+    const rateInput = document.getElementById('rate');
+    const statusText = document.getElementById('status');
+    const modelSelect = document.getElementById('model');
+    const taskList = document.getElementById('taskList');
+    const micDeviceSelect = document.getElementById('micDevice');
+    const refreshMicsButton = document.getElementById('refreshMics');
+    let recognition = null;
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let recordingStream = null;
+    let recordingTimer = null;
+    let listening = false;
+    let wakeMode = false;
+    let wakeArmed = false;
+    let voiceMode = '';
+    let conversationId = localStorage.getItem('assistant-conversation-id') || crypto.randomUUID();
+    localStorage.setItem('assistant-conversation-id', conversationId);
+    const pendingAttachments = [];
+    let ttsOptions = { providers: { elevenlabs: false, kokoro: false }, elevenlabs_voices: [] };
+
+    wakeNameInput.value = localStorage.getItem('assistant-wake-name') || 'Herald';
+    rateInput.value = localStorage.getItem('assistant-voice-rate') || '1';
+    document.getElementById('speak').checked = localStorage.getItem('assistant-speak') !== 'false';
+    wakeNameInput.addEventListener('change', () => localStorage.setItem('assistant-wake-name', wakeNameInput.value.trim() || 'Herald'));
+    rateInput.addEventListener('input', () => localStorage.setItem('assistant-voice-rate', rateInput.value));
+    document.getElementById('speak').addEventListener('change', event => localStorage.setItem('assistant-speak', event.target.checked));
+
+    async function refreshMicrophones(requestPermission = false) {
+      try {
+        if (requestPermission) {
+          const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          permissionStream.getTracks().forEach(track => track.stop());
+        }
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const selected = localStorage.getItem('assistant-microphone') || 'default';
+        micDeviceSelect.replaceChildren(new Option('System default', 'default'));
+        let number = 0;
+        for (const device of devices.filter(item => item.kind === 'audioinput')) {
+          if (!device.deviceId || device.deviceId === 'default') continue;
+          number += 1;
+          micDeviceSelect.add(new Option(device.label || `Microphone ${number}`, device.deviceId));
+        }
+        micDeviceSelect.value = [...micDeviceSelect.options].some(option => option.value === selected) ? selected : 'default';
+        if (micDeviceSelect.value !== selected) localStorage.setItem('assistant-microphone', 'default');
+      } catch (error) {
+        statusText.textContent = `Microphone devices unavailable: ${error.message}`;
+      }
+    }
+    micDeviceSelect.addEventListener('change', () => {
+      localStorage.setItem('assistant-microphone', micDeviceSelect.value);
+      statusText.textContent = `Microphone: ${micDeviceSelect.selectedOptions[0]?.textContent || 'System default'}`;
+    });
+    refreshMicsButton.addEventListener('click', () => void refreshMicrophones(true));
+    if (navigator.mediaDevices?.addEventListener) navigator.mediaDevices.addEventListener('devicechange', () => void refreshMicrophones());
+    void refreshMicrophones();
+
+    function refreshVoices() {
+      const provider = ttsProviderSelect.value;
+      const selected = localStorage.getItem(`assistant-voice-${provider}`) || '';
+      voiceSelect.replaceChildren();
+      if (provider === 'elevenlabs') {
+        for (const voice of ttsOptions.elevenlabs_voices) voiceSelect.add(new Option(voice.name, voice.id));
+      } else if (provider === 'kokoro') {
+        for (const [id, name] of [['af_heart','Heart (US)'],['af_bella','Bella (US)'],['af_nicole','Nicole (US)'],['af_sarah','Sarah (US)'],['am_adam','Adam (US)'],['am_michael','Michael (US)'],['bf_emma','Emma (UK)'],['bm_george','George (UK)']]) voiceSelect.add(new Option(name, id));
+      } else if ('speechSynthesis' in window) {
+        voiceSelect.add(new Option('System default', ''));
+        for (const voice of speechSynthesis.getVoices()) voiceSelect.add(new Option(`${voice.name} (${voice.lang})`, voice.name));
+      }
+      if (selected && [...voiceSelect.options].some(option => option.value === selected)) voiceSelect.value = selected;
+      else if (provider === 'kokoro') voiceSelect.value = 'af_heart';
+      else if (provider === 'elevenlabs' && voiceSelect.options.length) voiceSelect.selectedIndex = 0;
+      voiceSelect.disabled = voiceSelect.options.length === 0;
+    }
+
+    async function loadTtsOptions() {
+      try {
+        ttsOptions = await api('/api/tts');
+        const saved = localStorage.getItem('assistant-tts-provider') || 'elevenlabs';
+        ttsProviderSelect.value = saved;
+        for (const option of ttsProviderSelect.options) {
+          if (option.value === 'elevenlabs') option.disabled = !ttsOptions.providers.elevenlabs;
+          if (option.value === 'kokoro') option.disabled = !ttsOptions.providers.kokoro;
+        }
+        if (ttsProviderSelect.selectedOptions[0]?.disabled) ttsProviderSelect.value = ttsOptions.providers.kokoro ? 'kokoro' : 'device';
+      } catch {}
+      refreshVoices();
+    }
+    if ('speechSynthesis' in window) {
+      speechSynthesis.addEventListener('voiceschanged', refreshVoices);
+      refreshVoices();
+    } else voiceSelect.disabled = true;
+    voiceSelect.addEventListener('change', () => localStorage.setItem(`assistant-voice-${ttsProviderSelect.value}`, voiceSelect.value));
+    ttsProviderSelect.addEventListener('change', () => {
+      localStorage.setItem('assistant-tts-provider', ttsProviderSelect.value);
+      refreshVoices();
+    });
+
+    function addMessage(role, text, error = false, messageId = null) {
+      document.getElementById('welcome')?.remove();
+      const row = document.createElement('div');
+      row.className = `message ${role}${error ? ' error' : ''}`;
+      if (messageId !== null) row.dataset.messageId = messageId;
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      if (messageId !== null) bubble.title = `Message #${messageId}`;
+      bubble.textContent = text;
+      row.appendChild(bubble);
+      chat.appendChild(row);
+      chat.scrollTop = chat.scrollHeight;
+      return row;
+    }
+
+    async function api(path, body, method = body ? 'POST' : 'GET') {
+      const response = await fetch(path, {
+        method,
+        headers: { 'X-Ultimate-Assistant-Token': token, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+        ...(body ? { body: JSON.stringify(body) } : {})
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.detail || 'The request failed.');
+      return result;
+    }
+
+    document.getElementById('mathGraphForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      const resultNode = document.getElementById('mathGraphResult');
+      resultNode.replaceChildren();
+      try {
+        const result = await api('/api/math/graph', {
+          function_expr: document.getElementById('mathFunction').value,
+          x_min: Number(document.getElementById('mathXMin').value),
+          x_max: Number(document.getElementById('mathXMax').value)
+        });
+        const image = document.createElement('img');
+        image.alt = `Graph of ${result.function}`;
+        image.src = `data:image/png;base64,${result.image_base64_png}`;
+        resultNode.appendChild(image);
+        const summary = document.createElement('div');
+        summary.textContent = `y-intercept: ${result.summary.y_intercept}; x-intercepts: ${result.summary.x_intercepts.join(', ') || 'none'}; critical points: ${result.summary.critical_points.join(', ') || 'none'}; inflection points: ${result.summary.inflection_points.join(', ') || 'none'}`;
+        resultNode.appendChild(summary);
+      } catch (error) {
+        resultNode.textContent = error.message;
+      }
+    });
+
+    function renderAttachments() {
+      const container = document.getElementById('attachmentList');
+      container.replaceChildren();
+      pendingAttachments.forEach((file, index) => {
+        const chip = document.createElement('span');
+        chip.className = 'attachment-chip';
+        chip.append(document.createTextNode(`${file.filename}${file.truncated ? ' (text clipped)' : ''}`));
+        const remove = document.createElement('button');
+        remove.textContent = '×';
+        remove.title = `Remove ${file.filename}`;
+        remove.addEventListener('click', () => { pendingAttachments.splice(index, 1); renderAttachments(); });
+        chip.appendChild(remove);
+        container.appendChild(chip);
+      });
+    }
+    document.getElementById('attachFile').addEventListener('click', () => document.getElementById('fileInput').click());
+    document.getElementById('fileInput').addEventListener('change', async event => {
+      const files = [...event.target.files];
+      event.target.value = '';
+      for (const file of files) {
+        if (pendingAttachments.length >= 5) { addMessage('assistant', 'Attach up to five files per message.', true); break; }
+        if (file.size > 15 * 1024 * 1024) { addMessage('assistant', `${file.name} exceeds the 15 MB limit.`, true); continue; }
+        try {
+          statusText.textContent = `Extracting ${file.name}…`;
+          const response = await fetch('/api/files/extract', {
+            method: 'POST',
+            headers: { 'X-Ultimate-Assistant-Token': token, 'Content-Type': file.type || 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name) },
+            body: file
+          });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.detail || 'File extraction failed.');
+          const total = pendingAttachments.reduce((sum, item) => sum + item.text.length, 0) + result.text.length;
+          if (total > 50000) throw new Error('Attachments are limited to 50,000 extracted characters per message.');
+          pendingAttachments.push(result);
+          renderAttachments();
+          statusText.textContent = `Attached ${result.filename}`;
+        } catch (error) { addMessage('assistant', `${file.name}: ${error.message}`, true); }
+      }
+    });
+
+    async function refreshModels() {
+      try {
+        const result = await api('/api/models');
+        modelSelect.replaceChildren();
+        for (const entry of result.models) {
+          const option = document.createElement('option');
+          option.value = entry.id;
+          option.textContent = `${entry.id}${entry.unavailable ? ' (unavailable)' : ''}`;
+          option.disabled = entry.unavailable;
+          modelSelect.appendChild(option);
+        }
+        modelSelect.value = result.selected;
+        statusText.textContent = result.models.length ? `Ready · ${result.runner_host}` : 'Choose a provider to begin';
+      } catch (error) {
+        statusText.textContent = 'Router offline';
+        addMessage('assistant', error.message, true);
+      }
+    }
+
+    let loginAccount = '';
+    let loginTimer;
+    async function refreshProvider() {
+      try {
+        const state = await api('/api/onboarding');
+        const chooser = document.getElementById('providerChoice'), previous = chooser.value;
+        chooser.replaceChildren();
+        for (const provider of state.providers) {
+          const option=document.createElement('option'); option.value=provider.id;
+          option.textContent=`${provider.label} (${provider.adapter})`; chooser.append(option);
+        }
+        if (state.providers.some(p=>p.id===previous)) chooser.value=previous;
+        document.getElementById('accountConsole').href=state.router_url+'/ui';
+        const selected = state.accounts.find(a => a.model === state.active);
+        loginAccount = selected?.name || '';
+        const installed = state.providers.find(p => p.id === document.getElementById('providerChoice').value)?.installed;
+        document.getElementById('providerActive').textContent = selected
+          ? `Active: ${selected.name} (${selected.adapter}) · ${selected.status} · local Herald Router`
+          : 'Waiting: choose and connect your provider account';
+        document.getElementById('installProvider').disabled = installed;
+        document.getElementById('loginProvider').disabled = !selected?.login?.login;
+        document.getElementById('verifyProvider').disabled = !selected;
+        document.getElementById('startAssistantSetup').disabled = !['logged_in','verified'].includes(selected?.status);
+        if (selected?.status === 'logged_in') clearTimeout(loginTimer);
+      } catch (error) { document.getElementById('providerActive').textContent = `Blocked: ${error.message}`; }
+    }
+    async function providerAction(operation) {
+      clearTimeout(loginTimer);
+      try {
+        if (!loginAccount) throw new Error('Use this provider before signing in.');
+        const result = await api(`/api/onboarding/login/${operation}`, {cli: loginAccount});
+        document.getElementById('providerLoginOutput').textContent = `${result.state}\n${result.output || ''}`;
+        if (result.running) loginTimer = setTimeout(() => providerAction('poll'), 3000);
+        await refreshProvider();
+      } catch (error) { document.getElementById('providerLoginOutput').textContent = `Blocked: ${error.message}`; }
+    }
+    document.getElementById('providerChoice').addEventListener('change', refreshProvider);
+    document.getElementById('installProvider').onclick = async () => {
+      const button = document.getElementById('installProvider');
+      button.disabled = true;
+      document.getElementById('providerLoginOutput').textContent = 'Installing from the official provider…';
+      try { await api('/api/onboarding/install', {provider: document.getElementById('providerChoice').value});
+        document.getElementById('providerLoginOutput').textContent = 'Installed. Select Use this provider, then Sign in.';
+      } catch (error) { document.getElementById('providerLoginOutput').textContent = `Blocked: ${error.message}`; }
+      await refreshProvider();
+    };
+    document.getElementById('connectProvider').onclick = async () => {
+      try { await api('/api/onboarding/connect', {provider: document.getElementById('providerChoice').value,name:document.getElementById('providerName').value});
+        await refreshModels(); await refreshProvider();
+      } catch (error) { document.getElementById('providerLoginOutput').textContent = `Blocked: ${error.message}`; }
+    };
+    document.getElementById('loginProvider').onclick = () => providerAction('start');
+    document.getElementById('cancelProviderLogin').onclick = () => providerAction('cancel');
+    document.getElementById('checkProvider').onclick = refreshProvider;
+    document.getElementById('verifyProvider').onclick=async()=>{
+      try { const result=await api('/api/onboarding/verify',{name:loginAccount});
+        document.getElementById('providerLoginOutput').textContent=`${result.status}: ${result.detail}`; await refreshProvider();
+      } catch(error) {document.getElementById('providerLoginOutput').textContent=`Blocked: ${error.message}`;}
+    };
+    document.getElementById('apiKeyForm').onsubmit=async event=>{
+      event.preventDefault();
+      const field=document.getElementById('apiSecret'), key=field.value;field.value='';
+      try { const result=await api('/api/onboarding/api-key',{name:document.getElementById('apiAccountName').value,
+        provider:document.getElementById('apiProvider').value,model:document.getElementById('apiModel').value,
+        base_url:document.getElementById('apiBaseURL').value,key});
+        document.getElementById('apiKeyStatus').textContent=`${result.status}: ${result.detail}`;
+        await refreshModels();await refreshProvider();
+      }catch(error){document.getElementById('apiKeyStatus').textContent=`Blocked: ${error.message}`;}
+    };
+    let g4fCaptureId='',g4fCaptureTimer;
+    const g4fResult=result=>{document.getElementById('g4fStatus').textContent=`${result.status || result.session?.status || ''}: ${result.detail || result.instruction || result.session?.error || ''}`;};
+    async function refreshG4F(){
+      const state=await api('/api/g4f');
+      for(const [id,entries] of [['g4fProvider',state.providers],['g4fAccount',state.accounts]]){
+        const select=document.getElementById(id),previous=select.value;select.replaceChildren();
+        for(const entry of entries){const option=document.createElement('option');option.value=entry.id || entry.name;option.textContent=entry.id || `${entry.name} (${entry.provider})`;select.append(option);}
+        if(entries.some(e=>(e.id || e.name)===previous))select.value=previous;
+        else if(id==='g4fProvider' && entries.some(e=>e.id==='OpenaiChat')) select.value='OpenaiChat';
+      }
+      const list=document.getElementById('g4fAccountList');list.replaceChildren();
+      for(const account of state.accounts){const item=document.createElement('li');item.textContent=`${account.name}: ${account.status}, session ${account.session_saved?'saved':'not saved'}. `;
+        if(account.ui_url){const link=document.createElement('a');link.href=account.ui_url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Native g4f UI';item.append(link);}list.append(item);}
+    }
+    document.getElementById('g4fAccountForm').onsubmit=async event=>{
+      event.preventDefault();g4fResult({status:'waiting',detail:'Starting this account local g4f service...'});
+      try{g4fResult(await api('/api/g4f/accounts',{name:document.getElementById('g4fName').value,provider:document.getElementById('g4fProvider').value,model:document.getElementById('g4fModel').value,email_hint:document.getElementById('g4fEmail').value}));await refreshG4F();await refreshModels();await refreshProvider();}
+      catch(error){g4fResult({status:'blocked',detail:error.message});}
+    };
+    async function pollG4FCapture(){
+      try{const result=await api('/api/g4f/capture/'+encodeURIComponent(g4fCaptureId));g4fResult(result);
+        if(result.session?.status==='watching')g4fCaptureTimer=setTimeout(pollG4FCapture,2000);
+        else await refreshG4F();
+      }catch(error){g4fResult({status:'blocked',detail:error.message});}
+    }
+    document.getElementById('g4fCapture').onclick=async()=>{
+      clearTimeout(g4fCaptureTimer);
+      try{const result=await api('/api/g4f/capture',{account:document.getElementById('g4fAccount').value,timeout:120});g4fResult(result);
+        if(result.session){g4fCaptureId=result.session.id;g4fCaptureTimer=setTimeout(pollG4FCapture,2000);}
+      }catch(error){g4fResult({status:'blocked',detail:error.message});}
+    };
+    document.getElementById('g4fCancel').onclick=async()=>{
+      clearTimeout(g4fCaptureTimer);if(g4fCaptureId)g4fResult(await api('/api/g4f/capture/'+encodeURIComponent(g4fCaptureId)+'/cancel',{}));
+    };
+    document.getElementById('g4fImport').onclick=async()=>{
+      const input=document.getElementById('g4fSessionFile'),file=input.files[0];if(!file)return;
+      const form=new FormData();form.append('file',file);input.value='';
+      try{const response=await fetch('/api/g4f/import?account='+encodeURIComponent(document.getElementById('g4fAccount').value),{method:'POST',headers:{'X-Ultimate-Assistant-Token':token},body:form});
+        if(!response.ok)throw new Error('Session import rejected');g4fResult(await response.json());await refreshG4F();await refreshProvider();
+      }catch(error){g4fResult({status:'blocked',detail:error.message});}
+    };
+    document.getElementById('g4fRestart').onclick=async()=>{g4fResult(await api('/api/g4f/restart',{}));await refreshG4F();await refreshProvider();};
+    document.getElementById('g4fVerify').onclick=async()=>{
+      const name='g4f-'+document.getElementById('g4fAccount').value;
+      g4fResult(await api('/api/onboarding/verify',{name}));await refreshProvider();await refreshG4F();
+    };
+    refreshG4F().catch(error=>g4fResult({status:'blocked',detail:error.message}));
+    document.getElementById('providerCodeForm').onsubmit = async event => {
+      event.preventDefault();
+      const input = document.getElementById('providerCode'), code = input.value;
+      input.value = '';
+      try { await api('/api/onboarding/login/code', {cli: loginAccount, code}); await providerAction('poll'); }
+      catch (error) { document.getElementById('providerLoginOutput').textContent = `Blocked: ${error.message}`; }
+    };
+    document.getElementById('startAssistantSetup').onclick = () => startOnboarding(
+      'Set up this device',
+      'Continue any existing setup in this conversation. If this is the first setup, inspect this device using your native CLI tools, discover the bundled Vision MCP and scoped Herald gateway, configure any missing bridge from official instructions, and verify tools with harmless read-only calls. Install compatible connectors I request. Ask me only for account-specific information, OAuth or MFA. Preserve progress and report completed with evidence, waiting with my exact next action, or blocked with the real error.'
+    );
+    refreshProvider();
+    async function refreshUpdates() {
+      const state = await api('/api/updates');
+      document.getElementById('automaticUpdates').checked = state.automatic;
+      document.getElementById('updateStatus').textContent = `${state.result.status}: ${state.result.detail || state.result.version || ''}`;
+    }
+    document.getElementById('automaticUpdates').onchange = async event => {
+      await api('/api/updates/settings', {automatic: event.target.checked}); await refreshUpdates();
+    };
+    for (const [id, operation] of [['checkUpdate','check'], ['installUpdate','install'], ['rollbackUpdate','rollback']]) {
+      document.getElementById(id).onclick = async () => {
+        document.getElementById(id).disabled = true;
+        document.getElementById('updateStatus').textContent = 'Working…';
+        try { await api(`/api/updates/${operation}`, {}); await refreshUpdates(); }
+        catch (error) { document.getElementById('updateStatus').textContent = `Blocked: ${error.message}`; }
+        finally { document.getElementById(id).disabled = false; }
+      };
+    }
+    refreshUpdates().catch(() => {});
+    for (const [id,browser,operation] of [['setupKapture','kapture','setup'], ['verifyKapture','kapture','verify'], ['setupPlaywright','playwright','setup'], ['verifyPlaywright','playwright','verify'], ['disconnectKapture','kapture','disconnect'], ['disconnectPlaywright','playwright','disconnect']]) {
+      document.getElementById(id).onclick = async () => {
+        document.getElementById(id).disabled = true;
+        document.getElementById('browserSetupStatus').textContent = 'Discovering browser tools…';
+        try { const result = await api(`/api/browser/${operation}`, {browser});
+          document.getElementById('browserSetupStatus').textContent = `${browser}: ${result.status} — ${result.detail}`;
+          await refreshIntegrations();
+        } catch (error) { document.getElementById('browserSetupStatus').textContent = `Blocked: ${error.message}`; }
+        finally { document.getElementById(id).disabled = false; }
+      };
+    }
+
+    async function refreshIntegrations() {
+      const list = document.getElementById('integrationList');
+      try {
+        const result = await api('/api/integrations');
+        const instances = new Set(result.tools.map(tool => tool.instance));
+        const workspaceParts = [
+          instances.has('ultimate-assistant-filesystem') ? 'files' : 'filesystem MCP unavailable',
+          instances.has('ultimate-assistant-shell') ? 'shell' : 'shell MCP unavailable'
+        ];
+        document.getElementById('workspaceStatus').textContent = `Work folder: ${result.files_root} · ${workspaceParts.join(' · ')}`;
+        const visionToggle = document.getElementById('desktopVision');
+        visionToggle.checked = result.desktop_vision_enabled;
+        document.getElementById('visionStatus').textContent = result.desktop_vision_enabled
+          ? 'Desktop vision is enabled for this assistant. The Router must reach an interactive desktop MCP server.'
+          : 'Desktop vision is off for this assistant.';
+        const controlToggle = document.getElementById('desktopControl');
+        controlToggle.checked = result.desktop_control_enabled;
+        document.getElementById('controlStatus').textContent = result.desktop_control_enabled
+          ? 'Desktop control is enabled for this assistant. Actions use the connected win-ui MCP server.'
+          : 'Desktop control is off for this assistant.';
+        list.replaceChildren();
+        if (!result.tools.length) {
+          const item = document.createElement('li');
+          item.textContent = 'No tools bound to this assistant scope yet.';
+          list.appendChild(item);
+          return;
+        }
+        for (const tool of result.tools) {
+          const item = document.createElement('li');
+          item.textContent = `${tool.name}${tool.instance ? ` · ${tool.instance}` : ''}${tool.description ? ` — ${tool.description}` : ''}`;
+          list.appendChild(item);
+        }
+        if (result.discovery_errors.length) {
+          const warning = document.createElement('li');
+          warning.textContent = `Could not discover tools from: ${result.discovery_errors.join(', ')}`;
+          list.appendChild(warning);
+        }
+      } catch (error) {
+        list.replaceChildren();
+        const item = document.createElement('li');
+        item.textContent = error.message;
+        list.appendChild(item);
+      }
+    }
+
+    async function refreshConnectors() {
+      const target = document.getElementById('connectorList');
+      try {
+        const result = await api('/api/connectors');
+        target.replaceChildren();
+        for (const connector of result.connectors) {
+          const card = document.createElement('div');
+          card.className = 'connector-card';
+          const title = document.createElement('strong');
+          title.textContent = `${connector.name} · ${connector.status.replaceAll('_', ' ')}`;
+          const description = document.createElement('div');
+          description.className = 'sub';
+          description.textContent = connector.setup;
+          const actions = document.createElement('div');
+          actions.className = 'sub';
+          actions.textContent = `You may need to: ${connector.user_steps.join(' ')}`;
+          if (connector.id === 'zotero' && connector.status !== 'connected') {
+            const form = document.createElement('form');
+            form.className = 'connector-form';
+            const userId = document.createElement('input');
+            userId.inputMode = 'numeric'; userId.autocomplete = 'off';
+            userId.placeholder = 'Zotero user ID'; userId.required = true;
+            const apiKey = document.createElement('input');
+            apiKey.type = 'password'; apiKey.autocomplete = 'new-password';
+            apiKey.placeholder = 'Personal Zotero API key'; apiKey.required = true;
+            const save = document.createElement('button'); save.type = 'submit'; save.textContent = 'Verify and connect Zotero';
+            form.append(userId, apiKey, save);
+            form.addEventListener('submit', async event => {
+              event.preventDefault(); save.disabled = true; save.textContent = 'Verifying…';
+              try {
+                await api('/api/connectors/zotero', { user_id: userId.value.trim(), api_key: apiKey.value });
+                apiKey.value = '';
+                await refreshConnectors(); await refreshIntegrations();
+                statusText.textContent = 'Zotero connected';
+              } catch (error) { statusText.textContent = error.message; }
+              finally { save.disabled = false; save.textContent = 'Verify and connect Zotero'; }
+            });
+            card.append(title, description, actions, form);
+            target.appendChild(card);
+            continue;
+          }
+          card.append(title, description, actions);
+          if (connector.status === 'connected') {
+            const connected = document.createElement('div'); connected.className = 'sub';
+            connected.textContent = 'Herald reports this connector’s tools are available to the assistant.';
+            card.appendChild(connected);
+          } else {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = connector.status === 'included' ? 'Ask assistant about this' : 'Set up with assistant';
+            button.addEventListener('click', () => startOnboarding(`Set up ${connector.name}`, `Set up ${connector.name} for this user on this device.`));
+            card.appendChild(button);
+          }
+          target.appendChild(card);
+        }
+      } catch (error) { target.textContent = `Could not load connector options: ${error.message}`; }
+    }
+
+    function startOnboarding(title, objective) {
+      document.getElementById('connectorPanel').open = false;
+      sendMessage(`ONBOARDING TASK: ${title}\n${objective}\n\nYou are responsible for leading this setup, not merely giving me a checklist. First inspect the current device, assistant settings, available native CLI tools, and relevant scoped Herald tools to determine what is already present and what is missing. Use the selected CLI's own native tools as the primary computer-use interface; use Herald's scoped MCP tools when they add value. Consult official project documentation before installing or changing configuration. Perform safe, relevant setup steps yourself, preserving native CLI tools and user settings. Never print, request in chat, or put credentials in commands/config files; when sign-in, MFA, a secret, or a device-local action is required, tell me exactly where to do it and then continue setup after I finish. Do not make me repeat information already available in this conversation or device. Verify each completed step with a real health check or harmless tool call. Keep the outcome clear: completed and verified, waiting on one specific action from me, or blocked with the actual reason. Continue from the current state when I respond; do not restart discovery.`);
+    }
+
+    document.getElementById('schoolOnboarding').addEventListener('click', () => startOnboarding(
+      'Set up my school portal',
+      'Help me onboard my own school portal. Do not assume Moodle, Brightspace, or any specific school. Ask which portal/site I use only if it cannot be identified from what I provide. Open it with the existing portal/browser workflow, let me sign in and complete MFA myself, then inspect pages together using read-only actions to identify courses, assignments, grades, and deadlines. Record only what can be verified and explain exactly what this assistant can and cannot access.'
+    ));
+
+    document.getElementById('appOnboarding').addEventListener('submit', event => {
+      event.preventDefault();
+      const input = document.getElementById('appOnboardingName');
+      const name = input.value.trim();
+      if (!name) return;
+      input.value = '';
+      startOnboarding(`Set up ${name}`, `The user wants this app, MCP, or service: ${name}. Identify its official project documentation and the user's intended workflow if not already clear; inspect the local machine first, do the safe installation and configuration yourself using native CLI tools, and finish with verified tool discovery and a harmless test.`);
+    });
+
+    document.getElementById('desktopVision').addEventListener('change', async event => {
+      const toggle = event.target;
+      toggle.disabled = true;
+      try {
+        await api('/api/desktop-vision', { enabled: toggle.checked });
+        document.getElementById('visionStatus').textContent = toggle.checked
+          ? 'Desktop vision is enabled for this assistant. The Router must reach an interactive desktop MCP server.'
+          : 'Desktop vision is off for this assistant.';
+        await refreshIntegrations();
+      } catch (error) {
+        toggle.checked = !toggle.checked;
+        document.getElementById('visionStatus').textContent = error.message;
+      } finally { toggle.disabled = false; }
+    });
+
+    document.getElementById('desktopControl').addEventListener('change', async event => {
+      const toggle = event.target;
+      toggle.disabled = true;
+      try {
+        await api('/api/desktop-control', { enabled: toggle.checked });
+        document.getElementById('controlStatus').textContent = toggle.checked
+          ? 'Desktop control is enabled for this assistant. Actions use the connected win-ui MCP server.'
+          : 'Desktop control is off for this assistant.';
+        await refreshIntegrations();
+      } catch (error) {
+        toggle.checked = !toggle.checked;
+        document.getElementById('controlStatus').textContent = error.message;
+      } finally { toggle.disabled = false; }
+    });
+
+    async function loadConversation() {
+      try {
+        const result = await api(`/api/conversations/${encodeURIComponent(conversationId)}`);
+        if (result.messages.length) {
+          document.getElementById('welcome')?.remove();
+          for (const item of result.messages) addMessage(item.role, item.content, false, item.id);
+        }
+      } catch (error) { addMessage('assistant', `Could not load saved conversation: ${error.message}`, true); }
+      await refreshConversationMemory();
+    }
+    document.getElementById('newChat').addEventListener('click', async () => {
+      if (sendButton.disabled) { statusText.textContent = 'Wait for the current reply before starting a new chat'; return; }
+      conversationId = crypto.randomUUID();
+      localStorage.setItem('assistant-conversation-id', conversationId);
+      chat.replaceChildren();
+      pendingAttachments.splice(0, pendingAttachments.length);
+      renderAttachments();
+      const welcome = document.createElement('div');
+      welcome.className = 'welcome'; welcome.id = 'welcome';
+      welcome.innerHTML = '<div class="welcome-icon">✦</div><h2>New conversation</h2><p>Your saved memories are available here too.</p>';
+      chat.appendChild(welcome);
+      await refreshConversationMemory();
+    });
+    async function refreshConversationMemory() {
+      const target = document.getElementById('memorySummary');
+      try {
+        const result = await api(`/api/conversations/${encodeURIComponent(conversationId)}/memory`);
+        target.textContent = result.summary || 'No summary stored yet; recent conversation remains verbatim.';
+        if (result.updated_at) target.title = `Updated ${result.updated_at}`;
+      } catch (error) { target.textContent = `Memory unavailable: ${error.message}`; }
+    }
+
+    async function refreshMemories() {
+      const target = document.getElementById('persistentMemoryList');
+      try {
+        const result = await api('/api/memories');
+        document.getElementById('memoryEmbeddingModel').value = result.embedding_model || '';
+        document.getElementById('memoryVectorStatus').textContent = result.vector_enabled
+          ? 'Configured for local Ollama embeddings. Install that model locally; if Ollama is offline, keyword matching is used.'
+          : 'Keyword memory search is active. Configure a local Ollama embedding model to enable vector similarity.';
+        target.replaceChildren();
+        if (!result.memories.length) {
+          const empty = document.createElement('div'); empty.className = 'task-empty';
+          empty.textContent = 'No cross-conversation memories saved yet.'; target.append(empty); return;
+        }
+        for (const memory of result.memories) {
+          const row = document.createElement('div'); row.className = 'task-item';
+          const info = document.createElement('div'); info.className = 'task-info';
+          const title = document.createElement('div'); title.className = 'task-title';
+          title.textContent = `${memory.title} · ${memory.category}`;
+          const content = document.createElement('div'); content.className = 'task-meta'; content.textContent = memory.content;
+          info.append(title, content);
+          const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Edit';
+          edit.addEventListener('click', async () => {
+            const updatedContent = window.prompt('Edit this saved memory', memory.content);
+            if (updatedContent === null || !updatedContent.trim()) return;
+            try {
+              await api(`/api/memories/${encodeURIComponent(memory.id)}`, {
+                content: updatedContent.trim(), category: memory.category, title: memory.title, importance: memory.importance
+              }, 'PUT');
+              await refreshMemories();
+            } catch (error) { statusText.textContent = error.message; }
+          });
+          const forget = document.createElement('button'); forget.type = 'button'; forget.textContent = 'Forget';
+          forget.addEventListener('click', async () => {
+            try { await api(`/api/memories/${encodeURIComponent(memory.id)}`, null, 'DELETE'); await refreshMemories(); }
+            catch (error) { statusText.textContent = error.message; }
+          });
+          row.append(info, edit, forget); target.append(row);
+        }
+      } catch (error) { target.textContent = `Memory unavailable: ${error.message}`; }
+    }
+
+    document.getElementById('saveMemoryEmbedding').addEventListener('click', async () => {
+      try {
+        await api('/api/memory-settings', { embedding_model: document.getElementById('memoryEmbeddingModel').value.trim() }, 'PUT');
+        await refreshMemories();
+      } catch (error) { statusText.textContent = error.message; }
+    });
+
+    document.getElementById('memoryForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      const content = document.getElementById('memoryContent');
+      try {
+        await api('/api/memories', {
+          category: document.getElementById('memoryCategory').value,
+          title: document.getElementById('memoryTitle').value.trim(), content: content.value.trim(), importance: 5
+        });
+        content.value = ''; document.getElementById('memoryTitle').value = '';
+        await refreshMemories();
+      } catch (error) { statusText.textContent = error.message; }
+    });
+
+    async function refreshTasks() {
+      try {
+        const result = await api('/api/tasks');
+        taskList.replaceChildren();
+        if (!result.tasks.length) {
+          const empty = document.createElement('div');
+          empty.className = 'task-empty';
+          empty.textContent = 'Nothing tracked yet. Add a deadline or commitment to help plan ahead.';
+          taskList.append(empty);
+          return;
+        }
+        for (const task of result.tasks) {
+          const row = document.createElement('div');
+          row.className = 'task-item';
+          const info = document.createElement('div');
+          info.className = 'task-info';
+          const title = document.createElement('div');
+          title.className = 'task-title';
+          title.textContent = task.title;
+          const meta = document.createElement('div');
+          meta.className = 'task-meta';
+          const dateParts = task.due_at?.slice(0, 10).split('-').map(Number);
+          let due = 'No due date';
+          if (dateParts?.length === 3 && dateParts.every(Number.isFinite)) {
+            const dueDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const daysUntilDue = Math.round((dueDate - today) / 86400000);
+            if (daysUntilDue < 0) due = `Overdue ${dueDate.toLocaleDateString()}`;
+            else if (daysUntilDue === 0) due = 'Due today';
+            else if (daysUntilDue === 1) due = 'Due tomorrow';
+            else due = `Due ${dueDate.toLocaleDateString()}`;
+          }
+          const kind = task.kind === 'study_recovery' ? 'Study recovery' : task.domain;
+          const estimate = task.estimated_minutes ? ` · ${task.estimated_minutes} min` : '';
+          meta.textContent = `${kind} · ${due}${estimate}${task.status === 'in_progress' ? ' · in progress' : ''}`;
+          info.append(title, meta);
+          const dateInput = document.createElement('input');
+          dateInput.type = 'date';
+          dateInput.value = task.due_at?.slice(0, 10) || '';
+          dateInput.setAttribute('aria-label', `Reschedule ${task.title}`);
+          const reschedule = document.createElement('button');
+          reschedule.type = 'button';
+          reschedule.textContent = 'Move';
+          reschedule.setAttribute('aria-label', `Save new date for ${task.title}`);
+          reschedule.addEventListener('click', async () => {
+            try {
+              await api(`/api/tasks/${encodeURIComponent(task.id)}`, { due_at: dateInput.value || null }, 'PATCH');
+              await refreshTasks();
+            } catch (error) { statusText.textContent = error.message; }
+          });
+          const done = document.createElement('button');
+          done.type = 'button';
+          done.textContent = 'Done';
+          done.setAttribute('aria-label', `Mark ${task.title} done`);
+          done.addEventListener('click', async () => {
+            try { await api(`/api/tasks/${encodeURIComponent(task.id)}`, { status: 'done' }, 'PATCH'); await refreshTasks(); }
+            catch (error) { statusText.textContent = error.message; }
+          });
+          row.append(info, dateInput, reschedule, done);
+          taskList.append(row);
+        }
+      } catch (error) {
+        taskList.textContent = `Tasks unavailable: ${error.message}`;
+      }
+    }
+
+    document.getElementById('taskForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      const title = document.getElementById('taskTitle');
+      try {
+        await api('/api/tasks', {
+          title: title.value.trim(), domain: document.getElementById('taskDomain').value,
+          due_at: document.getElementById('taskDue').value || null,
+          kind: document.getElementById('taskKind').value,
+          estimated_minutes: Number(document.getElementById('taskEstimate').value) || null
+        });
+        title.value = '';
+        document.getElementById('taskDue').value = '';
+        document.getElementById('taskEstimate').value = '';
+        document.getElementById('taskKind').value = 'commitment';
+        await refreshTasks();
+      } catch (error) { statusText.textContent = error.message; }
+    });
+    document.getElementById('clearHistory').addEventListener('click', async () => {
+      if (sendButton.disabled) { statusText.textContent = 'Wait for the current reply before clearing chat'; return; }
+      try {
+        await fetch(`/api/conversations/${encodeURIComponent(conversationId)}`, {
+          method: 'DELETE', headers: { 'X-Ultimate-Assistant-Token': token }
+        }).then(async response => {
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.detail || 'Could not clear conversation.');
+        });
+        chat.replaceChildren();
+        pendingAttachments.splice(0, pendingAttachments.length);
+        renderAttachments();
+        const welcome = document.createElement('div');
+        welcome.className = 'welcome';
+        welcome.id = 'welcome';
+        welcome.textContent = 'Conversation cleared. What can I help with?';
+        chat.appendChild(welcome);
+        document.getElementById('memorySummary').textContent = 'No summary stored yet; recent conversation remains verbatim.';
+        document.getElementById('memorySummary').removeAttribute('title');
+      } catch (error) { addMessage('assistant', error.message, true); }
+    });
+
+    const portalOutput = document.getElementById('portalOutput');
+    async function portalAction(path, body) {
+      portalOutput.textContent = 'Working…';
+      try {
+        const result = await api(path, body);
+        if (path.endsWith('/open')) portalOutput.textContent = `Opened ${result.title || 'portal'}. Sign in and complete MFA in Edge, then inspect the page or enter a goal for AI exploration.`;
+        else if (path.endsWith('/inspect')) portalOutput.textContent = result.result;
+        else if (path.endsWith('/close')) portalOutput.textContent = 'Portal browser closed; its temporary session was discarded.';
+        else if (path.endsWith('/explore')) {
+          if (result.status === 'complete') await refreshTasks();
+          portalOutput.replaceChildren();
+          const answer = document.createElement('div');
+          const savedTasks = result.tracked_tasks
+            ? `\nAdded ${result.added_tasks} verified assignment(s) to your task list; ${result.tracked_tasks - result.added_tasks} already tracked.`
+            : '';
+          answer.textContent = `${result.status === 'needs_user' ? `User action needed: ${result.question}` : result.answer}\n\nVisited ${result.pages.length} page(s).${savedTasks}`;
+          portalOutput.appendChild(answer);
+          const evidence = document.createElement('details');
+          const summary = document.createElement('summary');
+          summary.textContent = 'Observed page evidence and actions';
+          evidence.appendChild(summary);
+          for (const page of result.pages) {
+            const entry = document.createElement('pre');
+            entry.textContent = `${page.page_id}: ${page.title}\n${page.url}\n${page.visible_text}\nLinks shown to agent: ${(page.same_origin_links || []).map(link => `${link.id}. ${link.label}`).join(' | ')}`;
+            evidence.appendChild(entry);
+          }
+          const actionLog = document.createElement('pre');
+          actionLog.textContent = JSON.stringify(result.actions, null, 2);
+          evidence.appendChild(actionLog);
+          portalOutput.appendChild(evidence);
+        }
+        else {
+          portalOutput.replaceChildren();
+          const summary = document.createElement('div');
+          summary.textContent = `${result.title || 'Page loaded'}\n${result.url || ''}\n\n${result.visible_text || ''}\n\nSame-origin links:`;
+          portalOutput.appendChild(summary);
+          for (const link of result.same_origin_links || []) {
+            const button = document.createElement('button');
+            button.textContent = `${link.id}. ${link.label}`;
+            button.addEventListener('click', () => portalAction('/api/portal/follow', { link_id: link.id }).then(() => portalAction('/api/portal/snapshot')));
+            portalOutput.appendChild(button);
+          }
+        }
+      } catch (error) { portalOutput.textContent = error.message; }
+    }
+    document.getElementById('portalOpen').addEventListener('click', () => portalAction('/api/portal/open', { url: document.getElementById('portalUrl').value.trim() }));
+    document.getElementById('portalDemo').addEventListener('click', () => {
+      const demoUrl = `${window.location.origin}/demo-school`;
+      document.getElementById('portalUrl').value = demoUrl;
+      void portalAction('/api/portal/open', { url: demoUrl });
+      document.getElementById('portalGoal').value = 'Find all courses, assignments and due dates, and current grades for Fall 2026. Cite the pages and evidence.';
+    });
+    document.getElementById('portalInspect').addEventListener('click', () => portalAction('/api/portal/inspect', {}));
+    document.getElementById('portalExplore').addEventListener('click', () => {
+      const goal = document.getElementById('portalGoal').value.trim();
+      if (goal.length < 8) { portalOutput.textContent = 'Enter a specific discovery goal first.'; return; }
+      void portalAction('/api/portal/explore', { goal });
+    });
+    document.getElementById('portalClose').addEventListener('click', () => portalAction('/api/portal/close', {}));
+
+    async function sendMessage(text = message.value, setupIntro = false) {
+      const prompt = text.trim();
+      if (!prompt || sendButton.disabled) return;
+      speechSynthesis?.cancel();
+      const userRow = addMessage('user', prompt);
+      message.value = '';
+      sendButton.disabled = true;
+      statusText.textContent = 'Thinking…';
+      const typing = addMessage('assistant', 'Thinking…');
+      typing.classList.add('typing-row');
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'X-Ultimate-Assistant-Token': token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: prompt, setup_intro: setupIntro, conversation_id: conversationId, web_search: document.getElementById('web').checked, attachments: pendingAttachments })
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || 'The request failed.');
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let result = null;
+        while (true) {
+          const { value, done } = await reader.read();
+          buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+          const frames = buffer.split('\n\n');
+          buffer = frames.pop() || '';
+          for (const frame of frames) {
+            const event = frame.match(/^event: (.+)$/m)?.[1];
+            const dataLine = frame.match(/^data: (.+)$/m)?.[1];
+            if (!event || !dataLine) continue;
+            const data = JSON.parse(dataLine);
+            if (event === 'progress') {
+              typing.querySelector('.bubble').textContent = data;
+              statusText.textContent = data;
+            } else if (event === 'complete') result = data;
+            else if (event === 'error') throw new Error(typeof data === 'string' ? data : 'The request failed.');
+          }
+          if (done) break;
+        }
+        if (!result) throw new Error('The connection ended before Herald returned a response.');
+        typing.remove();
+        if (result.user_message_id) {
+          userRow.dataset.messageId = result.user_message_id;
+          userRow.querySelector('.bubble').title = `Message #${result.user_message_id}`;
+        }
+        addMessage('assistant', result.reply, false, result.assistant_message_id);
+        pendingAttachments.splice(0, pendingAttachments.length);
+        renderAttachments();
+        await refreshConversationMemory();
+        await refreshMemories();
+        statusText.textContent = result.model;
+        if (document.getElementById('speak').checked) void speakReply(result.reply);
+      } catch (error) {
+        typing.remove();
+        addMessage('assistant', error.message, true);
+        statusText.textContent = 'Request failed';
+      } finally {
+        sendButton.disabled = false;
+        message.focus();
+      }
+    }
+
+    async function speakReply(text) {
+      if (ttsProviderSelect.value === 'device') return speakWithDevice(text);
+      try {
+        statusText.textContent = `Generating ${ttsProviderSelect.value} speech…`;
+        const response = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'X-Ultimate-Assistant-Token': token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text,
+            provider: ttsProviderSelect.value,
+            voice: voiceSelect.value || 'af_heart',
+            speed: Number(rateInput.value)
+          })
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || 'Speech generation failed.');
+        }
+        const audioUrl = URL.createObjectURL(await response.blob());
+        const audio = new Audio(audioUrl);
+        audio.onended = () => URL.revokeObjectURL(audioUrl);
+        audio.onerror = () => URL.revokeObjectURL(audioUrl);
+        await audio.play();
+        statusText.textContent = `Speaking · ${response.headers.get('X-TTS-Provider') || ttsProviderSelect.value}`;
+      } catch (error) {
+        statusText.textContent = 'Speech fallback · device voice';
+        if (!speakWithDevice(text)) addMessage('assistant', error.message, true);
+      }
+    }
+
+    function speakWithDevice(text) {
+      if (!('speechSynthesis' in window)) return false;
+      speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = Number(rateInput.value);
+      utterance.voice = speechSynthesis.getVoices().find(voice => voice.name === voiceSelect.value) || null;
+      speechSynthesis.speak(utterance);
+      return true;
+    }
+
+    document.getElementById('previewVoice').addEventListener('click', () => {
+      void speakReply('Hi, I’m Herald. What would you like to work on?');
+    });
+
+    sendButton.addEventListener('click', () => sendMessage());
+    void refreshConnectors();
+    message.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }
+    });
+    modelSelect.addEventListener('change', async () => {
+      try {
+        const result = await api('/api/model', { model: modelSelect.value });
+        statusText.textContent = `Using ${result.selected}`;
+        await refreshProvider();
+      } catch (error) {
+        statusText.textContent = error.message;
+        refreshModels();
+      }
+    });
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.lang = navigator.language || 'en-US';
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.onresult = event => {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (!event.results[i].isFinal) continue;
+          if (wakeMode) handleWakePhrase(event.results[i][0].transcript.trim());
+        }
+      };
+      recognition.onerror = event => {
+        statusText.textContent = event.error === 'not-allowed' ? 'Microphone blocked' : `Voice: ${event.error}`;
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') stopWakeMode();
+      };
+      recognition.onend = () => {
+        if (wakeMode) {
+          listening = false;
+          window.setTimeout(() => {
+            if (!wakeMode || listening) return;
+            try { recognition.start(); listening = true; }
+            catch { statusText.textContent = 'Wake listening paused'; }
+          }, 500);
+        }
+      };
+      wakeButton.addEventListener('click', () => wakeMode ? stopWakeMode() : startWakeMode());
+    } else {
+      wakeButton.disabled = true;
+      wakeButton.title = 'Wake listening is not supported by this browser';
+    }
+
+    async function startRecording() {
+      if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+        statusText.textContent = 'Audio recording is not supported by this browser';
+        return;
+      }
+      if (wakeMode) stopWakeMode();
+      const deviceId = micDeviceSelect.value;
+      const audio = deviceId === 'default' ? true : { deviceId: { exact: deviceId } };
+      try {
+        recordingStream = await navigator.mediaDevices.getUserMedia({ audio });
+        recordedChunks = [];
+        const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
+          .find(type => MediaRecorder.isTypeSupported(type));
+        mediaRecorder = mimeType ? new MediaRecorder(recordingStream, { mimeType }) : new MediaRecorder(recordingStream);
+        mediaRecorder.ondataavailable = event => { if (event.data?.size) recordedChunks.push(event.data); };
+        mediaRecorder.onstop = async () => {
+          clearTimeout(recordingTimer);
+          const blob = new Blob(recordedChunks, { type: mediaRecorder?.mimeType || 'audio/webm' });
+          recordingStream?.getTracks().forEach(track => track.stop());
+          recordingStream = null;
+          mediaRecorder = null;
+          recordedChunks = [];
+          listening = false;
+          micButton.classList.remove('listening');
+          micButton.title = 'Start voice input';
+          wakeButton.disabled = !SpeechRecognition;
+          if (!blob.size) { statusText.textContent = 'No microphone audio was recorded'; return; }
+          statusText.textContent = 'Transcribing through Herald…';
+          try {
+            const response = await fetch('/api/transcribe', {
+              method: 'POST',
+              headers: { 'X-Ultimate-Assistant-Token': token, 'Content-Type': blob.type.split(';')[0] || 'audio/webm' },
+              body: blob
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail || 'Transcription failed.');
+            message.value = data.text;
+            sendMessage();
+          } catch (error) {
+            statusText.textContent = 'Transcription failed';
+            addMessage('assistant', error.message, true);
+          }
+        };
+        mediaRecorder.start();
+        listening = true;
+        wakeButton.disabled = true;
+        speechSynthesis?.cancel();
+        micButton.classList.add('listening');
+        micButton.title = 'Recording — tap to finish and send';
+        statusText.textContent = `Recording · ${micDeviceSelect.selectedOptions[0]?.textContent || 'microphone'}`;
+        recordingTimer = window.setTimeout(() => {
+          if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
+        }, 120000);
+        void refreshMicrophones();
+      } catch (error) {
+        recordingStream?.getTracks().forEach(track => track.stop());
+        recordingStream = null;
+        statusText.textContent = `Microphone unavailable: ${error.message}`;
+      }
+    }
+
+    micButton.addEventListener('click', () => {
+      if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
+      else void startRecording();
+    });
+
+    document.addEventListener('keydown', event => {
+      if (event.altKey && event.code === 'Space' && !event.repeat) {
+        event.preventDefault();
+        micButton.click();
+      }
+    });
+
+    function handleWakePhrase(phrase) {
+      const name = (wakeNameInput.value.trim() || 'Herald').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const expression = new RegExp(`(?:^|[,\\s])${name}(?:[,\\s.!?]|$)`, 'i');
+      const match = expression.exec(phrase);
+      if (match) {
+        const request = phrase.slice(match.index + match[0].length).trim().replace(/^[,\s.!?]+/, '');
+        wakeArmed = true;
+        statusText.textContent = request ? 'Wake name heard' : 'Listening for your request';
+        if (request) { wakeArmed = false; sendMessage(request); }
+      } else if (wakeArmed) {
+        wakeArmed = false;
+        sendMessage(phrase);
+      }
+    }
+
+    function startWakeMode() {
+      wakeMode = true;
+      wakeArmed = false;
+      voiceMode = 'wake-word';
+      wakeButton.textContent = 'Disable wake listening';
+      wakeButton.setAttribute('aria-pressed', 'true');
+      try {
+        recognition.start();
+        listening = true;
+        statusText.textContent = `Listening for “${wakeNameInput.value.trim() || 'Herald'}”`;
+      } catch (error) { stopWakeMode(); statusText.textContent = `Voice unavailable: ${error.message}`; }
+    }
+
+    function stopWakeMode() {
+      wakeMode = false;
+      wakeArmed = false;
+      voiceMode = '';
+      wakeButton.textContent = 'Enable wake listening';
+      wakeButton.setAttribute('aria-pressed', 'false');
+      if (listening && recognition) recognition.stop();
+      listening = false;
+      statusText.textContent = 'Wake listening off';
+    }
+
+    refreshModels();
+    refreshIntegrations();
+    refreshTasks();
+    refreshMemories();
+    loadConversation();
+    loadTtsOptions();
+  </script>
+
+  <script>
+  (()=>{
+    const shell=document.querySelector('.shell');
+    const options=document.createElement('details');options.id='appSettings';options.className='integrations';
+    const optionsTitle=document.createElement('summary');optionsTitle.textContent='Settings and tools';options.append(optionsTitle);
+    for(const child of [...shell.children]){
+      if(child.tagName==='HEADER'||['setupWizard','manageAccounts','chat'].includes(child.id)||child.classList.contains('composer'))continue;
+      options.append(child);
+    }
+    shell.append(options);
+    const wizard=document.getElementById('setupWizard');
+    const names={antigravity:'Google AI subscription',codex:'ChatGPT subscription',claude:'Claude subscription'};
+    const services={openai:'OpenAI',gemini:'Google Gemini',anthropic:'Anthropic',openrouter:'OpenRouter',deepseek:'DeepSeek',xai:'xAI',custom:'Another compatible service'};
+    let state={providers:[],accounts:[]}, account='',timer=null,generation=0,handingOff=false;
+    const $=id=>document.getElementById(id);
+    function screen(html){clearTimeout(timer);generation++;wizard.innerHTML=html;wizard.hidden=false;document.body.classList.add('setup-active');wizard.querySelector('h2')?.setAttribute('tabindex','-1');wizard.querySelector('h2')?.focus();}
+    function error(message){const e=$('setupError');if(e){e.textContent=message;e.hidden=false;}}
+    function button(label,description,action){const b=document.createElement('button');const title=document.createElement('strong');title.textContent=label;b.append(title);if(description){const d=document.createElement('small');d.textContent=description;b.append(d);}b.onclick=action;return b;}
+    async function inventory(){state=await api('/api/onboarding');return state;}
+    function enterChat(){clearTimeout(timer);generation++;wizard.hidden=true;document.body.classList.remove('setup-active');$('providerPanel').open=false;}
+    async function handoff(){
+      if(handingOff)return;handingOff=true;
+      try{
+        await api('/api/onboarding/progress',{account,conversation_id:conversationId});
+        enterChat();await refreshModels();await refreshProvider();
+        sendMessage('Help me set up my assistant.', true);
+      }finally{handingOff=false;}
+    }
+    async function kinds(){
+      screen('<span class="eyebrow">Let’s get you connected</span><h2>How would you like to connect your AI?</h2><p>Choose the kind of access you already have. I’ll guide you through the rest.</p><div class="choices" id="kindChoices"></div><div id="savedChoices"></div><p id="setupError" class="error" hidden></p>');
+      $('kindChoices').append(button('An AI subscription','I use ChatGPT, Google AI, or Claude.',subscriptions),button('An API key','I have a key from an AI service.',apiChoice));
+      const run=generation;
+      try{await inventory();if(run!==generation)return;
+        if(state.accounts.length){const detail=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Use an account already connected on this device';detail.append(summary);const list=document.createElement('div');list.className='choices';
+          for(const a of state.accounts)list.append(button(a.name,a.status==='logged_in'||a.status==='verified'?'Connected':'Needs sign-in or a connection test',()=>resume(a)));
+          detail.append(list);$('savedChoices').append(detail);}
+      }catch(e){error('I couldn’t reach the local assistant. Please retry in a moment.');}
+    }
+    async function resume(a){account=a.name;await api('/api/model',{model:a.model});if(a.kind==='cli_profile' && !['logged_in','verified'].includes(a.status)){loginScreen();await beginLogin();}else await verify();}
+    function subscriptions(){
+      screen('<button class="back" id="setupBack">← Back</button><span class="eyebrow">Your subscription</span><h2>Which AI subscription do you use?</h2><p>I’ll prepare the connection, then open the provider’s sign-in page. Your plan must include access to its coding assistant.</p><div class="choices" id="subscriptionChoices"></div><p id="setupError" class="error" hidden></p>');$('setupBack').onclick=kinds;
+      const seen=new Set();const ordered=[...state.providers].sort((a,b)=>(b.id===b.adapter)-(a.id===a.adapter));
+      for(const p of ordered){if(seen.has(p.adapter))continue;seen.add(p.adapter);$('subscriptionChoices').append(button(names[p.adapter]||p.label,'Continue with '+({antigravity:'Antigravity',codex:'Codex',claude:'Claude Code'}[p.adapter]||p.label),()=>subscription(p)));}
+      if(!seen.size)error('Subscription options are still loading. Go back and try again.');
+    }
+    async function subscription(p){
+      screen('<span class="eyebrow">Connecting your subscription</span><h2>Getting things ready</h2><p id="setupStatus">Checking what’s already installed...</p><p id="setupError" class="error" hidden></p><button id="setupRetry" hidden>Try again</button><button id="setupBack" class="back" hidden>Choose another option</button>');
+      try{
+        if(!p.installed){$('setupStatus').textContent='Installing the official '+({antigravity:'Antigravity',codex:'Codex',claude:'Claude Code'}[p.adapter]||p.label)+' app. This may take a few minutes.';await api('/api/onboarding/install',{provider:p.id});}
+        $('setupStatus').textContent='Preparing your account...';
+        const result=await api('/api/onboarding/connect',{provider:p.id});account=result.account;
+        await inventory();const a=state.accounts.find(a=>a.name===account);
+        if(a?.status==='logged_in'){await verify();return;}
+        loginScreen();await beginLogin();
+      }catch(e){error(e.message);$('setupRetry').hidden=false;$('setupRetry').onclick=()=>subscription(p);$('setupBack').hidden=false;$('setupBack').onclick=kinds;}
+    }
+    function loginScreen(){
+      screen('<span class="eyebrow">Sign in securely</span><h2>Finish signing in with your provider</h2><p id="setupStatus">Opening your sign-in page...</p><a id="setupLoginLink" target="_blank" rel="noopener noreferrer" hidden>Open sign-in page again</a><p>You can complete any account questions or MFA there. I’ll continue automatically when you’re signed in.</p><form id="setupCodeForm" hidden><label>Paste the authorization code your provider gave you<input id="setupCode" type="password" autocomplete="off"></label><button class="primary">Submit code</button></form><p id="setupError" class="error" hidden></p><button id="setupRetry" hidden>Try sign-in again</button><button id="setupCancel" class="back">Cancel and choose another option</button><details><summary>Sign-in details</summary><pre id="setupLoginOutput"></pre></details>');
+      $('setupCancel').onclick=async()=>{clearTimeout(timer);generation++;try{await api('/api/onboarding/login/cancel',{cli:account});kinds();}catch(e){error('Could not cancel sign-in. '+e.message);}};
+      $('setupRetry').onclick=beginLogin;
+      $('setupCodeForm').onsubmit=async event=>{event.preventDefault();const code=$('setupCode').value;$('setupCode').value='';try{await api('/api/onboarding/login/code',{cli:account,code});await pollLogin();}catch(e){error(e.message);}};
+    }
+    async function beginLogin(){const run=generation;try{$('setupRetry').hidden=true;await api('/api/onboarding/login/start',{cli:account});if(run!==generation)return;await pollLogin();}catch(e){if(run!==generation)return;error(e.message);$('setupRetry').hidden=false;}}
+    async function pollLogin(){
+      const run=generation;clearTimeout(timer);
+      try{
+        const result=await api('/api/onboarding/login/poll',{cli:account});if(run!==generation)return;
+        $('setupLoginOutput').textContent=result.output||result.error||'';
+        if(result.login_url){$('setupLoginLink').href=result.login_url;$('setupLoginLink').hidden=false;$('setupStatus').textContent=result.browser_opened?'Your sign-in page is open. Complete sign-in there.':'Use the sign-in link below to continue.';}
+        else $('setupStatus').textContent='Waiting for your provider. Complete sign-in in the browser if it has opened.';
+        $('setupCodeForm').hidden=!/paste.*code|authorization code/i.test(result.output||'');
+        if(result.state==='succeeded'){await verify();return;}
+        if(!result.running){error('Sign-in didn’t finish. You can try again.');$('setupRetry').hidden=false;return;}
+        timer=setTimeout(pollLogin,2500);
+      }catch(e){if(run!==generation)return;error('Could not check sign-in. '+e.message);$('setupRetry').hidden=false;}
+    }
+    async function verify(){
+      screen('<span class="eyebrow">Almost ready</span><h2>Checking your connection</h2><p>I’m sending a small test request to confirm your account works. This may use a little of your provider quota.</p><p id="setupError" class="error" hidden></p><button id="setupRetry" hidden>Test again</button><button id="setupBack" class="back" hidden>Choose another option</button>');
+      try{const result=await api('/api/onboarding/verify',{name:account});if(result.status!=='completed')throw new Error(result.detail);await handoff();}
+      catch(e){error('The connection isn’t ready yet. '+e.message);$('setupRetry').hidden=false;$('setupRetry').onclick=verify;const selected=state.accounts.find(a=>a.name===account);if(selected?.kind==='cli_profile'){const again=button('Sign in again','',()=>{loginScreen();beginLogin();});wizard.append(again);}$('setupBack').hidden=false;$('setupBack').onclick=kinds;}
+    }
+    function apiChoice(){
+      screen('<button id="setupBack" class="back">← Back</button><span class="eyebrow">Your API key</span><h2>Which service is your key for?</h2><label>AI service<select id="setupAPIProvider"></select></label><button class="primary" id="setupAPINext">Continue</button>');$('setupBack').onclick=kinds;
+      for(const [id,name] of Object.entries(services)){const option=document.createElement('option');option.value=id;option.textContent=name;$('setupAPIProvider').append(option);}
+      $('setupAPINext').onclick=()=>apiForm($('setupAPIProvider').value);
+    }
+    function apiForm(provider){
+      screen('<button id="setupBack" class="back">← Back</button><span class="eyebrow">Connect your API key</span><h2 id="setupAPIHeading"></h2><p>Your key is stored encrypted on this device. It won’t be put in the conversation.</p><form id="setupAPIForm" autocomplete="off"><label>API key<input id="setupAPISecret" type="password" required autocomplete="off"></label><label>Which model should I use?<input id="setupAPIModel" required placeholder="Model name from your provider"></label><p class="sub">Use a model available to your API account. You can change it later.</p><details id="setupAPIAdvanced"><summary>Connection address</summary><label>API address<input id="setupAPIURL" type="url" placeholder="https://your-service.example/v1"></label></details><button id="setupAPISave" class="primary">Connect and test</button></form><p>Connecting sends one small test request and may use provider quota.</p><p id="setupStatus" role="status"></p><p id="setupError" class="error" hidden></p>');
+      $('setupAPIHeading').textContent='Connect to '+services[provider];$('setupBack').onclick=apiChoice;
+      if(provider==='custom'){$('setupAPIAdvanced').open=true;$('setupAPIURL').required=true;}
+      $('setupAPIForm').onsubmit=async event=>{event.preventDefault();const key=$('setupAPISecret').value;$('setupAPISecret').value='';$('setupAPISave').disabled=true;$('setupBack').disabled=true;$('setupStatus').textContent='Saving your encrypted key...';
+        try{await inventory();const base=services[provider]+' account';account=base;let n=2;while(state.accounts.some(a=>a.name===account))account=base+' '+n++;
+          await api('/api/onboarding/api-key',{name:account,provider,model:$('setupAPIModel').value,key,base_url:$('setupAPIURL').value});await verify();
+        }catch(e){error(e.message);if($('setupAPISave')){$('setupAPISave').disabled=false;$('setupBack').disabled=false;$('setupStatus').textContent='Enter the key again to retry.';}}
+      };
+    }
+    $('manageAccounts').onclick=kinds;
+    async function initialize(){
+      try{const [progress]=await Promise.all([api('/api/onboarding/progress'),inventory()]);
+        if(progress.phase==='setup_started' && state.accounts.some(a=>a.name===progress.account && ['logged_in','verified'].includes(a.status))){if(progress.conversation_id){conversationId=progress.conversation_id;localStorage.setItem('assistant-conversation-id',conversationId);await loadConversation();}enterChat();return;}
+      }catch(e){}await kinds();
+    }
+    initialize();
+  })();
+  </script>
+</body>
+</html>

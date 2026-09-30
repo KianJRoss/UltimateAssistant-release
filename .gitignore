@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venvs/
+.venv/
+.runtime/
+.playwright-mcp/
+*.log
+*.db
+*.sqlite*
+.env
+.env.*
+.publication-private-markers
+apps/assistant/models/kokoro/*.onnx
+apps/assistant/models/kokoro/*.bin

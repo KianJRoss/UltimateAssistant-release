@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "product": "Ultimate Assistant friend build",
+  "bundled_servers": [
+    {
+      "id": "assistant-tasks",
+      "kind": "application",
+      "source": "ultimate_assistant.task_tools",
+      "scope": "friend-assistant/conversation",
+      "enabled_by_default": true
+    },
+    {
+      "id": "assistant-memory",
+      "kind": "application",
+      "source": "ultimate_assistant.memory_tools",
+      "scope": "friend-assistant/conversation",
+      "enabled_by_default": true
+    },
+    {
+      "id": "assistant-math",
+      "kind": "herald-python-mcp",
+      "source": "herald.math_tools",
+      "scope": "friend-assistant/conversation",
+      "enabled_by_default": true,
+      "availability": "same-device Router",
+      "dependencies": ["sympy", "matplotlib", "numpy"]
+    },
+    {
+      "id": "assistant-study-sessions",
+      "kind": "assistant-local-mcp",
+      "source": "ultimate_assistant.study_tools",
+      "scope": "friend-assistant/conversation",
+      "enabled_by_default": true,
+      "availability": "same-device Router",
+      "storage": "local SQLite; no reminder delivery",
+      "flashcard_schedule": "Leitner intervals; learner self-rates each review"
+    },
+    {
+      "id": "filesystem",
+      "kind": "official-herald-native",
+      "package": "@modelcontextprotocol/server-filesystem",
+      "source": "components/herald/herald/native_integrations.py",
+      "version": "2026.7.10",
+      "scope": "configured assistant workspace",
+      "enabled_by_default": true
+    },
+    {
+      "id": "shell",
+      "kind": "herald-native",
+      "source": "components/herald/herald/native_mcp.py",
+      "scope": "configured assistant workspace",
+      "enabled_by_default": true
+    },
+    {
+      "id": "desktop-perception",
+      "kind": "bundled-python-mcp",
+      "source": "components/perception-mcp/server.py",
+      "scope": "friend-assistant/conversation",
+      "enabled_by_default": true
+    },
+    {
+      "id": "desktop-control",
+      "kind": "bundled-python-mcp",
+      "source": "components/ai-workspace/win-ui-mcp/server.py",
+      "scope": "friend-assistant/conversation",
+      "enabled_by_default": false
+    }
+  ],
+  "built_in_capabilities": [
+    "selected provider CLI native tools for local work; Herald harness for swarms, loops, and optional shared MCPs",
+    "web-search via Herald websearch_tools.py",
+    "read-only Playwright portal exploration",
+    "document and image OCR ingestion",
+    "voice transcription and synthesis",
+    "local conversation/task persistence",
+    "local math graphing panel with symbolic curve analysis",
+    "school independent active recall, flashcard, worked example, and study planning support using user-provided material and local tasks",
+    "persistent local study-session tracking and spaced-review flashcards"
+  ],
+  "optional_connectors_in_setup_catalog": [
+    {
+      "id": "google-workspace",
+      "source": "components/college-assistant/src/servers/gmail_mcp.py",
+      "related_sources": [
+        "components/college-assistant/app/integrations/gmail",
+        "components/college-assistant/app/integrations/google_calendar"
+      ],
+      "requirement": "Setup catalog available; connector MCP packaging and OAuth UI still required. Friend-owned OAuth only; never copy existing credentials or tokens"
+    },
+    {
+      "id": "zotero",
+      "source": "apps/assistant/ultimate_assistant/zotero_mcp.py",
+      "reference_source": "components/college-assistant/app/integrations/zotero/mcp_server.py",
+      "requirement": "In-app setup registers a project-scoped read-only MCP; user supplies own Zotero ID/API key, encrypted in Herald's local vault"
+    },
+    {
+      "id": "obsidian",
+      "source": "components/simple-assistant/mcp-obsidian",
+      "requirement": "Setup catalog available; portable MCP packaging and local REST plugin configuration UI still required"
+    }
+  ],
+  "excluded_developer_or_machine_specific_servers": [
+    "Herald Pi CLI and AdminLoop",
+    "Cengage/Moodle/perception variants tied to a particular installation",
+    "Developer-specific connectors, credentials, and absolute paths",
+    "container/process/Git automation servers intended for development swarms"
+  ]
+}

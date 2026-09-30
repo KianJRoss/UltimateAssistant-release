@@ -1,0 +1,13 @@
+﻿Ultimate Assistant for Windows
+
+1. Extract this entire ZIP to a writable folder.
+2. Double-click apps\assistant\Install-UltimateAssistant.cmd.
+   Or run apps\assistant\Install-UltimateAssistant.ps1 from PowerShell.
+3. The app starts its bundled Herald Router on this device. Select Antigravity or Codex, install it if needed, and sign in in the app.
+
+Requirements: Windows PowerShell 5.1 or newer, Python 3.13 with the py launcher,
+and internet access for Python packages. Node.js/npm is recommended for the
+official filesystem MCP. The Herald Router is bundled. Provider accounts and credentials are never bundled.
+Public HTTPS updates need no GitHub account or Git.
+
+Build version: 0.2.1

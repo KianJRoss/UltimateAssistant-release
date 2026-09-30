@@ -1,0 +1,30 @@
+{
+  "name": "lmstudio",
+  "command": "python",
+  "additional_args": [
+    "-m", "herald.cli.lmstudio_runner",
+    "--yolo"
+  ],
+  "env": {
+    "LMSTUDIO_BASE_URL": "http://localhost:1234/v1"
+  },
+  "mcp_config_path": "conf/mcp_configs/lmstudio-mcp.json",
+  "roles": {
+    "default": {
+      "prompt_path": "systemprompts/clink/default.txt",
+      "role_args": []
+    },
+    "coder": {
+      "prompt_path": "systemprompts/clink/default.txt",
+      "role_args": []
+    },
+    "security": {
+      "prompt_path": "systemprompts/clink/security_expert.txt",
+      "role_args": []
+    },
+    "performance": {
+      "prompt_path": "systemprompts/clink/performance_engineer.txt",
+      "role_args": []
+    }
+  }
+}

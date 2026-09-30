@@ -1,0 +1,111 @@
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "herald-ai"
+version = "0.2.0"
+description = "Route AI models, coding CLIs, and MCP tools through one Python-first platform"
+requires-python = ">=3.10"
+readme = "README.md"
+license = "MIT"
+keywords = [
+    "ai",
+    "agents",
+    "cli",
+    "llm",
+    "mcp",
+    "model-router",
+    "multi-model",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "httpx>=0.27.0",
+    "aiohttp>=3.9.0",
+    "croniter>=2.0.0",
+    "mcp>=1.28.1,<2.0.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "typer>=0.12.0",
+    "rich>=13.0.0",
+    "pyyaml>=6.0.0",
+    "google-genai>=1.19.0",
+    "openai>=1.55.2",
+    "keyring>=25.0.0",
+    "cryptography>=42.0.0",
+    "tiktoken>=0.7.0",
+    "pyte>=0.8.0",
+    "zeroconf>=0.132.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-timeout>=2.3.0",
+]
+voice = [
+    "faster-whisper>=1.0.0",
+    "sounddevice>=0.4.6",
+    "numpy>=1.24.0",
+]
+ingestion = [
+    "pillow>=10.0.0",
+    "numpy>=1.24.0",
+    "pymupdf>=1.24.0",
+    "python-docx>=1.1.0",
+    "openpyxl>=3.1.0",
+    "python-pptx>=0.6.23",
+    "rapidocr-onnxruntime>=1.2.0",
+    "pytesseract>=0.3.10",
+    "pyzbar>=0.1.9",
+    "opencv-python-headless>=4.9.0",
+]
+math = [
+    "sympy>=1.12",
+    "matplotlib>=3.8.0",
+    "numpy>=1.24.0",
+]
+
+[project.scripts]
+herald = "herald.cli.main:app"
+
+[project.urls]
+Homepage = "https://github.com/KianJRoss/herald"
+Documentation = "https://github.com/KianJRoss/herald#readme"
+Repository = "https://github.com/KianJRoss/herald"
+Issues = "https://github.com/KianJRoss/herald/issues"
+Changelog = "https://github.com/KianJRoss/herald/blob/main/CHANGELOG.md"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["herald*"]
+
+[tool.setuptools.package-data]
+herald = ["py.typed", "router/static/**", "conf/**", "shell_assets/**"]
+
+[tool.setuptools.exclude-package-data]
+"*" = ["__pycache__/*", "**/__pycache__/*", "*.pyc", "**/*.pyc", "*.pyo", "**/*.pyo", "*.db", "**/*.db", "*.db-*", "**/*.db-*", "*.sqlite", "**/*.sqlite", "*.sqlite3", "**/*.sqlite3"]
+herald = ["shell_assets/**/__pycache__/*", "shell_assets/**/*.pyc", "router/*.db", "router/*.db-*"]
+
+[tool.pytest.ini_options]
+# A global backstop, not a target for individual tests to approach: an
+# accidentally-included blocking route (an SSE stream, a subprocess with no
+# timeout) should fail loudly in under a minute, not silently freeze CI.
+timeout = 60
+

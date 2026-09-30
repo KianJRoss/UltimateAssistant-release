@@ -1,0 +1,20 @@
+"""Enumeration describing which backend owns a given model."""
+
+from enum import Enum
+
+__all__ = ["ProviderType"]
+
+
+class ProviderType(Enum):
+    """Canonical identifiers for every supported provider backend."""
+
+    GOOGLE = "google"
+    OPENAI = "openai"
+    AZURE = "azure"
+    XAI = "xai"
+    MISTRAL = "mistral"
+    DEEPSEEK = "deepseek"
+    OPENROUTER = "openrouter"
+    CUSTOM = "custom"
+    DIAL = "dial"
+    G4F = "g4f"

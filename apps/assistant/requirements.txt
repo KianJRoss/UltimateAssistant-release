@@ -1,0 +1,14 @@
+-e ../../components/herald
+g4f[api,gui]==8.5.9
+curl_cffi>=0.6.2
+pywinpty>=2.0.15; sys_platform == 'win32'
+sympy>=1.12
+matplotlib>=3.8.0
+numpy>=1.24.0
+playwright>=1.50
+pypdf>=5.0.0
+python-docx>=1.1.0
+python-pptx>=0.6.23
+openpyxl>=3.1.0
+pillow>=10.0.0
+rapidocr-onnxruntime>=1.2.0

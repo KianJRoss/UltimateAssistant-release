@@ -1,0 +1,4 @@
+mcp>=1.0.0
+pywin32>=310
+pyautogui>=0.9.54
+psutil>=5.9.0

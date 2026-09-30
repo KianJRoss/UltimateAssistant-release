@@ -1,0 +1,125 @@
+{
+  "_README": {
+    "description": "Example configuration for LM Studio local models.",
+    "documentation": "https://github.com/BeehiveInnovations/pal-mcp-server/blob/main/docs/custom_models.md",
+    "usage": "Copy these model definitions to custom_models.json and configure CUSTOM_API_URL to point to your LM Studio instance",
+    "field_notes": "Matches providers/shared/model_capabilities.py.",
+    "setup_instructions": {
+      "1_configure_lm_studio": "In LM Studio, go to Settings → Server and set binding to 0.0.0.0 (or your specific IP) to allow network access",
+      "2_load_model": "Load your desired model in LM Studio (e.g., llama3.2, mistral, deepseek)",
+      "3_set_env_vars": "Set CUSTOM_API_URL=http://YOUR_PC_IP:1234/v1 (replace YOUR_PC_IP with actual IP address)",
+      "4_optional_auth": "Set CUSTOM_API_KEY if your LM Studio requires authentication (usually not needed)",
+      "5_test_connection": "Test with: curl http://YOUR_PC_IP:1234/v1/models"
+    },
+    "network_access": {
+      "same_machine": "CUSTOM_API_URL=http://localhost:1234/v1",
+      "local_network": "CUSTOM_API_URL=http://localhost:1234/v1",
+      "ssh_tunnel": "ssh -L 1234:localhost:1234 user@pc-ip && CUSTOM_API_URL=http://localhost:1234/v1"
+    },
+    "firewall_note": "On Windows, allow inbound TCP connections on port 1234 for network access"
+  },
+  "models": [
+    {
+      "model_name": "lmstudio-llama3.2",
+      "friendly_name": "Llama 3.2 (LM Studio)",
+      "aliases": [
+        "lms-llama",
+        "lmstudio-llama"
+      ],
+      "context_window": 128000,
+      "max_output_tokens": 64000,
+      "supports_extended_thinking": false,
+      "supports_json_mode": false,
+      "supports_function_calling": false,
+      "supports_images": false,
+      "max_image_size_mb": 0.0,
+      "description": "Llama 3.2 via LM Studio - 128K context window (text-only)",
+      "intelligence_score": 6
+    },
+    {
+      "model_name": "lmstudio-deepseek-v3",
+      "friendly_name": "DeepSeek V3 (LM Studio)",
+      "aliases": [
+        "lms-deepseek",
+        "lmstudio-deepseek"
+      ],
+      "context_window": 128000,
+      "max_output_tokens": 64000,
+      "supports_extended_thinking": false,
+      "supports_json_mode": true,
+      "supports_function_calling": false,
+      "supports_images": false,
+      "max_image_size_mb": 0.0,
+      "description": "DeepSeek V3 671B via LM Studio - Frontier reasoning model (128K context)",
+      "intelligence_score": 17
+    },
+    {
+      "model_name": "lmstudio-qwen2.5-72b",
+      "friendly_name": "Qwen 2.5 72B (LM Studio)",
+      "aliases": [
+        "lms-qwen",
+        "lmstudio-qwen"
+      ],
+      "context_window": 128000,
+      "max_output_tokens": 64000,
+      "supports_extended_thinking": false,
+      "supports_json_mode": true,
+      "supports_function_calling": true,
+      "supports_images": false,
+      "max_image_size_mb": 0.0,
+      "description": "Qwen 2.5 72B via LM Studio - Strong coding and reasoning (128K context)",
+      "intelligence_score": 15
+    },
+    {
+      "model_name": "lmstudio-codellama-70b",
+      "friendly_name": "Code Llama 70B (LM Studio)",
+      "aliases": [
+        "lms-codellama",
+        "lmstudio-codellama"
+      ],
+      "context_window": 100000,
+      "max_output_tokens": 50000,
+      "supports_extended_thinking": false,
+      "supports_json_mode": false,
+      "supports_function_calling": false,
+      "supports_images": false,
+      "max_image_size_mb": 0.0,
+      "description": "Code Llama 70B via LM Studio - Specialized coding model (100K context)",
+      "intelligence_score": 14
+    },
+    {
+      "model_name": "lmstudio-mistral-7b",
+      "friendly_name": "Mistral 7B (LM Studio)",
+      "aliases": [
+        "lms-mistral",
+        "lmstudio-mistral"
+      ],
+      "context_window": 32768,
+      "max_output_tokens": 16384,
+      "supports_extended_thinking": false,
+      "supports_json_mode": true,
+      "supports_function_calling": false,
+      "supports_images": false,
+      "max_image_size_mb": 0.0,
+      "description": "Mistral 7B via LM Studio - Fast local inference (32K context)",
+      "intelligence_score": 10
+    },
+    {
+      "model_name": "lmstudio-custom",
+      "friendly_name": "Custom Fine-tuned Model (LM Studio)",
+      "aliases": [
+        "lms-custom",
+        "custom-model"
+      ],
+      "context_window": 32768,
+      "max_output_tokens": 16384,
+      "supports_extended_thinking": false,
+      "supports_json_mode": true,
+      "supports_function_calling": false,
+      "supports_images": false,
+      "max_image_size_mb": 0.0,
+      "description": "Custom fine-tuned model via LM Studio - Adjust specs as needed",
+      "intelligence_score": 12
+    }
+  ]
+}

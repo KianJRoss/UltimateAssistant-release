@@ -1,0 +1,81 @@
+{
+  "_README": {
+    "description": "Model metadata for DeepSeek API access.",
+    "documentation": "https://github.com/BeehiveInnovations/pal-mcp-server/blob/main/docs/custom_models.md",
+    "usage": "Models listed here are exposed directly through the DeepSeek provider. Aliases are case-insensitive.",
+    "field_notes": "Matches providers/shared/model_capabilities.py.",
+    "setup_instructions": {
+      "1_get_api_key": "Get your DeepSeek API key from https://platform.deepseek.com/",
+      "2_set_env_var": "Set DEEPSEEK_API_KEY=your_api_key_here in .env file",
+      "3_optional_config": "Optionally set DEEPSEEK_MODELS_CONFIG_PATH to use custom model definitions"
+    },
+    "pricing_note": "DeepSeek offers highly competitive pricing. Check https://platform.deepseek.com/pricing for current rates."
+  },
+  "models": [
+    {
+      "model_name": "deepseek-chat",
+      "friendly_name": "DeepSeek Chat",
+      "aliases": [
+        "deepseek",
+        "ds-chat",
+        "dschat"
+      ],
+      "intelligence_score": 17,
+      "description": "DeepSeek Chat (128K context) - Flagship model with advanced reasoning and coding capabilities",
+      "context_window": 128000,
+      "max_output_tokens": 64000,
+      "supports_extended_thinking": false,
+      "supports_system_prompts": true,
+      "supports_streaming": true,
+      "supports_function_calling": true,
+      "supports_json_mode": true,
+      "supports_images": false,
+      "supports_temperature": true,
+      "max_image_size_mb": 0.0,
+      "allow_code_generation": true
+    },
+    {
+      "model_name": "deepseek-coder",
+      "friendly_name": "DeepSeek Coder",
+      "aliases": [
+        "ds-coder",
+        "dscoder",
+        "deepseek-code"
+      ],
+      "intelligence_score": 18,
+      "description": "DeepSeek Coder (128K context) - Specialized coding model with state-of-the-art code generation",
+      "context_window": 128000,
+      "max_output_tokens": 64000,
+      "supports_extended_thinking": false,
+      "supports_system_prompts": true,
+      "supports_streaming": true,
+      "supports_function_calling": true,
+      "supports_json_mode": true,
+      "supports_images": false,
+      "supports_temperature": true,
+      "max_image_size_mb": 0.0,
+      "allow_code_generation": true
+    },
+    {
+      "model_name": "deepseek-reasoner",
+      "friendly_name": "DeepSeek Reasoner (R1)",
+      "aliases": [
+        "ds-reasoner",
+        "deepseek-r1",
+        "r1"
+      ],
+      "intelligence_score": 19,
+      "description": "DeepSeek Reasoner R1 (128K context) - Advanced reasoning model with chain-of-thought capabilities",
+      "context_window": 128000,
+      "max_output_tokens": 64000,
+      "supports_extended_thinking": true,
+      "supports_system_prompts": true,
+      "supports_streaming": true,
+      "supports_function_calling": true,
+      "supports_json_mode": true,
+      "supports_images": false,
+      "supports_temperature": true,
+      "max_image_size_mb": 0.0
+    }
+  ]
+}

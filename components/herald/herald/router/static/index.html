@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'">
+<title>Herald Account Console</title>
+<link rel="stylesheet" href="/static/herald-ui.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--hz-bg); color: var(--hz-text);
+    font-family: var(--hz-font-body);
+    font-size: 14px;
+  }
+  main { padding: 24px 28px; display: grid; gap: 24px; max-width: 1400px; margin: 0 auto; }
+  section { background: var(--hz-panel); border: 1px solid var(--hz-border); border-radius: var(--hz-radius); padding: 18px 20px; overflow-x: auto; }
+  section h2 { font-family: var(--hz-font-display); font-size: 12px; font-weight: 700; margin: 0 0 14px; color: var(--hz-muted); text-transform: uppercase; letter-spacing: .08em; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 600px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--hz-border); white-space: nowrap; }
+  th { color: var(--hz-muted); font-family: var(--hz-font-display); font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; }
+  td.wrap { white-space: normal; max-width: 420px; }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-family: var(--hz-font-display); font-size: 11px; font-weight: 600; }
+  .pill.ok { background: color-mix(in srgb, var(--hz-success) 20%, transparent); color: var(--hz-success); }
+  .pill.bad { background: color-mix(in srgb, var(--hz-error) 20%, transparent); color: var(--hz-error); }
+  .pill.type { background: color-mix(in srgb, var(--hz-accent) 18%, transparent); color: var(--hz-accent); }
+  .mono { font-family: var(--hz-font-mono); font-size: 12px; color: var(--hz-muted); }
+  .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+  .stat { font-family: var(--hz-font-display); font-size: 26px; font-weight: 700; }
+  .stat-label { color: var(--hz-muted); font-size: 12px; margin-top: 2px; }
+  .note { color: var(--hz-muted); font-size: 12px; margin: -6px 0 12px; }
+  a.link { color: var(--hz-accent); text-decoration: none; }
+  button {
+    font: inherit; font-family: var(--hz-font-display); font-size: 12.5px; font-weight: 600;
+    cursor: pointer; border-radius: var(--hz-radius-sm); border: 1px solid var(--hz-border-strong);
+    background: var(--hz-panel-raised); color: var(--hz-text); padding: 6px 12px;
+  }
+  button:hover { border-color: var(--hz-accent); }
+  button.danger:hover { border-color: var(--hz-error); color: var(--hz-error); }
+  button.primary { background: var(--hz-accent); border-color: var(--hz-accent); color: #04141c; }
+  input, select, textarea {
+    font: inherit; border-radius: var(--hz-radius-sm); border: 1px solid var(--hz-border-strong);
+    background: var(--hz-bg); color: var(--hz-text); padding: 5px 8px;
+  }
+  details { margin-top: 14px; }
+  details summary { cursor: pointer; color: var(--hz-accent); font-size: 13px; }
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 10px; }
+  .form-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--hz-muted); }
+  .form-grid textarea { min-height: 70px; font-family: var(--hz-font-mono); font-size: 12px; }
+  .login-panel {
+    margin-top: 8px; padding: 10px; border: 1px solid var(--hz-border); border-radius: 8px;
+    background: var(--hz-bg); display: none;
+  }
+  .login-panel.open { display: block; }
+  .login-panel pre {
+    white-space: pre-wrap; word-break: break-all; font-size: 12px; margin: 0 0 8px;
+    max-height: 220px; overflow-y: auto;
+  }
+  .login-panel .row { display: flex; gap: 8px; }
+  .login-panel input { flex: 1; }
+</style>
+</head>
+<body>
+<header class="hz-header">
+  <span class="hz-mark">◆</span>
+  <h1 class="hz-wordmark">Herald</h1>
+  <span class="hz-tagline">Account Console &middot; accounts &middot; logins &middot; API keys &middot; sessions &middot; usage</span>
+  <span class="hz-status-line"><span id="refresh-indicator">loading&hellip;</span></span>
+</header>
+<main>
+  <section>
+    <h2>Voice</h2>
+    <p class="note">Talk to Herald from this browser. Voice mode records your mic, runs Whisper + SAPI transcription server-side via <span class="mono">/voice/transcribe</span>, and speaks replies back with the browser's speech synthesis &mdash; the same flow the mobile app uses.</p>
+    <div><a class="link" href="/mobile?voice=1"><button class="primary">Open voice console&hellip;</button></a></div>
+  </section>
+  <section>
+    <h2>Named Accounts</h2>
+    <table>
+      <thead><tr><th>Name</th><th>Provider</th><th>Authentication</th><th>Priority</th><th>Status</th><th>Secret source</th><th></th></tr></thead>
+      <tbody id="accounts-body"></tbody>
+    </table>
+    <details>
+      <summary>+ Add account or API key reference</summary>
+      <form id="add-account-form" class="form-grid">
+        <label>Name <input name="name" required placeholder="openrouter-work"></label>
+        <label>Provider <input name="provider" required placeholder="openrouter"></label>
+        <label>Authentication
+          <select name="auth_kind">
+            <option value="api_key">api_key</option><option value="cli_profile">cli_profile</option>
+            <option value="browser_session">browser_session</option><option value="oauth">oauth</option>
+            <option value="local">local</option>
+          </select>
+        </label>
+        <label>Secret reference <input name="secret_ref" placeholder="env:OPENROUTER_WORK_KEY"></label>
+        <label>Priority <input name="priority" type="number" value="100"></label>
+        <label style="grid-column:1/-1">Non-secret config (JSON) <textarea name="config" placeholder='{"base_url":"https://..."}'></textarea></label>
+        <div><button class="primary" type="submit">Add / Update</button></div>
+      </form>
+      <div id="add-account-status" class="mono"></div>
+    </details>
+    <details>
+      <summary>Test one account connection</summary>
+    <div class="form-grid">
+      <label>Account <select id="test-account"></select></label>
+      <label style="grid-column:1/-1">Short test message <textarea id="test-prompt" maxlength="2000">Reply with exactly: Herald connection OK</textarea></label>
+      <div><button class="primary" id="test-account-button">Test connection</button></div>
+    </div>
+    <pre id="test-output" class="mono" style="white-space:pre-wrap;max-height:220px;overflow:auto"></pre>
+    </details>
+  </section>
+
+  <section>
+    <h2>Agent Memories</h2>
+    <p class="note">Encrypted state used by package and CLI agents. Contents remain hidden here.</p>
+    <table><thead><tr><th>Agent</th><th>Memory</th><th>Model</th><th>Scope</th><th>Turns</th><th>Updated</th><th></th></tr></thead><tbody id="agent-sessions-body"></tbody></table>
+  </section>
+
+  <section>
+    <h2>Protected G4F Capture</h2>
+    <div class="form-grid">
+      <label>Account <select id="capture-account"></select></label>
+      <label>Watch timeout (seconds) <input id="capture-timeout" type="number" value="120" min="15" max="900"></label>
+      <div><button class="primary" id="capture-start-button">Start secure capture</button></div>
+    </div>
+    <div id="capture-instruction" class="mono" style="margin:10px 0"></div>
+    <table><thead><tr><th>ID</th><th>Account</th><th>Status</th><th>Verified</th><th>Started</th><th>Error / next step</th></tr></thead><tbody id="capture-sessions-body"></tbody></table>
+  </section>
+
+  <section>
+    <h2>Orchestration Flow Control</h2>
+    <p class="note">Validate, start, and monitor router flows. Interactive coding and agent conversations stay in the Herald CLI.</p>
+    <div class="form-grid">
+      <label style="grid-column:1/-1">Flow configuration <textarea id="flow-yaml" style="min-height:230px">version: 1
+name: review
+mode: efficiency
+agents:
+  Director: {model: auto, memory: director}
+  Reviewer: {model: g4f-gateway, memory: reviewer}
+flow:
+  - Director
+  - [Reviewer]
+  - Director
+  - output
+rules:
+  Director: Coordinate the work and produce the final answer.
+  Reviewer: Critically review the proposed work.</textarea></label>
+      <label style="grid-column:1/-1">Run input <textarea id="flow-input" placeholder="Describe the work for this run"></textarea></label>
+      <label><input id="flow-persist" type="checkbox" checked style="width:auto"> Encrypt checkpoints and make resumable</label>
+      <div><button id="flow-validate-button">Validate configuration</button> <button class="primary" id="flow-run-button">Start flow</button></div>
+    </div>
+    <pre id="flow-output" class="mono" style="white-space:pre-wrap;max-height:360px;overflow:auto"></pre>
+    <table><thead><tr><th>Run</th><th>Name</th><th>Mode</th><th>Status</th><th>Stage</th><th>Updated</th></tr></thead><tbody id="flow-runs-body"></tbody></table>
+  </section>
+
+  <section>
+    <h2>Router Events</h2>
+    <div class="form-grid">
+      <label>Hook name <input id="hook-name" placeholder="notify-build"></label>
+      <label>Event pattern <input id="hook-pattern" value="flow.run.*"></label>
+      <label style="grid-column:1/-1">Webhook URL <input id="hook-url" placeholder="https://example.test/herald-events"></label>
+      <div><button id="hook-add-button">Add webhook</button></div>
+    </div>
+    <table><thead><tr><th>Name</th><th>Pattern</th><th>Transport</th><th>Target</th><th></th></tr></thead><tbody id="hooks-body"></tbody></table>
+    <table><thead><tr><th>Time</th><th>Topic</th><th>Payload</th></tr></thead><tbody id="events-body"></tbody></table>
+  </section>
+
+  <section>
+    <h2>Mesh Devices</h2>
+    <p class="note">Herald nodes discovered on this network via mDNS. Approving one hands it a bearer token, signed and delivered directly to that device &mdash; nothing to copy or type.</p>
+    <table><thead><tr><th>Code</th><th>Name</th><th>Last seen</th><th></th></tr></thead><tbody id="pending-devices-body"></tbody></table>
+    <details>
+      <summary>Trusted devices</summary>
+      <table><thead><tr><th>Code</th><th>Name</th><th>Approved</th><th></th></tr></thead><tbody id="trusted-devices-body"></tbody></table>
+    </details>
+  </section>
+
+  <section>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h2 style="margin:0">Connections &amp; Kapture</h2>
+      <button id="kapture-register-button">Register pinned Kapture MCP</button>
+    </div>
+    <div id="kapture-status" class="mono" style="margin:12px 0"></div>
+    <table>
+      <thead><tr><th>Owner</th><th>Name</th><th>Kind</th><th>Transport</th><th>Source</th><th>Imported</th></tr></thead>
+      <tbody id="integrations-body"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Backends</h2>
+    <table>
+      <thead><tr><th>Name</th><th>Type</th><th>Pool</th><th>Priority</th><th>Circuit</th><th>Config</th><th></th></tr></thead>
+      <tbody id="backends-body"></tbody>
+    </table>
+    <details>
+      <summary>+ Add backend</summary>
+      <form id="add-backend-form" class="form-grid">
+        <label>Name <input name="name" required placeholder="e.g. gemini-key-2"></label>
+        <label>Type
+          <select name="backend_type">
+            <option value="api_key">api_key</option>
+            <option value="cli">cli</option>
+            <option value="local_model">local_model</option>
+            <option value="browser_session">browser_session</option>
+          </select>
+        </label>
+        <label>Pool name (optional, for multi-key failover) <input name="pool_name" placeholder="e.g. gemini-pool"></label>
+        <label>Priority <input name="priority" type="number" value="100"></label>
+        <label>Cost per 1k tokens (optional) <input name="cost_per_1k_tokens" type="number" step="any"></label>
+        <label><input name="enabled" type="checkbox" checked style="width:auto"> Enabled</label>
+        <label style="grid-column: 1 / -1">Config (JSON) <textarea name="config" placeholder='{"secret_ref":"env:GEMINI_API_KEY","model_name":"...","provider":"gemini"}'></textarea></label>
+        <div><button type="submit" class="primary">Add / Update</button></div>
+      </form>
+      <div id="add-backend-status" class="mono" style="margin-top:6px"></div>
+    </details>
+  </section>
+
+  <section>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px">
+      <h2 style="margin:0">CLI & G4F Auth Maintenance</h2>
+      <button id="auth-refresh-button" class="primary">Recheck Login Status</button>
+    </div>
+    <table>
+      <thead><tr><th>CLI / Session</th><th>Status</th><th>Detail</th><th></th></tr></thead>
+      <tbody id="auth-body"></tbody>
+    </table>
+    <div id="login-panels"></div>
+  </section>
+
+  <section>
+    <h2>Browser Session Health</h2>
+    <table>
+      <thead><tr><th>Account</th><th>Status</th><th>Last Success</th><th>Last Failure</th><th>Last Error</th></tr></thead>
+      <tbody id="sessions-body"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>CLI Usage (own sessions, last 24h)</h2>
+    <table>
+      <thead><tr><th>CLI</th><th>Status</th><th>Input Tok</th><th>Output Tok</th><th>Cache Create</th><th>Cache Read</th></tr></thead>
+      <tbody id="cli-usage-body"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Usage by Backend</h2>
+    <table>
+      <thead><tr><th>Backend</th><th>Type</th><th>Calls</th><th>Success</th><th>In Tok</th><th>Out Tok</th><th>Cost</th><th>Avg ms</th></tr></thead>
+      <tbody id="usage-body"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Recent Calls</h2>
+    <table>
+      <thead><tr><th>Time</th><th>Backend</th><th>OK</th><th>ms</th><th>Prompt</th><th>Response / Error</th></tr></thead>
+      <tbody id="logs-body"></tbody>
+    </table>
+  </section>
+</main>
+
+<script src="/ui/index.js" defer></script>
+</body>
+</html>

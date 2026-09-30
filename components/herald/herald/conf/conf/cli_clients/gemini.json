@@ -1,0 +1,37 @@
+{
+  "name": "gemini",
+  "command": "agy",
+  "additional_args": [],
+  "env": {},
+  "mcp_config_path": "conf/mcp_configs/gemini-mcp.json",
+  "roles": {
+    "default": {
+      "prompt_path": "systemprompts/clink/default.txt",
+      "role_args": []
+    },
+    "planner": {
+      "prompt_path": "systemprompts/clink/default_planner.txt",
+      "role_args": []
+    },
+    "codereviewer": {
+      "prompt_path": "systemprompts/clink/default_codereviewer.txt",
+      "role_args": []
+    },
+    "security": {
+      "prompt_path": "systemprompts/clink/security_expert.txt",
+      "role_args": []
+    },
+    "performance": {
+      "prompt_path": "systemprompts/clink/performance_engineer.txt",
+      "role_args": []
+    },
+    "test": {
+      "prompt_path": "systemprompts/clink/test_architect.txt",
+      "role_args": []
+    },
+    "docs": {
+      "prompt_path": "systemprompts/clink/documentation_specialist.txt",
+      "role_args": []
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "profile_claude",
+  "runner_type": "antigravity",
+  "command": "agy",
+  "additional_args": [
+    "--model",
+    "Claude Sonnet 4.6 (Thinking)",
+    "--output-format",
+    "json"
+  ],
+  "env": {},
+  "mcp_config_path": "conf/mcp_configs/antigravity-mcp.json",
+  "roles": {
+    "default": {
+      "prompt_path": "systemprompts/clink/default.txt",
+      "role_args": []
+    }
+  }
+}
