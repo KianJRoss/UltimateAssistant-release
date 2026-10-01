@@ -51,3 +51,5 @@ Official browser instructions: https://github.com/williamkapke/kapture and https
 Provider setup also discovers Herald?s supported Claude and Antigravity profile login options. The secure API-key form stores Windows-encrypted secret references and supports OpenAI, Gemini, Anthropic, OpenRouter, DeepSeek, xAI and compatible endpoints. Saved credentials are unverified until an actual provider test succeeds.
 
 Optional g4f 8.5.9 runs locally, with a separate worker and session directory per user-created account. ChatGPT session capture reuses Herald?s protected Kapture flow; other providers can use the native g4f interface or import their own HAR/cookie export. Imported or captured sessions require restart and a successful provider test. Provider availability, model access and subscription eligibility depend on the provider and account. No browser sessions or accounts are supplied with the installer.
+
+Restart app and Quit app controls stop the app-owned Router cleanly. Restart loads an installed update while preserving conversations and accounts. Existing app desktop shortcuts are refreshed on launch.

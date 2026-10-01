@@ -1422,7 +1422,28 @@
       } catch (error) { inventoryOutput.textContent = error.message; }
       finally { inventoryButton.disabled = false; }
     };
-    document.querySelector('.voice-settings').append(diagnosticButton, uploadDiagnostics, inventoryButton);
+    const restartApp = document.createElement('button');
+    restartApp.textContent = 'Restart app';
+    const quitApp = document.createElement('button');
+    quitApp.textContent = 'Quit app';
+    async function appLifecycle(operation) {
+      if (sendButton.disabled) { statusText.textContent = 'Wait for the current action to finish.'; return; }
+      try {
+        await api(`/api/app/${operation}`, {});
+        statusText.textContent = operation === 'restart' ? 'Restarting the app and applying its selected update...' : 'App stopped. Reopen it from your desktop shortcut.';
+        if (operation === 'restart') {
+          const retry = setInterval(async () => {
+            try {
+              const response = await fetch('/', { cache: 'no-store', signal: AbortSignal.timeout(1500) });
+              if (response.ok) { clearInterval(retry); location.reload(); }
+            } catch {}
+          }, 2500);
+        }
+      } catch (error) { statusText.textContent = error.message; }
+    }
+    restartApp.onclick = () => appLifecycle('restart');
+    quitApp.onclick = () => appLifecycle('quit');
+    document.querySelector('.voice-settings').append(diagnosticButton, uploadDiagnostics, inventoryButton, restartApp, quitApp);
     document.querySelector('.voice-settings').after(inventoryOutput);
     refreshModels();
     refreshIntegrations();

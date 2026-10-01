@@ -28,6 +28,11 @@ from .assistant import Assistant
 from .portal import PortalSession
 from .settings import settings
 from . import tts
+
+_UI_SERVER = None
+_UI_RESTART = False
+_ACTIVE_EXECUTIONS = 0
+_EXECUTION_LOCK = threading.Lock()
 from .knowledge import search_local_knowledge
 from .conversation_store import ConversationStore
 from .file_ingest import MAX_FILE_BYTES, extract_document
@@ -1010,6 +1015,9 @@ async def chat(request: ChatRequest):
             return
 
     def run_cli() -> None:
+        global _ACTIVE_EXECUTIONS
+        with _EXECUTION_LOCK:
+            _ACTIVE_EXECUTIONS += 1
         setup_checkpoints = []
         try:
             for attempt in range(2):
@@ -1070,6 +1078,9 @@ async def chat(request: ChatRequest):
             except Exception:
                 _LOGGER.warning("Could not save failed execution context")
             events.put(("error", message[-3000:]))
+        finally:
+            with _EXECUTION_LOCK:
+                _ACTIVE_EXECUTIONS -= 1
 
     async def event_stream():
         listener = threading.Thread(target=listen_for_events, daemon=True)
@@ -1256,6 +1267,21 @@ def diagnostic_download() -> Response:
                     headers={"Content-Disposition": 'attachment; filename="UltimateAssistant-diagnostics.zip"'})
 
 
+@app.post("/api/app/{operation}", dependencies=[Depends(_require_app_token)])
+def app_lifecycle(operation: str) -> dict:
+    global _UI_RESTART
+    if operation not in {"restart", "quit"}:
+        raise HTTPException(400, "Use restart or quit")
+    if _UI_SERVER is None:
+        raise HTTPException(409, "App lifecycle controls require the installed launcher")
+    with _EXECUTION_LOCK:
+        if _ACTIVE_EXECUTIONS:
+            raise HTTPException(409, "Wait for the current assistant action to finish before restarting or quitting")
+    _UI_RESTART = operation == "restart"
+    threading.Timer(1.0, lambda: setattr(_UI_SERVER, "should_exit", True)).start()
+    return {"status": "restarting" if _UI_RESTART else "quitting"}
+
+
 @app.get("/api/native-inventory", dependencies=[Depends(_require_app_token)])
 async def native_inventory() -> dict:
     from urllib.parse import quote
@@ -1361,16 +1387,22 @@ async def transcribe(request: Request) -> dict[str, str]:
         raise HTTPException(status_code=502, detail="Herald could not transcribe the recording. Check Router connectivity.") from exc
 
 
-def main() -> None:
+def main() -> bool:
+    global _UI_SERVER, _UI_RESTART
+    _UI_RESTART = False
     url = "http://127.0.0.1:8765"
-    threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    if not os.environ.get("ULTIMATE_ASSISTANT_RESTARTING"):
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     print(f"Ultimate Assistant UI: {url}")
     print(f"Herald Router: {settings.herald_url}; model: {_assistant.model}")
     try:
-        uvicorn.run(app, host="127.0.0.1", port=8765, log_level="warning")
+        _UI_SERVER = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=8765, log_level="warning"))
+        _UI_SERVER.run()
     finally:
         _portal_executor.submit(_portal.close).result()
         _portal_executor.shutdown(wait=True)
+        _UI_SERVER = None
+    return _UI_RESTART
 
 
 if __name__ == "__main__":
