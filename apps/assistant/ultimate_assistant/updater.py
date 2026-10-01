@@ -14,6 +14,20 @@ from urllib.parse import urlsplit
 import httpx
 
 
+def diagnostic_destination(data: Path) -> str:
+    config_file = data / "updates.json"
+    config = json.loads(config_file.read_text("utf-8")) if config_file.exists() else {}
+    source = config.get("manifest_url", "https://raw.githubusercontent.com/KianJRoss/UltimateAssistant-release/main/release.json")
+    if urlsplit(source).scheme != "https":
+        raise ValueError("Use an HTTPS release manifest URL")
+    response = httpx.get(source, follow_redirects=True, timeout=20)
+    response.raise_for_status()
+    destination = response.json().get("diagnostics_upload_url", "")
+    if not destination:
+        raise ValueError("This release channel has no diagnostic upload destination")
+    return destination
+
+
 def check_update(data: Path, install: bool = False) -> dict:
     config_file = data / "updates.json"
     config = json.loads(config_file.read_text("utf-8")) if config_file.exists() else {}

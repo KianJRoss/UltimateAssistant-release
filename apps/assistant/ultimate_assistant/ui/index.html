@@ -362,8 +362,24 @@
       voiceSelect.disabled = voiceSelect.options.length === 0;
     }
 
+    async function persistVoicePreferences() {
+      const keys = ['assistant-tts-provider', 'assistant-voice-device', 'assistant-voice-kokoro', 'assistant-voice-elevenlabs', 'assistant-voice-rate', 'assistant-speak', 'assistant-wake-name'];
+      const preferences = Object.fromEntries(keys.filter(key => localStorage.getItem(key) !== null).map(key => [key, localStorage.getItem(key)]));
+      await api('/api/voice-preferences', { preferences });
+    }
+    for (const element of [wakeNameInput, rateInput, document.getElementById('speak'), voiceSelect, ttsProviderSelect]) {
+      element.addEventListener('change', () => queueMicrotask(() => persistVoicePreferences().catch(() => { statusText.textContent = 'Could not save voice preferences to the app.'; })));
+    }
+
     async function loadTtsOptions() {
       try {
+        const persisted = await api('/api/voice-preferences');
+        const keys = ['assistant-tts-provider', 'assistant-voice-device', 'assistant-voice-kokoro', 'assistant-voice-elevenlabs', 'assistant-voice-rate', 'assistant-speak', 'assistant-wake-name'];
+        for (const key of keys) if (key in persisted) localStorage.setItem(key, persisted[key]);
+        if (!Object.keys(persisted).length) await persistVoicePreferences();
+        wakeNameInput.value = localStorage.getItem('assistant-wake-name') || 'Herald';
+        rateInput.value = localStorage.getItem('assistant-voice-rate') || '1';
+        document.getElementById('speak').checked = localStorage.getItem('assistant-speak') !== 'false';
         ttsOptions = await api('/api/tts');
         const saved = localStorage.getItem('assistant-tts-provider') || 'elevenlabs';
         ttsProviderSelect.value = saved;
@@ -807,7 +823,14 @@
         const result = await api(`/api/conversations/${encodeURIComponent(conversationId)}`);
         if (result.messages.length) {
           document.getElementById('welcome')?.remove();
-          for (const item of result.messages) addMessage(item.role, item.content, false, item.id);
+          for (const item of result.messages) {
+            const row = addMessage(item.role, item.content, false, item.id);
+            if (item.activity?.length) {
+              const list = activityPanel(row);
+              for (const event of item.activity) appendActivity(list, event);
+              list.parentElement.open = false;
+            }
+          }
         }
       } catch (error) { addMessage('assistant', `Could not load saved conversation: ${error.message}`, true); }
       await refreshConversationMemory();
@@ -1061,6 +1084,22 @@
     });
     document.getElementById('portalClose').addEventListener('click', () => portalAction('/api/portal/close', {}));
 
+    function activityPanel(row) {
+      const panel = document.createElement('details');
+      panel.open = true;
+      const title = document.createElement('summary');
+      title.textContent = 'Assistant activity';
+      const list = document.createElement('ol');
+      panel.append(title, list);
+      row.querySelector('.bubble').append(panel);
+      return list;
+    }
+    function appendActivity(list, event) {
+      const item = document.createElement('li');
+      item.textContent = `${Number(event.elapsed_seconds || 0).toFixed(1)}s \u00b7 ${event.label || event}`;
+      list.append(item);
+    }
+
     async function sendMessage(text = message.value, setupIntro = false) {
       const prompt = text.trim();
       if (!prompt || sendButton.disabled) return;
@@ -1071,6 +1110,8 @@
       statusText.textContent = 'Thinking…';
       const typing = addMessage('assistant', 'Thinking…');
       typing.classList.add('typing-row');
+      const activity = activityPanel(userRow);
+      const timer = setInterval(() => { typing.querySelector('.bubble').textContent = 'Still running - no new activity received.'; }, 15000);
       try {
         const response = await fetch('/api/chat', {
           method: 'POST',
@@ -1096,8 +1137,9 @@
             if (!event || !dataLine) continue;
             const data = JSON.parse(dataLine);
             if (event === 'progress') {
-              typing.querySelector('.bubble').textContent = data;
-              statusText.textContent = data;
+              appendActivity(activity, data);
+              typing.querySelector('.bubble').textContent = data.label || data;
+              statusText.textContent = data.label || data;
             } else if (event === 'complete') result = data;
             else if (event === 'error') throw new Error(typeof data === 'string' ? data : 'The request failed.');
           }
@@ -1121,6 +1163,7 @@
         addMessage('assistant', error.message, true);
         statusText.textContent = 'Request failed';
       } finally {
+        clearInterval(timer);
         sendButton.disabled = false;
         message.focus();
       }
@@ -1182,7 +1225,7 @@
         await refreshProvider();
       } catch (error) {
         statusText.textContent = error.message;
-        refreshModels();
+            refreshModels();
       }
     });
 
@@ -1330,11 +1373,61 @@
       statusText.textContent = 'Wake listening off';
     }
 
+        const diagnosticButton = document.createElement('button');
+    diagnosticButton.textContent = 'Download diagnostics';
+    diagnosticButton.title = 'Download version and action timings to share with support. Excludes chat text and credentials.';
+    diagnosticButton.onclick = async () => {
+      try {
+        const response = await fetch('/api/diagnostics', { headers: { 'X-Ultimate-Assistant-Token': token } });
+        if (!response.ok) throw new Error('Diagnostic download failed');
+        const url = URL.createObjectURL(await response.blob());
+        const link = document.createElement('a');
+        link.href = url; link.download = 'UltimateAssistant-diagnostics.zip'; link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        statusText.textContent = 'Diagnostics downloaded. Send the ZIP to the person helping you.';
+      } catch (error) { statusText.textContent = error.message; }
+    };
+    const uploadDiagnostics = document.createElement('button');
+    uploadDiagnostics.textContent = 'Send diagnostics';
+    uploadDiagnostics.title = 'Send version and action timings to the configured support destination. Excludes chat text and credentials.';
+    uploadDiagnostics.onclick = async () => {
+      uploadDiagnostics.disabled = true;
+      statusText.textContent = 'Sending diagnostics...';
+      try {
+        await api('/api/diagnostics/upload', {});
+        statusText.textContent = 'Diagnostic report accepted by support destination.';
+      } catch (error) { statusText.textContent = error.message; }
+      finally { uploadDiagnostics.disabled = false; }
+    };
+    const inventoryButton = document.createElement('button');
+    inventoryButton.textContent = 'Models and usage';
+    const inventoryOutput = document.createElement('pre');
+    inventoryOutput.style.whiteSpace = 'pre-wrap';
+    inventoryOutput.hidden = true;
+    inventoryButton.onclick = async () => {
+      inventoryButton.disabled = true; inventoryOutput.hidden = false;
+      inventoryOutput.textContent = 'Reading native Antigravity models and usage...';
+      try {
+        const info = await api('/api/native-inventory');
+        const lines = [];
+        for (const group of info.groups) {
+          lines.push(group.name);
+          for (const bucket of group.buckets || []) {
+            const remaining = typeof bucket.remaining_fraction === 'number' ? `${Math.round(bucket.remaining_fraction * 100)}% remaining` : 'Unknown remaining allowance';
+            lines.push(`  ${bucket.name}: ${remaining}${bucket.reset_time ? ` \u00b7 resets ${new Date(bucket.reset_time).toLocaleString()}` : ''}`);
+          }
+        }
+        lines.push('', 'Available models:', ...info.models.map(model => `  ${model.label} (${model.id})`));
+        inventoryOutput.textContent = lines.join('\n');
+      } catch (error) { inventoryOutput.textContent = error.message; }
+      finally { inventoryButton.disabled = false; }
+    };
+    document.querySelector('.voice-settings').append(diagnosticButton, uploadDiagnostics, inventoryButton);
+    document.querySelector('.voice-settings').after(inventoryOutput);
     refreshModels();
     refreshIntegrations();
     refreshTasks();
     refreshMemories();
-    loadConversation();
     loadTtsOptions();
   </script>
 

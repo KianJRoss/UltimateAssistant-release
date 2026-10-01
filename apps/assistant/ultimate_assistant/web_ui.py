@@ -162,6 +162,10 @@ class SpeechRequest(BaseModel):
     speed: float = Field(ge=0.75, le=1.2)
 
 
+class VoicePreferencesRequest(BaseModel):
+    preferences: dict[str, str]
+
+
 class PortalOpenRequest(BaseModel):
     url: str = Field(min_length=8, max_length=2048)
 
@@ -773,6 +777,8 @@ async def file_extract(request: Request) -> dict[str, object]:
 
 @app.post("/api/chat", dependencies=[Depends(_require_app_token)])
 async def chat(request: ChatRequest):
+    import time
+    request_started = time.monotonic()
     message = request.message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
@@ -829,6 +835,7 @@ async def chat(request: ChatRequest):
     assistant_policy = (
         "You are the user's assistant. Decide for yourself whether this request needs native CLI tools. "
         "The selected provider CLI's own native interface and tools (for example Codex or Antigravity) are the primary way to do local computer work: use its built-in read/write/search/shell/browser capabilities when available rather than requiring an equivalent Herald MCP. Do not replace, disable, or unnecessarily duplicate those native tools. The app runs CLI backends directly in agentic mode so their native tools remain active; non-CLI backends use Herald's full harness. The scoped Herald MCP gateway adds Router tools to the CLI when configured. Use Herald swarm/loop capabilities only when their actual tools or supported APIs are available; otherwise use the CLI's own subagents and never claim a Herald swarm/loop ran. "
+        "For a simple device action such as closing one browser tab, use the known connected browser or desktop tool directly. Avoid broad environment discovery, installation, research, or delegation unless the action is actually blocked. Give a brief visible progress update before tool work and after a substantial wait, distinguishing active work, waiting for a tool, and waiting for the user. For larger independent tasks, use available native subagents or a verified Herald swarm interface with bounded workers and then verify their results. For ongoing requests, use the scoped recurring-loop tools when available and report the schedule. Never claim a worker or loop exists without a successful tool result. "
         "For conversation, questions, planning, or explanation, respond normally without tools unless a scoped tool materially helps. Use native tools "
         "or the currently scoped Herald integrations when they materially help complete the user's requested work. "
         "Use the configured assistant work folder as the default for local file and shell operations. Herald's shell "
@@ -954,6 +961,20 @@ async def chat(request: ChatRequest):
     messages.append({"role": "user", "content": model_message})
     events: Queue[tuple[str, object]] = Queue()
     stop = threading.Event()
+    activity_id = secrets.token_hex(16)
+    started = request_started
+    progress_lock = threading.Lock()
+    last_label = [None]
+
+    def progress(label: str) -> None:
+        with progress_lock:
+            if label == last_label[0]:
+                return
+            last_label[0] = label
+            event = _conversations.record_activity(request.conversation_id, user_message_id, time.monotonic() - started, label)
+            events.put(("progress", event))
+
+    progress("Request prepared; starting native assistant")
 
     def listen_for_events() -> None:
         try:
@@ -972,17 +993,19 @@ async def chat(request: ChatRequest):
                         continue
                     payload = event.get("payload", {})
                     if (payload.get("project") != settings.herald_project or payload.get("part") != settings.herald_part
+                            or payload.get("activity_id") != activity_id
                             or event.get("event_type") not in {"agent.step", "agent.stderr"}):
                         continue
                     kind = str(payload.get("kind") or payload.get("type") or "activity")
                     tool = str(payload.get("item_type") or payload.get("tool_name") or "")
-                    status = str(payload.get("status") or "")
-                    label = f"Using {tool.replace('_', ' ')}" if tool else "Working"
+                    status = str(payload.get("status") or payload.get("state") or "")
+                    label = f"Using {tool.replace('_', ' ')}" if tool else ("Native assistant response" if kind == "step.agent_response" else "Working")
                     if status:
                         label += f" · {status}"
                     if kind in {"error", "turn.failed"}:
                         label = "CLI reported an error"
-                    events.put(("progress", label[:120]))
+                    if event.get("event_type") != "agent.stderr":
+                        progress(label[:120])
         except Exception:
             return
 
@@ -994,7 +1017,7 @@ async def chat(request: ChatRequest):
                     f"{router_url}/v1/chat/completions", headers={**headers, "Content-Type": "application/json"},
                     json={"model": _assistant.model, "messages": messages, "agentic": True,
                           "force_harness": selected.get("backend_type") != "cli",
-                          "project": settings.herald_project, "part": settings.herald_part},
+                          "project": settings.herald_project, "part": settings.herald_part, "activity_id": activity_id},
                     timeout=httpx.Timeout(connect=10, read=1800, write=30, pool=10),
                 )
                 if not response.is_success:
@@ -1018,18 +1041,20 @@ async def chat(request: ChatRequest):
                     setup_checkpoints.append(checkpoint)
                 if attempt:
                     raise RuntimeError("Connection configuration was saved, but the fresh assistant session could not finish verification.")
-                events.put(("progress", "Verifying the connection"))
+                progress("Verifying the connection")
                 messages.extend([
                     {"role": "assistant", "content": checkpoint or "Connection configuration saved; verification is pending."},
                     {"role": "system", "content": "Automatic setup continuation in a fresh native CLI session. Continue the same user-authorized setup from the saved observations. Verify the newly configured tools with a harmless read-only call and continue. No new user action or authorization was supplied. Do not repeat completed setup or invent successful verification."},
                 ])
             model_reply = "\n\n".join([*setup_checkpoints, reply]) if setup_checkpoints else None
             assistant_message_id = _conversations.append(request.conversation_id, "assistant", reply, model_content=model_reply)
+            progress("Completed")
             events.put(("complete", {
                 "reply": str(reply), "model": _assistant.model,
                 "user_message_id": user_message_id, "assistant_message_id": assistant_message_id,
             }))
         except Exception as exc:
+            progress("Execution failed; see response for details")
             _LOGGER.exception("Assistant execution failed")
             from herald.router.sanitization import sanitize_error
             message = sanitize_error(exc).strip() or "Herald could not complete the request."
@@ -1222,6 +1247,57 @@ def speech_options() -> dict[str, object]:
         except Exception:
             pass
     return {"providers": available, "elevenlabs_voices": voices}
+
+
+@app.get("/api/diagnostics", dependencies=[Depends(_require_app_token)])
+def diagnostic_download() -> Response:
+    from .diagnostics import bundle
+    return Response(bundle(_assistant.model), media_type="application/zip",
+                    headers={"Content-Disposition": 'attachment; filename="UltimateAssistant-diagnostics.zip"'})
+
+
+@app.get("/api/native-inventory", dependencies=[Depends(_require_app_token)])
+async def native_inventory() -> dict:
+    from urllib.parse import quote
+    try:
+        return await asyncio.to_thread(onboarding.router_request, "GET", "/backends/" + quote(_assistant.model, safe="") + "/native-inventory")
+    except Exception as exc:
+        raise HTTPException(502, detail="Native inventory unavailable. Select an Antigravity account and check its sign-in.") from exc
+
+
+@app.post("/api/diagnostics/upload", dependencies=[Depends(_require_app_token)])
+async def diagnostic_upload() -> dict:
+    from .diagnostics import upload
+    try:
+        return await asyncio.to_thread(upload, _assistant.model)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Diagnostic upload failed; the report remains available for download.") from exc
+
+
+@app.get("/api/voice-preferences", dependencies=[Depends(_require_app_token)])
+def voice_preferences() -> dict:
+    path = settings.user_settings_file.parent / "voice-preferences.json"
+    return json.loads(path.read_text("utf-8")) if path.exists() else {}
+
+
+@app.post("/api/voice-preferences", dependencies=[Depends(_require_app_token)])
+def save_voice_preferences(request: VoicePreferencesRequest) -> dict:
+    allowed = {"assistant-tts-provider", "assistant-voice-device", "assistant-voice-kokoro",
+               "assistant-voice-elevenlabs", "assistant-voice-rate", "assistant-speak", "assistant-wake-name"}
+    if set(request.preferences) - allowed or any(len(value) > 200 for value in request.preferences.values()):
+        raise HTTPException(status_code=400, detail="Unsupported voice preference")
+    if "assistant-tts-provider" in request.preferences and request.preferences["assistant-tts-provider"] not in {"device", "kokoro", "elevenlabs"}:
+        raise HTTPException(status_code=400, detail="Unsupported speech provider")
+    path = settings.user_settings_file.parent / "voice-preferences.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    saved = voice_preferences()
+    saved.update(request.preferences)
+    pending = path.with_suffix(".pending.json")
+    pending.write_text(json.dumps(saved, indent=2) + "\n", "utf-8")
+    pending.replace(path)
+    return saved
 
 
 @app.post("/api/tts", dependencies=[Depends(_require_app_token)])

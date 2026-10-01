@@ -1,24 +1,9 @@
-# Friend-test release source and verification
+# Diagnostics update source and verification
 
-Release tag: [v0.2.1](https://github.com/KianJRoss/UltimateAssistant-release/releases/tag/v0.2.1)
+Version: 0.2.2. The source commit and installer checksum are recorded in the release metadata.
 
-Selected source commit: `31b8fb217987b2484aab8aade4fe23fad2cc2b2d`. The tag points to that commit. This repository contains the selected app, bundled Herald Python source, perception MCP, Windows control MCP, and publication checks. Operational state, credentials, development probes, and maintainer-only AdminLoop modules are excluded. Speech model binaries are included in the Windows release ZIP, with licenses, and fetched with checksum verification for source installs when absent.
+This curated release contains persistent timestamped activity, explicit diagnostic sharing, Antigravity quota-group fallback and live inventory, sign-in startup, and persistent voice preferences. Optional module development and manager-work records are excluded from this update.
 
-Windows ZIP SHA-256: `4e0872c1e082612cb9355803182c499baa1ec93ba8179cde671d9775613c123e`.
+Evidence: full Herald regression passed 455 tests with 2 skipped; app checks passed 25 tests; focused native CLI checks passed 18 tests. A real Antigravity native file read returned the expected text. Browser checks confirmed activity survives completion and reload and native usage displays without JavaScript errors. A clean isolated install and reinstall preserved the selected voice; installed app/component bytes matched the ZIP and Kokoro was detected. Selected archive privacy checks passed. The support receiver accepted a synthetic HTTPS diagnostic upload and retains reports privately.
 
-## Verification evidence
-
-- Development Herald regression: 452 passed, 2 skipped.
-- App setup/update regressions: 21 passed.
-- Clean isolated installation of the exact Windows ZIP completed with Python 3.13; installed source and model bytes matched the archive.
-- Fresh packaged Router/UI imports passed.
-- Selected public source and installer ZIP passed filename/content publication checks.
-- Installed Python dependency audit found no known vulnerabilities across 146 distributions. The editable custom Herald source was checked separately rather than treated as an upstream registry package.
-- GitHub publication checks passed for the selected source commit.
-- An anonymous HTTPS download matched all 114,904,128 ZIP bytes and its checksum.
-
-## Scope
-
-This is a Windows friend-test prerelease. The published package is ready to send for feedback; provider-specific sign-in, permissions, upstream availability, and real-world MCP session behavior remain part of that practical testing. See [release notes](RELEASE-NOTES.md) for observed limitations. This is not a new Herald registry release, a fleet deployment, or a declaration that every integration is complete.
-
-The regular updater manifest remains at v0.2.0. The separate `preview-release.json` manifest points to this friend-test release.
+This is a friend-test update. It does not grant remote control, automatically transmit conversations, or claim all external integrations work.

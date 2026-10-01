@@ -248,11 +248,15 @@ def _parse_antigravity_line(parsed: dict[str, Any], state: dict[str, Any]) -> di
             state["result_response"] = result["response"]
         if result.get("status") != "SUCCESS":
             state.setdefault("stderr_lines", []).append(f"antigravity status: {result.get('status')}")
+            if result.get("error"):
+                state["stderr_lines"].append(sanitize_error(result["error"]))
         return {"kind": "result", "status": result.get("status")}
     if etype != "step_update":
         return None
     step = parsed.get("step_update", {})
     step_type = step.get("step_type")
+    if step_type == "tool":
+        state["native_tools_started"] = state.get("native_tools_started", 0) + 1
     if step_type == "agent_response" and step.get("text_delta"):
         state.setdefault("response_deltas", []).append(step["text_delta"])
     tool_error = step.get("state") == "ERROR" or bool((step.get("tool_info") or {}).get("error"))
@@ -494,7 +498,8 @@ def _call_cli_streaming(
                 "error": f"{cli_kind} appears logged out; original error: {error_text}",
                 "partial_content": _partial_content(state),
             }
-        return {"ok": False, "error": error_text, "partial_content": _partial_content(state)}
+        return {"ok": False, "error": error_text, "partial_content": _partial_content(state),
+                "native_tools_started": state.get("native_tools_started", 0)}
 
     agent_messages = state.get("agent_messages") or []
     usage = state.get("usage") or {}
@@ -628,6 +633,19 @@ def call_cli(
 
     base_args = _strip_output_format([*client.internal_args, *client.config_args])
     cli_kind = _detect_streaming_cli_kind(exec_name)
+    if config.get("model"):
+        # A per-call model selection must replace the profile flag, not duplicate it.
+        cleaned = []
+        skip = False
+        for arg in base_args:
+            if skip:
+                skip = False
+                continue
+            if arg == "--model":
+                skip = True
+            elif not arg.startswith("--model="):
+                cleaned.append(arg)
+        base_args = [*cleaned, "--model", str(config["model"])]
     # These calls run unattended through the full native provider harness.
     # Use the provider's supported per-invocation permission flag; leave its
     # persisted configuration and native tools intact.
@@ -661,10 +679,29 @@ def call_cli(
         cmd = [resolved_exec, *client.executable[1:], *client.internal_args, *client.config_args, "-p", prompt]
 
     if cli_kind:
-        return _call_cli_streaming(
+        result = _call_cli_streaming(
             cmd, env, client, timeout, cli_kind,
             stdin_text=prompt if cli_kind == "codex" else None,
         )
+        if (cli_kind == "antigravity" and not result.get("ok") and not result.get("native_tools_started")
+                and result.get("error_kind") != "auth" and config.get("model_fallback", True)
+                and any(word in str(result.get("error", "")).lower() for word in ("quota", "rate limit", "resource_exhausted", "429"))):
+            try:
+                from .antigravity_models import available_fallbacks
+                candidates = available_fallbacks([resolved_exec, *client.executable[1:]], env,
+                                                 str(client.working_dir) if client.working_dir else None,
+                                                 config.get("fallback_models", []))
+            except Exception:
+                candidates = []
+            for model in candidates[:2]:
+                event_bus.emit_nowait("agent.step", payload={**event_bus.get_scope(), "kind": "model.fallback", "tool_name": model, "status": "switching"}, source="antigravity_cli")
+                attempt = call_cli({**config, "model": model, "model_fallback": False}, prompt, timeout, working_dir=working_dir)
+                if attempt.get("ok"):
+                    return {**attempt, "native_model": model, "fallback_used": True}
+                result = attempt
+                if attempt.get("native_tools_started") or attempt.get("error_kind") == "auth":
+                    break
+        return result
 
     try:
         # Explicit DEVNULL, not inherited stdin: a server process's stdin can be

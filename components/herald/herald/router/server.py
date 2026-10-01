@@ -54,7 +54,7 @@ import httpx
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from herald.router import cli_auth
 from herald.router import cli_usage
@@ -726,6 +726,7 @@ class OpenAIChatRequest(BaseModel):
     agentic: bool = False
     project: str | None = None
     part: str | None = None
+    activity_id: str | None = Field(default=None, max_length=100)
     max_tool_iterations: int = 6
     max_depth: int = 3
     max_parallel: int = 4
@@ -999,6 +1000,30 @@ def list_backends() -> dict[str, Any]:
     return {"backends": [_backend_to_dict(b) for b in registry.list_all()]}
 
 
+@app.get("/backends/{name}/native-inventory")
+def native_model_inventory(name: str) -> dict[str, Any]:
+    backend = registry.get(name)
+    if not backend or backend.backend_type != "cli":
+        raise HTTPException(400, "Select a native CLI backend")
+    from clink.registry import ClinkRegistry
+    from herald.router.bootstrap import _path_with_cli_locations
+    from herald.router.antigravity_models import inventory
+    import shutil
+    client = ClinkRegistry().get_client(backend.config["cli_name"])
+    if client.runner != "antigravity":
+        raise HTTPException(400, "Native model-group inventory currently supports Antigravity")
+    env = {**os.environ, **client.env, **backend.config.get("env", {})}
+    env["PATH"] = _path_with_cli_locations()
+    executable = shutil.which(client.executable[0], path=env["PATH"])
+    if not executable:
+        raise HTTPException(400, "Antigravity executable is unavailable")
+    try:
+        return inventory([executable, *client.executable[1:]], env,
+                         str(client.working_dir) if client.working_dir else None)
+    except Exception:
+        raise HTTPException(502, "Antigravity could not provide its native model and usage inventory") from None
+
+
 @app.post("/backends")
 def create_backend(request: BackendCreateRequest) -> dict[str, Any]:
     """Upserts by name (see Registry.register) -- also how you add another
@@ -1246,6 +1271,7 @@ def openai_chat_completions(request: OpenAIChatRequest) -> Any:
     from herald.router import event_bus
     event_bus.set_scope({
         "project": request.project, "part": request.part,
+        "activity_id": request.activity_id,
         "consult_depth": request.consult_depth,
     })
     direct_cli_backend = registry.get(selected_model)
@@ -1314,7 +1340,8 @@ def openai_chat_completions(request: OpenAIChatRequest) -> Any:
                 from herald.router import event_bus
                 event_bus.emit_nowait(
                     "agent.step", importance=0.2,
-                    payload={**data, "kind": kind, "project": request.project, "part": request.part},
+                    payload={**data, "kind": kind, "project": request.project, "part": request.part,
+                             "activity_id": request.activity_id},
                     source="harness_agent",
                 )
             except Exception:

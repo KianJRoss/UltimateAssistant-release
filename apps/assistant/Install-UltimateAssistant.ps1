@@ -1,6 +1,7 @@
 param(
     [switch]$SkipConfiguration,
-    [switch]$SkipLaunch
+    [switch]$SkipLaunch,
+    [switch]$SkipStartup
 )
 
 $ErrorActionPreference = "Stop"
@@ -63,4 +64,8 @@ if (-not $env:ULTIMATE_ASSISTANT_NO_SHORTCUT) {
     $shortcut.Save()
 }
 Write-Host 'Your bundled local Router starts with the assistant. Connect Antigravity or Codex in the app.'
+if (-not $env:ULTIMATE_ASSISTANT_NO_SHORTCUT -and -not $env:ULTIMATE_ASSISTANT_NO_STARTUP) {
+    $startupDisabled = Test-Path (Join-Path $env:LOCALAPPDATA 'UltimateAssistant\startup-disabled')
+    & (Join-Path $installRoot 'apps\assistant\configure-startup.ps1') -Disable:($SkipStartup -or $startupDisabled)
+}
 if (-not $SkipConfiguration -and -not $SkipLaunch) { & $launchScript }

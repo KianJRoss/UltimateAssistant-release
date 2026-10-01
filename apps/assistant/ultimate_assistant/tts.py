@@ -31,6 +31,9 @@ def kokoro_python() -> Path | None:
     executable = Path(configured) if configured else None
     if executable and executable.is_file():
         return executable
+    bundled = Path(__file__).resolve().parents[3] / '.venvs' / 'kokoro' / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
+    if bundled.is_file():
+        return bundled
     return None
 
 

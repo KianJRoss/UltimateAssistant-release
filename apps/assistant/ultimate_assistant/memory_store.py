@@ -145,11 +145,13 @@ class MemoryStore:
         terms = {term.casefold() for term in re.findall(r"[\w'-]{2,}", query)}
         if not terms:
             return []
+        memories = self.list_memories(limit=500)
+        if not memories:
+            return []
         try:
-            query_vector = embedder(query) if embedder else None
+            query_vector = embedder(query) if embedder and any(memory.get("embedding") for memory in memories) else None
         except Exception:
             query_vector = None
-        memories = self.list_memories(limit=500)
         ranked: list[tuple[float, dict[str, Any]]] = []
         now = datetime.now(timezone.utc)
         for memory in memories:

@@ -1,3 +1,15 @@
+# 0.2.2 ? Friend diagnostics update
+
+- Timestamped assistant action history remains visible after completion and after reopening a conversation.
+- Diagnostic download and explicit upload include version, backend and action timings, excluding chat text, credentials and raw provider logs.
+- Support upload destination is supplied by release-channel metadata or per-user configuration.
+- Launch at Windows sign-in, with an opt-out and duplicate-launch protection.
+- Voice preferences persist in user data; installed Kokoro runtime is detected automatically.
+- Antigravity can fall back to an available model in another quota group after a confirmed quota failure, before native tool actions have started.
+- Simple device actions are directed to connected tools immediately; independent complex work uses available native subagents or a verified swarm, and ongoing requests use available scoped loops.
+
+A diagnostic report is sent only when the user presses Send diagnostics. This update does not provide remote control of the user's machine.
+
 # Ultimate Assistant 0.2.1 ? friend-test release
 
 This release is intended to be sent to a friend for practical testing and feedback.

@@ -13,6 +13,18 @@ import httpx
 def main() -> None:
     data = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "UltimateAssistant"
     data.mkdir(parents=True, exist_ok=True)
+    # Existing installations gain the same sign-in launcher as new installs.
+    # Respect explicit opt-out and isolated preview launchers.
+    if (os.name == "nt" and not (data / "startup-disabled").exists()
+            and not os.environ.get("ULTIMATE_ASSISTANT_NO_SHORTCUT")
+            and not os.environ.get("ULTIMATE_ASSISTANT_NO_STARTUP")):
+        startup_script = Path(__file__).resolve().parents[1] / "configure-startup.ps1"
+        if startup_script.exists():
+            result = subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                                     "-File", str(startup_script)], capture_output=True, timeout=30,
+                                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            if result.returncode:
+                print("Could not register launch at sign-in; use configure-startup.ps1 to retry.")
     import json
     from .updater import check_update
     updates_file = data / "updates.json"

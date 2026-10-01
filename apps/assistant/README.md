@@ -236,3 +236,41 @@ under `%LOCALAPPDATA%\UltimateAssistant\data`. Setting
 `COLLEGE_ASSISTANT_ROOT` explicitly opts into that project's index. The CLI
 web-search fallback finds Herald's `websearch_tools.py` under
 `HERALD_SOURCE_ROOT`, or in this workspace at `components\herald` by default.
+
+## Reopening, sign-in startup, and voices
+
+New installations open at Windows sign-in for the installing user. Existing
+installations register this on their next launch after updating. The desktop
+shortcut still reopens the app; duplicate launcher starts reuse its browser UI.
+Run `configure-startup.ps1 -Disable` to opt out or `configure-startup.ps1` to
+turn sign-in launch back on. Installer `-SkipStartup` also opts out. Isolated
+preview/update installations using `ULTIMATE_ASSISTANT_NO_SHORTCUT` do not
+change the host user's startup registration.
+
+Voice choices, speaking speed, speak-replies preference, and wake name are saved
+under `%LOCALAPPDATA%\UltimateAssistant\voice-preferences.json`. Existing browser
+preferences migrate on first load. This state survives app updates and a different
+browser on the same Windows account. Kokoro detects its installed local runtime
+without requiring a custom environment variable; installation supplies its model
+and voice pack. ElevenLabs uses each user's own API key and available account
+voices. Device voices depend on voices installed in Windows. This does not copy
+credentials or synchronize preferences between separate computers.
+
+## Diagnostic sharing
+
+Assistant activity stays in each conversation as timestamped actions and statuses,
+including completion and failure. Download diagnostics creates a ZIP containing
+version, backend and activity timings. Send diagnostics uploads the same ZIP to
+the support destination provided by the release channel. Reports exclude chat
+text, attachments, employee records, credentials and raw provider logs. Upload is
+explicit, not automatic; no remote-control connection is established.
+
+A custom support destination can be set in the user's `diagnostics-upload.json`
+with an HTTPS `url` and optional vault `token_ref`. The receiver accepts a ZIP body
+with `Content-Type: application/zip`. Failed uploads remain downloadable.
+
+Antigravity quota fallback reads the native `/usage` groups and `models` inventory
+only after a quota error. It keeps the same native harness and account, tries up
+to two models with remaining allowance, and reports switches in activity. Native
+tool activity prevents automatic replay of a request. Unknown limits are not
+presented as remaining allowance.
