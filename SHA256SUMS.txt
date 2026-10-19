@@ -1,1 +1,1 @@
-d7c2aac16de69c51124998a20f753c9c0ecf50c270d2933a8d6b46dd83fd2090  UltimateAssistant-0.2.3-windows-x64.zip
+e5b8d2336588cce59e820e7ca417f04d628e5babb0e854226072de7fc23cc9a0  UltimateAssistant-0.2.3-windows-x64.zip

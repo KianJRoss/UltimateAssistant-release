@@ -1,8 +1,8 @@
 {
   "version": "0.2.3",
   "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.2.3/UltimateAssistant-0.2.3-windows-x64.zip",
-  "sha256": "d7c2aac16de69c51124998a20f753c9c0ecf50c270d2933a8d6b46dd83fd2090",
-  "source_commit": "4c2a90ea31609484d25ed0a952c80682e17e804f",
+  "sha256": "e5b8d2336588cce59e820e7ca417f04d628e5babb0e854226072de7fc23cc9a0",
+  "source_commit": "e7f365bc2950f9ecfd863494f889fc1fe8e5aca2",
   "channel": "friend-test",
   "diagnostics_upload_url": "https://kianserver-2.taile4f97e.ts.net:9443/assistant-diagnostics"
 }
