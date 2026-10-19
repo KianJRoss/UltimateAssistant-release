@@ -305,17 +305,14 @@ def _parse_antigravity_line(parsed: dict[str, Any], state: dict[str, Any]) -> di
         info = step.get("tool_info") or {}
         error = info.get("error") or {}
         message = error.get("message") if isinstance(error, dict) else str(error)
-        # A missing-file reconnaissance probe is recoverable in the native loop.
-        # Permission failures and all other tool errors remain fatal; terminal
-        # SUCCESS and independent scope/test gates are still required.
-        missing_probe = (step.get("tool_name") == "view_file"
-                         and isinstance(message, str)
-                         and "no such file or directory" in message.lower()
-                         and not any(term in message.lower() for term in
-                                     ("permission denied", "access denied", "not authorized")))
-        state.setdefault("tool_warnings" if missing_probe else "stderr_lines", []).append(
+        # Tool errors are observations within the native recovery loop, not a
+        # terminal outcome. The CLI must still produce SUCCESS and callers must
+        # independently validate the work. Keep bounded diagnostics on either outcome.
+        state["native_tool_errors"] = state.get("native_tool_errors", 0) + 1
+        warning = sanitize_error(
             f"Antigravity tool {step.get('tool_name') or 'unknown'} failed: {message or 'reported ERROR'}"
-        )
+        )[:500]
+        state["tool_warnings"] = [*state.get("tool_warnings", []), warning][-20:]
     return {
         "kind": f"step.{step_type}", "state": step.get("state"),
         **({"tool_name": step.get("tool_name"), "tool_info": step.get("tool_info")} if step_type == "tool" else {}),
@@ -380,6 +377,8 @@ def _call_cli_streaming(
                'native_tools_started':state.get('native_tools_started',0),'elapsed_seconds':time.monotonic()-started}
         if last is not None:value['since_last_event_seconds']=time.monotonic()-last
         if state.get('conversation_id'):value['conversation_id']=state['conversation_id']
+        if state.get('tool_warnings'):
+            value.update(tool_warnings=state['tool_warnings'],native_tool_errors=state['native_tool_errors'])
         return value
     ended=set()
     try:
@@ -394,13 +393,13 @@ def _call_cli_streaming(
                 from herald.router.admin_control import stop_requested
                 if stop_requested():return failure('cancelled','Admin execution stopped by operator')
             now=time.monotonic()
+            remaining=deadline-now
+            if remaining<=0:return failure('deadline_exceeded',f'{cli_kind} exceeded its {timeout}s wall-clock deadline')
             if health_check_interval is not None and now>=next_health:
                 code=owned.proc.poll()
                 if code is not None and code!=0:return failure("health_failed",f"Owned native process exited with code {code}")
-                event_bus.emit_nowait("agent.step",importance=.2,payload={**scope,"kind":"health.check","status":"unknown" if code is None else "exited","elapsed":now-started},source=f"{cli_kind}_cli")
+                event_bus.emit_nowait("agent.step",importance=.2,payload={**scope,"kind":"health.check","status":"unknown" if code is None else "exited","elapsed":now-started,"since_last_event_seconds":now-(last if last is not None else started)},source=f"{cli_kind}_cli")
                 next_health=now+health_check_interval
-            remaining=deadline-now if health_check_interval is None else .2
-            if remaining<=0:return failure('deadline_exceeded',f'{cli_kind} exceeded its {timeout}s wall-clock deadline')
             try:kind,line=owned.queue.get(timeout=min(remaining,.2))
             except queue.Empty:continue
             if kind=='oversize':
@@ -420,7 +419,7 @@ def _call_cli_streaming(
                 except ImportError:progress=None
                 if progress:progress({key:step.get(key) for key in ('kind','tool_name','status','state')})
                 event_bus.emit_nowait('agent.step',importance=.2,payload={**scope,**step},source=f'{cli_kind}_cli')
-        try:owned.proc.wait(timeout=max(.1,deadline-time.monotonic()) if health_check_interval is None else None)
+        try:owned.proc.wait(timeout=max(.1,deadline-time.monotonic()))
         except subprocess.TimeoutExpired:return failure('deadline_exceeded',f'{cli_kind} exceeded its {timeout}s wall-clock deadline')
         stderr_lines=state.get('stderr_lines') or []
         if owned.proc.returncode or stderr_lines:
@@ -436,6 +435,7 @@ def _call_cli_streaming(
         if not content.strip():return failure('missing_response',f'{cli_kind} exited successfully but returned no assistant response')
         usage=state.get('usage') or {}
         return {'ok':True,'content':content,'native_tools_started':state.get('native_tools_started',0),
+                **({'tool_warnings':state['tool_warnings'],'native_tool_errors':state['native_tool_errors']} if state.get('tool_warnings') else {}),
                 **({'conversation_id':state['conversation_id']} if state.get('conversation_id') else {}),
                 **({'native_session_id':state['native_session_id']} if state.get('native_session_id') else {}),
                 'usage':{'input_tokens':usage.get('input_tokens'),'output_tokens':usage.get('output_tokens'),'cost_usd':state.get('cost_usd')},

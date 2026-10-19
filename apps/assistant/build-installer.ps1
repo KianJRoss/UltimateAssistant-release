@@ -24,6 +24,7 @@ try {
         "apps\assistant\ultimate_assistant\g4f_worker.py",
         "apps\assistant\ultimate_assistant\g4f_gateway.py",
         "components\herald\herald\router\provider_discovery.py",
+        "components\herald\herald\router\antigravity_models.py",
         "apps\assistant\ultimate_assistant\study_store.py",
         "apps\assistant\ultimate_assistant\study_tools.py",
         "apps\assistant\ultimate_assistant\flashcard_store.py",
