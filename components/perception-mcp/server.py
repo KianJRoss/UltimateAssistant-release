@@ -13,13 +13,14 @@ or VNC). A pure SSH/service session cannot see the live desktop and will capture
 
 import base64
 import io
+import json
 import logging
 import os
 import sys
 import time
 from typing import Any, Optional
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Image
 
 logging.basicConfig(level=logging.INFO, stream=sys.stderr,
                     format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -37,6 +38,8 @@ OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_VISION_MODEL = os.environ.get("PERCEPTION_OPENROUTER_MODEL",
                                          "qwen/qwen3-vl-8b-instruct")
 
+VISION_MAX_WIDTH = int(os.environ.get("PERCEPTION_VISION_MAX_WIDTH", "3072"))
+
 os.makedirs(CAPTURE_DIR, exist_ok=True)
 
 # Lazy singletons — heavy imports only when first used.
@@ -44,8 +47,9 @@ _ocr = None
 _mss = None
 
 
-def _grab(region: Optional[dict] = None):
-    """Return a PIL.Image of the screen (or a region {left,top,width,height})."""
+def _grab(region: Optional[dict] = None, monitor: Optional[int] = None):
+    """Return a PIL.Image of every monitor (default), one monitor (1..N), or a
+    region {left,top,width,height} in virtual-screen coordinates."""
     global _mss
     import mss
     from PIL import Image
@@ -55,7 +59,13 @@ def _grab(region: Optional[dict] = None):
         mon = {"left": int(region["left"]), "top": int(region["top"]),
                "width": int(region["width"]), "height": int(region["height"])}
     else:
-        mon = _mss.monitors[1]  # primary monitor
+        # mss.monitors[0] is the whole virtual screen; 1..N are single monitors.
+        # Default to all of them: a primary-only capture missed every window on
+        # the other screens of a multi-monitor desk.
+        index = int(monitor or 0)
+        if not 0 <= index < len(_mss.monitors):
+            raise ValueError(f"monitor must be 1..{len(_mss.monitors) - 1}, or omitted for all")
+        mon = _mss.monitors[index]
     shot = _mss.grab(mon)
     img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
     return img, mon
@@ -81,26 +91,37 @@ def _looks_blank(img) -> bool:
     return ex[1] - ex[0] < 8
 
 
-@mcp.tool()
-def capture_screen(region: Optional[dict] = None) -> dict[str, Any]:
-    """Capture the primary screen (or a region {left,top,width,height}). Saves a PNG and
-    returns its path + dimensions. Requires an interactive desktop session (local/VNC)."""
+@mcp.tool(structured_output=False)
+def capture_screen(region: Optional[dict] = None, monitor: Optional[int] = None,
+                   include_image: bool = True):
+    """Capture the screen (or a region {left,top,width,height}). Saves a PNG on this
+    device and returns its path + dimensions, plus the image itself (downscaled) so a
+    model on any device can look at it. Requires an interactive desktop session.
+    `monitor`: omit for all monitors, or 1..N for one (layout in perception_status)."""
     try:
-        img, mon = _grab(region)
+        img, mon = _grab(region, monitor)
         path = _save(img)
-        return {"ok": True, "path": path, "width": img.width, "height": img.height,
+        info = {"ok": True, "path": path, "width": img.width, "height": img.height,
                 "region": mon, "blank_warning": _looks_blank(img)}
+        if not include_image:
+            return info
+        if img.width > VISION_MAX_WIDTH:
+            img = img.resize((VISION_MAX_WIDTH, round(img.height * VISION_MAX_WIDTH / img.width)))
+        buf = io.BytesIO(); img.convert("RGB").save(buf, format="JPEG", quality=80)
+        info["image_scale"] = round(img.width / info["width"], 4)
+        return [json.dumps(info), Image(data=buf.getvalue(), format="jpeg")]
     except Exception as exc:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
 @mcp.tool()
-def ocr_screen(region: Optional[dict] = None) -> dict[str, Any]:
+def ocr_screen(region: Optional[dict] = None, monitor: Optional[int] = None) -> dict[str, Any]:
     """Read all on-screen text with RapidOCR. Returns items with text, confidence, and
-    center pixel coordinates {x,y} — feed those coords to win-ui to click the element."""
+    center pixel coordinates {x,y} — feed those coords to win-ui to click the element.
+    `monitor`: omit for all monitors, or 1..N for one (layout in perception_status)."""
     try:
         import numpy as np
-        img, mon = _grab(region)
+        img, mon = _grab(region, monitor)
         result, _ = _get_ocr()(np.array(img))
         items = []
         for box, text, score in (result or []):
@@ -116,10 +137,11 @@ def ocr_screen(region: Optional[dict] = None) -> dict[str, Any]:
 
 
 @mcp.tool()
-def find_on_screen(query: str, region: Optional[dict] = None) -> dict[str, Any]:
+def find_on_screen(query: str, region: Optional[dict] = None,
+                   monitor: Optional[int] = None) -> dict[str, Any]:
     """Find on-screen text matching `query` (case-insensitive substring). Returns matches
     ranked by score with click coordinates — use to locate a button/label to click."""
-    res = ocr_screen(region)
+    res = ocr_screen(region, monitor)
     if not res.get("ok"):
         return res
     q = query.lower().strip()
@@ -140,11 +162,15 @@ def _ollama_vision(prompt: str, img_b64: str, model: str) -> dict[str, Any]:
 
 @mcp.tool()
 def describe_screen(question: Optional[str] = None, region: Optional[dict] = None,
-                    model: Optional[str] = None) -> dict[str, Any]:
+                    model: Optional[str] = None, monitor: Optional[int] = None) -> dict[str, Any]:
     """Ask a vision model about the current screen. `question` defaults to a general
-    description. Uses local Ollama Qwen3-VL by default; set model to override."""
+    description. Uses local Ollama Qwen3-VL by default; set model to override.
+    `monitor`: omit for all monitors, or 1..N for one (layout in perception_status)."""
     try:
-        img, mon = _grab(region)
+        img, mon = _grab(region, monitor)
+        blank = _looks_blank(img)
+        if img.width > VISION_MAX_WIDTH:  # several monitors side by side
+            img = img.resize((VISION_MAX_WIDTH, round(img.height * VISION_MAX_WIDTH / img.width)))
         buf = io.BytesIO(); img.save(buf, format="PNG")
         img_b64 = base64.b64encode(buf.getvalue()).decode()
         prompt = question or ("Describe what is on this screen: the active app, key UI "
@@ -155,7 +181,7 @@ def describe_screen(question: Optional[str] = None, region: Optional[dict] = Non
                 data = _ollama_vision(prompt, img_b64, candidate)
                 text = data.get("message", {}).get("content", "")
                 return {"ok": True, "model": candidate, "answer": text,
-                        "blank_warning": _looks_blank(img)}
+                        "blank_warning": blank}
             except Exception as exc:
                 last = f"{type(exc).__name__}: {exc}"
                 logger.warning("vision model %s failed: %s", candidate, last)
@@ -183,6 +209,7 @@ def perception_status() -> dict[str, Any]:
     try:
         img, _ = _grab(); out["capture"] = {"ok": True, "size": [img.width, img.height],
                                             "blank_warning": _looks_blank(img)}
+        out["monitors"] = [{"monitor": i, **m} for i, m in enumerate(_mss.monitors) if i]
     except Exception as exc:
         out["capture"] = {"ok": False, "error": str(exc)}
     try:
@@ -200,4 +227,15 @@ if __name__ == "__main__":
     transport = os.environ.get("PERCEPTION_MCP_TRANSPORT", "stdio")
     if transport not in {"stdio", "streamable-http"}:
         raise ValueError("PERCEPTION_MCP_TRANSPORT must be stdio or streamable-http")
+    # Import the heavy modules before the stdio reader thread starts. On Windows,
+    # first importing numpy while another thread has a pending read on the stdin
+    # pipe blocks until that read returns -- every OCR call hung until the client
+    # timed out (verified on a Windows desktop: capture_screen answered in 0.1s, ocr_screen
+    # exactly at the 90s client timeout).
+    import numpy  # noqa: F401
+    import PIL.Image  # noqa: F401
+    try:
+        import rapidocr_onnxruntime  # noqa: F401
+    except ImportError:
+        pass
     mcp.run(transport=transport)

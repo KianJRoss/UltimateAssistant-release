@@ -21,7 +21,7 @@ DANGEROUS_SYSTEM_PATHS = {
 }
 
 # User home container paths - block ONLY the exact path, not subdirectories
-# Subdirectory access (e.g., /home/<username>/project) is controlled by is_home_directory_root()
+# Subdirectory access (e.g., a project inside the user home) is controlled by is_home_directory_root()
 # This allows users to work in their home subdirectories while blocking overly broad access
 DANGEROUS_HOME_CONTAINERS = {
     "/home",
@@ -105,7 +105,7 @@ def is_dangerous_path(path: Path) -> bool:
        Example: /etc is dangerous, so /etc/passwd is also blocked.
 
     2. Home containers (DANGEROUS_HOME_CONTAINERS): Block ONLY the exact path.
-       Example: /home is blocked, but /home/<username>/project is allowed.
+       Example: /home is blocked, but a project inside the user home is allowed.
        Subdirectory access control is delegated to is_home_directory_root().
 
     Args:
@@ -150,7 +150,7 @@ def is_dangerous_path(path: Path) -> bool:
                     return True
 
         # Check 3: Home containers - block ONLY exact match
-        # Subdirectories like /home/<username>/project should pass through here
+        # Subdirectories like a project inside the user home should pass through here
         # and be handled by is_home_directory_root() in resolve_and_validate_path()
         for container in DANGEROUS_HOME_CONTAINERS:
             for container_path in _dangerous_variants(Path(container)):

@@ -1,0 +1,11 @@
+{@body const images = (data.images || []).map(i => typeof i === "string" ? {src: i} : i)}
+{#if data.title}<title size="md">{data.title}</title>{/if}
+<grid columns={Math.max(1, Math.min(data.columns || 2, images.length))} gap={2}>
+  {#each images as img}
+    <grid-item gap={1}>
+      <image src={img.src} radius="md" aspectRatio={data.aspect || "4:3"} alt={img.caption || ""}/>
+      {#if img.caption}<caption>{img.caption}</caption>{/if}
+    </grid-item>
+  {/each}
+</grid>
+{#if data.caption}<caption>{data.caption}</caption>{/if}

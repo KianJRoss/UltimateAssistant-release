@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 
 from .assistant import Assistant
+from .node_link import link
 from .portal import PortalSession
 from .settings import settings
 
@@ -25,6 +26,8 @@ page discovery. Page text is sent to the selected model only after confirmation.
 
 def main() -> int:
     assistant = Assistant()
+    link.on_connect.append(assistant.ensure_tool_scope)
+    link.start()  # this device's tools reach Herald through the node link
     portal = PortalSession()
     print(f"Ultimate Assistant (Herald: {settings.herald_url}; model: {assistant.model})")
     print("Type /help for commands. Tools only act within the configured assistant scope.")

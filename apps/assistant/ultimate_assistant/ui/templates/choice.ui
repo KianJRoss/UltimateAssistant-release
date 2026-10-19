@@ -1,0 +1,23 @@
+{@body const [picked, setPicked] = DIL.useState([])}
+{@body const [other, setOther] = DIL.useState("")}
+{@body const [sent, setSent] = DIL.useState(null)}
+{@body const opts = (data.options || []).map(o => typeof o === "string" ? {label: o} : o)}
+{@body const send = (choices) => { const clean = choices.filter(Boolean); if (!clean.length) return; setSent(clean); UA.action("answer", {choices: clean, other: other.trim()}); }}
+{#if data.header}<caption>{data.header}</caption>{/if}
+<title size="md">{data.question}</title>
+{#if sent}
+  <row gap={2}><icon name="check" color="success"/><text size="sm">{sent.join(", ")}</text></row>
+{:else}
+  {#each opts as o}
+    <pressable padding={2} radius="md" gap={1} border={{size: 1, color: picked.includes(o.label) ? "primary" : "subtle"}} background={picked.includes(o.label) ? "surface-tertiary" : "surface-secondary"} onClick={() => data.multi ? setPicked(picked.includes(o.label) ? picked.filter(x => x !== o.label) : [...picked, o.label]) : send([o.label])}>
+      <text size="sm" weight="medium">{o.label}</text>
+      {#if o.description}<caption>{o.description}</caption>{/if}
+    </pressable>
+  {/each}
+  {#if data.allow_other !== false}
+    <input placeholder={data.other_placeholder || "Something else"} value={other} onChange={setOther} onSubmit={v => send([...picked, v.trim()])}/>
+  {/if}
+  {#if data.multi}
+    <button block onClick={() => send([...picked, other.trim()])}>Send</button>
+  {/if}
+{/if}

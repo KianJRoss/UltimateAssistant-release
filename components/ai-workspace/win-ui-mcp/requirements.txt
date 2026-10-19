@@ -1,4 +1,6 @@
-mcp>=1.0.0
+mcp>=1.0.0,<2
 pywin32>=310
 pyautogui>=0.9.54
 psutil>=5.9.0
+# focus-free control (UI Automation)
+uiautomation==2.0.20

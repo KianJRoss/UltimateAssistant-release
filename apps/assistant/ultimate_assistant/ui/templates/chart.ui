@@ -1,0 +1,3 @@
+{#if data.title}<title size="md">{data.title}</title>{/if}
+<Chart content={data}/>
+{#if data.caption}<caption>{data.caption}</caption>{/if}

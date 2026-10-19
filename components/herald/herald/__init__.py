@@ -61,7 +61,7 @@ def connect(url: str) -> None:
     Call this before any other herald function if your router isn't on
     the default localhost:8790.
 
-        herald.connect("http://router.example:8790")
+        herald.connect("http://100.99.89.118:8790")
     """
     global _client
     from herald.client import RouterClient

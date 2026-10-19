@@ -37,6 +37,7 @@ def add_assistant_task(
     kind: str = "commitment",
     estimated_minutes: int = 0,
     related_task_id: str = "",
+    verify: bool = False,
 ) -> str:
     """Save an explicitly requested commitment to the local assistant task list."""
     title = title.strip()
@@ -58,7 +59,7 @@ def add_assistant_task(
         due_at=due_at.strip() or None, kind=kind,
         estimated_minutes=estimated_minutes or None,
         related_task_id=related_task_id.strip() or None,
-        source="assistant", evidence=evidence,
+        source="assistant", evidence=evidence, verify=verify,
     )
     return json.dumps({"task": task}, ensure_ascii=False)
 
@@ -66,6 +67,7 @@ def add_assistant_task(
 @mcp.tool()
 def update_assistant_task(
     task_id: str, status: str = "", due_at: str = "", estimated_minutes: int = 0,
+    doer: str = "",
 ) -> str:
     """Update a task's status, due date, or estimated duration."""
     if status and status not in {"open", "in_progress", "done"}:
@@ -77,12 +79,39 @@ def update_assistant_task(
             due_at = datetime.fromisoformat(due_at).isoformat()
         except ValueError:
             return json.dumps({"error": "Due date must be an ISO date or datetime."})
-    task = _store().update_task(
-        task_id, status=status or None, due_at=due_at.strip() or None,
-        update_due=bool(due_at.strip()), estimated_minutes=estimated_minutes or None,
-        update_estimate=estimated_minutes > 0,
-    )
+    try:
+        task = _store().update_task(
+            task_id, status=status or None, due_at=due_at.strip() or None,
+            update_due=bool(due_at.strip()), estimated_minutes=estimated_minutes or None,
+            update_estimate=estimated_minutes > 0, doer=doer,
+        )
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)}, ensure_ascii=False)
     return json.dumps({"task": task} if task else {"error": "Task not found."}, ensure_ascii=False)
+
+
+@mcp.tool()
+def verify_assistant_task(
+    task_id: str, outcome: str, note: str, verifier: str,
+) -> str:
+    """Approve verified work or request changes after checking it."""
+    try:
+        task = _store().verify_task(task_id, outcome, note, verifier)
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)}, ensure_ascii=False)
+    return json.dumps({"task": task}, ensure_ascii=False)
+
+
+@mcp.tool()
+def list_task_decisions(limit: int = 30, outcome: str = "") -> str:
+    """List recorded verification decisions, newest first."""
+    try:
+        decisions = _store().list_task_decisions(
+            limit=max(1, min(limit, 100)), outcome=outcome or None,
+        )
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)}, ensure_ascii=False)
+    return json.dumps({"decisions": decisions}, ensure_ascii=False)
 
 
 if __name__ == "__main__":

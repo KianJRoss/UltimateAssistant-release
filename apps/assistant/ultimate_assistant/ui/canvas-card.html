@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Canvas card</title>
+<link rel="stylesheet" href="/api/canvas/ui/genui.css">
+<style>
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  body.ua-standalone { background: #0b0d12; overflow: auto; padding: 24px; }
+  body.ua-standalone #card { max-width: 560px; margin: 0 auto; }
+  /* In the overlay's own window: the card is the whole (opaque, rounded) window. */
+  body.ua-embedded { background: var(--ua-card-fill); }
+  body.ua-embedded #card { border: 0; border-radius: 0; box-shadow: none; background: var(--ua-card-fill); }
+</style>
+</head>
+<body>
+<div id="card"></div>
+<script>window.GENUI_ASSETS = '/api/canvas/ui/vendor/';</script>
+<script src="/api/canvas/ui/genui.js"></script>
+<script>
+/* One interactive canvas card. The PC overlay loads this page in its own small
+ * always-on-top window and hands it the element with uaShow(); opened directly
+ * in a browser (/api/canvas/ui/card?id=...#token=...) it follows the canvas stream. */
+(function () {
+  const hash = new URLSearchParams(location.hash.slice(1));
+  const query = new URLSearchParams(location.search);
+  const token = hash.get('token') || '';
+  const base = location.origin;
+  const root = document.getElementById('card');
+  if (query.get('embedded')) document.body.classList.add('ua-embedded');
+  let card = null;
+
+  function reportHeight() {
+    const height = Math.ceil(root.getBoundingClientRect().height);
+    document.title = 'ua-h:' + height;
+  }
+  new ResizeObserver(reportHeight).observe(root);
+
+  function addFrame() {
+    if (root.querySelector('.ua-frame-close')) return;
+    const close = document.createElement('button');
+    close.className = 'ua-frame-close';
+    close.title = 'Close';
+    close.textContent = '×';
+    close.addEventListener('click', () => card && card.send({ type: 'close' }));
+    root.appendChild(close);
+  }
+
+  window.uaShow = function (element) {
+    if (typeof element === 'string') element = JSON.parse(element);
+    if (card) card.update(element);
+    else card = GenUICard.mount(root, element, {
+      base, token,
+      // Closing is local: the overlay hides this window at once; the event still tells the assistant.
+      onEvent: (e) => { if (e.type === 'close') document.title = 'ua-close'; },
+      onRender: () => { addFrame(); reportHeight(); },
+    });
+    if (element.bare) root.classList.add('ua-bare'); else root.classList.remove('ua-bare');
+  };
+
+  const id = query.get('id');
+  if (!id) return;  // the overlay drives this page
+  document.body.classList.add('ua-standalone');
+  async function follow() {
+    for (;;) {
+      try {
+        const response = await fetch(`${base}/api/canvas/stream?device=${encodeURIComponent(query.get('device') || 'everywhere')}`,
+                                     { headers: { 'x-ultimate-assistant-token': token } });
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let cut;
+          while ((cut = buffer.indexOf('\n\n')) >= 0) {
+            const chunk = buffer.slice(0, cut);
+            buffer = buffer.slice(cut + 2);
+            const data = chunk.split('\n').find((line) => line.startsWith('data:'));
+            if (!data) continue;
+            const element = JSON.parse(data.slice(5)).elements.find((e) => e.id === id);
+            if (element) window.uaShow(element);
+          }
+        }
+      } catch (error) { /* retry below */ }
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+  }
+  follow();
+})();
+</script>
+</body>
+</html>

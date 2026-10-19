@@ -79,6 +79,9 @@ class MemoryStore:
                     embedding TEXT
                 )"""
             )
+            columns = {r["name"] for r in connection.execute("PRAGMA table_info(memories)")}
+            if "superseded_by" not in columns:
+                connection.execute("ALTER TABLE memories ADD COLUMN superseded_by TEXT")
             connection.execute("CREATE INDEX IF NOT EXISTS memories_active ON memories(status, importance DESC)")
 
     def _connect(self) -> sqlite3.Connection:
@@ -156,7 +159,8 @@ class MemoryStore:
         now = datetime.now(timezone.utc)
         for memory in memories:
             haystack = f"{memory['title']} {memory['content']}".casefold()
-            overlap = sum(term in haystack for term in terms) / max(1, len(terms))
+            words = set(re.findall(r"[\w'-]{2,}", haystack))
+            overlap = len(terms & words) / max(1, len(terms))
             vector_score = 0.0
             if query_vector and memory.get("embedding"):
                 try:
@@ -189,6 +193,18 @@ class MemoryStore:
                     [(accessed, item["id"]) for item in selected],
                 )
         return selected
+
+    def supersede(self, memory_id: str, replacement_id: str) -> bool:
+        """Retain a corrected memory for audit, excluding it from future retrieval."""
+        if memory_id == replacement_id:
+            raise ValueError("A memory cannot replace itself")
+        with self._lock, closing(self._connect()) as connection, connection:
+            replacement = connection.execute("SELECT id FROM memories WHERE id=? AND status='active'", (replacement_id,)).fetchone()
+            if not replacement:
+                raise ValueError("Replacement memory must exist and be active")
+            cursor = connection.execute("UPDATE memories SET status='superseded',superseded_by=? WHERE id=? AND status='active'",
+                                        (replacement_id, memory_id))
+        return cursor.rowcount > 0
 
     def delete(self, memory_id: str) -> bool:
         with self._lock, closing(self._connect()) as connection, connection:

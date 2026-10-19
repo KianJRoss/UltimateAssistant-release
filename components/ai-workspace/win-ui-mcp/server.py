@@ -126,11 +126,45 @@ def _parse_send_keys(keys: str) -> tuple[str, ...]:
     return tuple(sequence)
 
 
+class FocusRefusedError(Exception):
+    pass
+
+
 def _focus_hwnd(hwnd: int) -> None:
+    """Bring a window to the front, or raise FocusRefusedError.
+
+    Windows refuses SetForegroundWindow from background processes; attaching
+    to the foreground thread's input queue is the supported way around that.
+    Callers that send keystrokes must not continue if this raises: the keys
+    would land in whatever the user is using."""
+    import ctypes
     if win32gui.IsIconic(hwnd):
         win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-    win32gui.SetForegroundWindow(hwnd)
-    win32api.Sleep(100)
+    if win32gui.GetForegroundWindow() == hwnd:
+        return
+    foreground = win32gui.GetForegroundWindow()
+    current = win32api.GetCurrentThreadId()
+    target_thread = win32process.GetWindowThreadProcessId(hwnd)[0]
+    fg_thread = win32process.GetWindowThreadProcessId(foreground)[0] if foreground else 0
+    attached = []
+    try:
+        for thread in {fg_thread, target_thread} - {0, current}:
+            if ctypes.windll.user32.AttachThreadInput(current, thread, True):
+                attached.append(thread)
+        win32gui.BringWindowToTop(hwnd)
+        try:
+            win32gui.SetForegroundWindow(hwnd)
+        except Exception:  # noqa: BLE001 - checked below
+            pass
+    finally:
+        for thread in attached:
+            ctypes.windll.user32.AttachThreadInput(current, thread, False)
+    for _ in range(10):
+        if win32gui.GetForegroundWindow() == hwnd:
+            return
+        win32api.Sleep(30)
+    raise FocusRefusedError("Windows did not give this window the keyboard; nothing was typed. "
+                            "Use ui_set_value / ui_invoke / send_keys_background, which need no focus.")
 
 
 def _window_error(title: str) -> dict[str, Any]:
@@ -153,10 +187,83 @@ def _count_children(hwnd: int) -> int:
     return count
 
 
+def _is_cloaked(hwnd: int) -> bool:
+    """DWM-cloaked windows (other virtual desktops, suspended UWP shells) report
+    IsWindowVisible but are not on screen."""
+    import ctypes
+    cloaked = ctypes.c_int(0)
+    try:
+        ctypes.windll.dwmapi.DwmGetWindowAttribute(
+            ctypes.c_void_p(hwnd), 14, ctypes.byref(cloaked), ctypes.sizeof(cloaked))
+    except OSError:
+        return False
+    return bool(cloaked.value)
+
+
+def _monitors() -> list[tuple[int, int, int, int]]:
+    # Same order as mss / perception-mcp's `monitor` numbering (1..N).
+    return [tuple(info[2]) for info in win32api.EnumDisplayMonitors()]
+
+
+def _visible_fraction(rect: tuple[int, int, int, int], above: list[tuple[int, int, int, int]],
+                      screens: list[tuple[int, int, int, int]], samples: int = 24) -> float:
+    """Share of the window that is on a monitor and not covered by windows above it."""
+    l, t, r, b = rect
+    if r <= l or b <= t:
+        return 0.0
+    shown = total = 0
+    for i in range(samples):
+        x = l + (r - l) * (i + 0.5) / samples
+        for j in range(samples):
+            y = t + (b - t) * (j + 0.5) / samples
+            total += 1
+            if not any(sl <= x < sr and st <= y < sb for sl, st, sr, sb in screens):
+                continue
+            if any(al <= x < ar and at <= y < ab for al, at, ar, ab in above):
+                continue
+            shown += 1
+    return round(shown / total, 2)
+
+
 @mcp.tool()
-def list_windows() -> list[dict[str, Any]]:
-    """List all visible top-level windows with their title, handle, and PID."""
-    return _enum_top_level_windows()
+def list_windows(include_hidden: bool = False) -> list[dict[str, Any]]:
+    """List open application windows front-to-back (z-order) with process, rect,
+    monitor (same numbering as perception-mcp), minimized/foreground state, and
+    visible_fraction: how much of the window is actually showing after windows
+    in front of it are accounted for. Cross-check with perception's screenshot /
+    OCR to see what is really on screen. include_hidden adds hidden, cloaked and
+    tool windows (tray helpers, background shells)."""
+    screens = _monitors()
+    foreground = win32gui.GetForegroundWindow()
+    covering: list[tuple[int, int, int, int]] = []
+    result: list[dict[str, Any]] = []
+    for w in _enum_top_level_windows():  # EnumWindows order is top-to-bottom z-order
+        hwnd = int(w["handle"])
+        ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+        minimized = bool(win32gui.IsIconic(hwnd))
+        shown = (w["visible"] and not _is_cloaked(hwnd)
+                 and not ex_style & win32con.WS_EX_TOOLWINDOW)
+        if not shown and not include_hidden:
+            continue
+        rect = tuple(win32gui.GetWindowRect(hwnd))
+        cx, cy = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
+        monitor = next((i + 1 for i, (sl, st, sr, sb) in enumerate(screens)
+                        if sl <= cx < sr and st <= cy < sb), None)
+        try:
+            process = psutil.Process(w["pid"]).name() if w["pid"] else None
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            process = None
+        fraction = 0.0 if (minimized or not shown) else _visible_fraction(rect, covering, screens)
+        result.append({
+            "title": w["title"], "handle": hwnd, "pid": w["pid"], "process": process,
+            "rect": {"left": rect[0], "top": rect[1], "right": rect[2], "bottom": rect[3]},
+            "monitor": monitor, "minimized": minimized, "foreground": hwnd == foreground,
+            "visible_fraction": fraction,
+            **({} if shown else {"hidden": True}),
+        })
+        if shown and not minimized and w["title"] != "Program Manager":
+            covering.append(rect)
+    return result
 
 
 @mcp.tool()
@@ -168,13 +275,16 @@ def focus_window(title: str) -> dict[str, Any]:
         return {"ok": True, "title": actual, "handle": hwnd}
     except WindowNotFoundError:
         return _window_error(title)
+    except FocusRefusedError as exc:
+        return {"ok": False, "error": str(exc)}
     except Exception as exc:
         return _exc_error(f"focus_window {title!r}", exc)
 
 
 @mcp.tool()
 def type_text(window_title: str, text: str) -> dict[str, Any]:
-    """Focus a window and type text into it."""
+    """Focus a window and type into it with real keystrokes. Takes the user's keyboard focus:
+    prefer ui_set_value (no focus). Refuses (types nothing) if Windows won't focus the window."""
     try:
         hwnd, _ = _find_window_by_partial_title(window_title)
         _focus_hwnd(hwnd)
@@ -182,6 +292,8 @@ def type_text(window_title: str, text: str) -> dict[str, Any]:
         return {"ok": True, "chars_sent": len(text)}
     except WindowNotFoundError:
         return _window_error(window_title)
+    except FocusRefusedError as exc:
+        return {"ok": False, "error": str(exc)}
     except Exception as exc:
         return _exc_error(f"type_text {window_title!r}", exc)
 
@@ -196,6 +308,8 @@ def send_keys_tool(window_title: str, keys: str) -> dict[str, Any]:
         return {"ok": True}
     except WindowNotFoundError:
         return _window_error(window_title)
+    except FocusRefusedError as exc:
+        return {"ok": False, "error": str(exc)}
     except Exception as exc:
         return _exc_error(f"send_keys {window_title!r}", exc)
 
@@ -545,6 +659,460 @@ def scan_integration_surfaces() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Focus-free control: UI Automation and window messages. These act on a window
+# without taking the user's keyboard or mouse, so the assistant can work while
+# the user keeps using the PC (and on a monitor the user isn't looking at).
+# ---------------------------------------------------------------------------
+
+_PATH = __import__("re").compile(r"^\d+(\.\d+)*$")
+_PATTERNS = ("Invoke", "Value", "Toggle", "ExpandCollapse", "SelectionItem", "Text", "Scroll", "RangeValue")
+
+
+def _uia():
+    import uiautomation as auto  # imported lazily: COM init happens in the calling thread
+    auto.SetGlobalSearchTimeout(2)
+    return auto
+
+
+def _window_hwnd(window: str | int) -> int:
+    if isinstance(window, int) or str(window).isdigit():
+        hwnd = int(window)
+        if not win32gui.IsWindow(hwnd):
+            raise WindowNotFoundError(f"Window not found: handle {window}")
+        return hwnd
+    return _find_window_by_partial_title(str(window))[0]
+
+
+def _patterns(control) -> list[str]:
+    auto = _uia()
+    found = []
+    for name in _PATTERNS:
+        try:
+            if control.GetPattern(getattr(auto.PatternId, f"{name}Pattern")):
+                found.append(name)
+        except Exception:  # noqa: BLE001 - a pattern query may fail on odd providers
+            continue
+    return found
+
+
+def _describe(control, path: str) -> dict[str, Any]:
+    rect = control.BoundingRectangle
+    item = {"path": path, "type": control.ControlTypeName.replace("Control", ""), "name": control.Name[:120],
+            "automation_id": control.AutomationId[:80], "class": control.ClassName[:60],
+            "enabled": bool(control.IsEnabled),
+            "rect": {"left": rect.left, "top": rect.top, "right": rect.right, "bottom": rect.bottom}}
+    patterns = _patterns(control)
+    if patterns:
+        item["can"] = patterns
+    if "Value" in patterns:
+        try:
+            item["value"] = control.GetValuePattern().Value[:200]
+        except Exception:  # noqa: BLE001
+            pass
+    if "Toggle" in patterns:
+        try:
+            item["toggled"] = int(control.GetTogglePattern().ToggleState)
+        except Exception:  # noqa: BLE001
+            pass
+    return item
+
+
+def _resolve(root, element: str):
+    """An element by tree path ("0.2.1" from ui_tree), automation id, or name."""
+    element = (element or "").strip()
+    if not element:
+        return root
+    if _PATH.match(element):
+        node = root
+        for index in (int(i) for i in element.split(".")):
+            children = node.GetChildren()
+            if index >= len(children):
+                raise LookupError(f"No element at path {element}")
+            node = children[index]
+        return node
+    auto = _uia()
+    for criteria in ({"AutomationId": element}, {"Name": element}, {"SubName": element}):
+        found = auto.Control(searchFromControl=root, searchDepth=30, **criteria)
+        if found.Exists(0, 0):
+            return found
+    raise LookupError(f"No element matching {element!r}; use ui_tree to see what's there")
+
+
+def _ui_call(window, fn):
+    auto = _uia()
+    with auto.UIAutomationInitializerInThread():
+        try:
+            root = auto.ControlFromHandle(_window_hwnd(window))
+            return fn(root)
+        except WindowNotFoundError as exc:
+            return {"ok": False, "error": str(exc)}
+        except LookupError as exc:
+            return {"ok": False, "error": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            return _exc_error("ui call", exc)
+
+
+@mcp.tool()
+def ui_tree(window: str, depth: int = 4, max_nodes: int = 150) -> dict[str, Any]:
+    """The controls inside a window (UI Automation), without focusing it: path, type, name,
+    automation_id, value, what each can do (Invoke, Value, Toggle, ...). window: title text or
+    handle from list_windows. Use the path/automation_id/name with ui_get, ui_set_value, ui_invoke."""
+    def walk(root):
+        out: list[dict[str, Any]] = []
+
+        def visit(node, path, level):
+            if len(out) >= max_nodes:
+                return
+            out.append(_describe(node, path))
+            if level >= depth:
+                return
+            for i, child in enumerate(node.GetChildren()):
+                visit(child, f"{path}.{i}" if path else str(i), level + 1)
+
+        for i, child in enumerate(root.GetChildren()):
+            visit(child, str(i), 1)
+        return {"ok": True, "window": root.Name, "elements": out, "truncated": len(out) >= max_nodes}
+    return _ui_call(window, walk)
+
+
+@mcp.tool()
+def ui_get(window: str, element: str = "") -> dict[str, Any]:
+    """Read one control without focusing it: its value, toggle state, and text content
+    (documents/editors, first 4000 characters)."""
+    def get(root):
+        control = _resolve(root, element)
+        item = _describe(control, element)
+        try:
+            pattern = control.GetTextPattern()
+            if pattern:
+                item["text"] = pattern.DocumentRange.GetText(4000)
+        except Exception:  # noqa: BLE001
+            pass
+        return {"ok": True, **item}
+    return _ui_call(window, get)
+
+
+@mcp.tool()
+def ui_set_value(window: str, element: str, text: str, append: bool = False) -> dict[str, Any]:
+    """Put text into a field or editor without focusing it or typing (UI Automation Value pattern;
+    falls back to a WM_SETTEXT window message for classic edit controls). Verifies the result."""
+    def set_value(root):
+        control = _resolve(root, element)
+        new = text
+        try:
+            if append:
+                new = (control.GetValuePattern().Value or "") + text
+            control.GetValuePattern().SetValue(new)
+            method = "uia-value"
+        except Exception:  # noqa: BLE001 - not a Value-pattern control
+            hwnd = control.NativeWindowHandle
+            if not hwnd:
+                return {"ok": False, "error": "This control can't take text without focus; "
+                                              "use type_text (takes focus) after telling the user."}
+            if append:
+                length = win32gui.SendMessage(hwnd, win32con.WM_GETTEXTLENGTH, 0, 0)
+                buffer = win32gui.PyMakeBuffer((length + 1) * 2)
+                win32gui.SendMessage(hwnd, win32con.WM_GETTEXT, length + 1, buffer)
+                new = buffer.tobytes().decode("utf-16-le", "ignore").rstrip("\x00") + text
+            win32gui.SendMessage(hwnd, win32con.WM_SETTEXT, 0, new)
+            method = "wm-settext"
+        read = ""
+        try:
+            read = control.GetValuePattern().Value
+        except Exception:  # noqa: BLE001
+            try:
+                read = control.GetTextPattern().DocumentRange.GetText(len(new) + 10)
+            except Exception:  # noqa: BLE001
+                pass
+        verified = bool(read) and read.replace("\r", "").rstrip() == new.replace("\r", "").rstrip()
+        return {"ok": True, "method": method, "verified": verified, "chars": len(new)}
+    return _ui_call(window, set_value)
+
+
+@mcp.tool()
+def ui_invoke(window: str, element: str, action: str = "auto") -> dict[str, Any]:
+    """Press a button, pick a menu item, tick a box, expand a list or select an item, without focus
+    or the mouse. action: auto (best available) | invoke | toggle | expand | collapse | select."""
+    def invoke(root):
+        control = _resolve(root, element)
+        order = {"auto": ("invoke", "toggle", "select", "expand", "default"),
+                 "invoke": ("invoke",), "toggle": ("toggle",), "select": ("select",),
+                 "expand": ("expand",), "collapse": ("collapse",)}.get(action)
+        if not order:
+            return {"ok": False, "error": f"unknown action {action!r}"}
+        for kind in order:
+            try:
+                if kind == "invoke":
+                    control.GetInvokePattern().Invoke()
+                elif kind == "toggle":
+                    control.GetTogglePattern().Toggle()
+                elif kind == "select":
+                    control.GetSelectionItemPattern().Select()
+                elif kind == "expand":
+                    control.GetExpandCollapsePattern().Expand()
+                elif kind == "collapse":
+                    control.GetExpandCollapsePattern().Collapse()
+                else:
+                    control.GetLegacyIAccessiblePattern().DoDefaultAction()
+                return {"ok": True, "did": kind, "element": control.Name[:120]}
+            except Exception:  # noqa: BLE001 - try the next way
+                continue
+        return {"ok": False, "error": f"{control.Name!r} supports none of: {', '.join(order)}"}
+    return _ui_call(window, invoke)
+
+
+@mcp.tool()
+def send_keys_background(window: str, keys: str, element: str = "") -> dict[str, Any]:
+    """Send keys to a window (or one of its controls) as window messages, without focusing it.
+    Works for classic Windows apps (Notepad's text area, dialogs, most Win32 programs); many modern
+    and browser apps ignore it. Same syntax as send_keys: plain text, '{ENTER}', '^s'."""
+    def post(root):
+        control = _resolve(root, element) if element else root
+        hwnd = control.NativeWindowHandle or _window_hwnd(window)
+        target = _deepest_native(hwnd) if not element else hwnd
+        modifiers = {"ctrl": win32con.VK_CONTROL, "alt": win32con.VK_MENU, "shift": win32con.VK_SHIFT}
+        held: list[int] = []
+        sent = 0
+        index = 0
+        while index < len(keys):
+            char = keys[index]
+            if char in _MODIFIER_MAP:
+                vk = modifiers[_MODIFIER_MAP[char]]
+                win32api.PostMessage(target, win32con.WM_KEYDOWN, vk, 0)
+                held.append(vk)
+                index += 1
+                continue
+            if char == "{":
+                end = keys.find("}", index)
+                token = _normalize_key_name(keys[index + 1:end])
+                vk = _VK_FOR.get(token)
+                if vk is None:
+                    return {"ok": False, "error": f"unknown key {token!r}"}
+                win32api.PostMessage(target, win32con.WM_KEYDOWN, vk, 0)
+                win32api.PostMessage(target, win32con.WM_KEYUP, vk, 0)
+                index = end + 1
+            else:
+                if held:  # a shortcut like ^s: key down/up with modifiers held
+                    vk = win32api.VkKeyScan(char) & 0xFF
+                    win32api.PostMessage(target, win32con.WM_KEYDOWN, vk, 0)
+                    win32api.PostMessage(target, win32con.WM_KEYUP, vk, 0)
+                else:
+                    win32api.PostMessage(target, win32con.WM_CHAR, ord(char), 0)
+                index += 1
+            for vk in reversed(held):
+                win32api.PostMessage(target, win32con.WM_KEYUP, vk, 0)
+            held.clear()
+            sent += 1
+        return {"ok": True, "sent": sent, "target_class": win32gui.GetClassName(target)}
+    return _ui_call(window, post)
+
+
+_VK_FOR = {"enter": win32con.VK_RETURN, "tab": win32con.VK_TAB, "esc": win32con.VK_ESCAPE,
+           "space": win32con.VK_SPACE, "backspace": win32con.VK_BACK, "delete": win32con.VK_DELETE,
+           "up": win32con.VK_UP, "down": win32con.VK_DOWN, "left": win32con.VK_LEFT, "right": win32con.VK_RIGHT,
+           "home": win32con.VK_HOME, "end": win32con.VK_END, "pageup": win32con.VK_PRIOR,
+           "pagedown": win32con.VK_NEXT, **{f"f{i}": getattr(win32con, f"VK_F{i}") for i in range(1, 13)}}
+
+
+def _deepest_native(hwnd: int) -> int:
+    """The child window that takes keyboard input (an app's edit/document control), else the window."""
+    best = [hwnd]
+
+    def visit(child, _):
+        cls = win32gui.GetClassName(child).lower()
+        if any(k in cls for k in ("edit", "richedit", "scintilla", "document")):
+            best.append(child)
+            return False
+        return True
+
+    try:
+        win32gui.EnumChildWindows(hwnd, visit, None)
+    except Exception:  # noqa: BLE001 - EnumChildWindows raises when the callback stops early
+        pass
+    return best[-1]
+
+
+# ---------------------------------------------------------------------------
+# Monitors and the assistant's own display. A virtual monitor (an IddCx virtual
+# display driver) is the assistant's workspace: windows it works in live there,
+# off the user's screens, and come over when they're ready.
+# ---------------------------------------------------------------------------
+
+def _settings_display() -> str:
+    """Which monitor is the assistant's own: ULTIMATE_ASSISTANT_OPERATOR_DISPLAY or the
+    "operator_display" setting (a monitor number or device name); default: the virtual one."""
+    import json
+    if os.environ.get("ULTIMATE_ASSISTANT_OPERATOR_DISPLAY"):
+        return os.environ["ULTIMATE_ASSISTANT_OPERATOR_DISPLAY"]
+    for folder in ("UltimateAssistantPersonal", "UltimateAssistant"):
+        path = os.path.join(os.environ.get("LOCALAPPDATA", ""), folder, "settings.json")
+        try:
+            value = json.load(open(path, encoding="utf-8")).get("operator_display")
+        except (OSError, ValueError):
+            continue
+        if value:
+            return str(value)
+    return ""
+
+
+def _adapters() -> dict[str, str]:
+    """Display device name (DISPLAY3 etc.) -> its adapter/driver ("Virtual Desktop Monitor", "NVIDIA ...")."""
+    names: dict[str, str] = {}
+    index = 0
+    while True:
+        try:
+            device = win32api.EnumDisplayDevices(None, index)
+        except Exception:  # noqa: BLE001 - past the last device
+            break
+        names[device.DeviceName] = device.DeviceString
+        index += 1
+    return names
+
+
+def _monitor_list() -> list[dict[str, Any]]:
+    monitors = []
+    for index, (handle, _, rect) in enumerate(win32api.EnumDisplayMonitors(), start=1):
+        info = win32api.GetMonitorInfo(handle)
+        device = info.get("Device", "")
+        adapter = _adapters().get(device, "")
+        monitors.append({"monitor": index, "device": device, "adapter": adapter,
+                         "primary": bool(info.get("Flags", 0) & 1),
+                         "rect": {"left": rect[0], "top": rect[1], "right": rect[2], "bottom": rect[3]},
+                         "virtual": "virtual" in adapter.lower() or "idd" in adapter.lower()})
+    configured = _settings_display()
+    for m in monitors:  # configured: monitor number, device name, or adapter name ("Virtual Display Driver")
+        m["assistant_display"] = (configured in (m["device"], str(m["monitor"]))
+                                  or configured.lower() in m["adapter"].lower()) if configured else m["virtual"]
+    chosen = [m for m in monitors if m["assistant_display"]]
+    for m in chosen[1:]:  # exactly one assistant display
+        m["assistant_display"] = False
+    return monitors
+
+
+def _assistant_monitor() -> dict[str, Any] | None:
+    return next((m for m in _monitor_list() if m["assistant_display"]), None)
+
+
+def _move(hwnd: int, monitor: dict[str, Any], maximize: bool) -> None:
+    r = monitor["rect"]
+    if win32gui.IsIconic(hwnd) or win32gui.GetWindowPlacement(hwnd)[1] == win32con.SW_SHOWMAXIMIZED:
+        win32gui.ShowWindow(hwnd, win32con.SW_SHOWNOACTIVATE)
+    l, t, rr, b = win32gui.GetWindowRect(hwnd)
+    width, height = min(rr - l, r["right"] - r["left"]), min(b - t, r["bottom"] - r["top"])
+    flags = win32con.SWP_NOACTIVATE | win32con.SWP_NOZORDER
+    win32gui.SetWindowPos(hwnd, 0, r["left"] + 40, r["top"] + 40, width, height, flags)
+    if maximize:
+        win32gui.ShowWindow(hwnd, win32con.SW_SHOWMAXNOACTIVE)
+
+
+@mcp.tool()
+def list_monitors() -> dict[str, Any]:
+    """Monitors (same numbering as perception's screenshots), which is primary, which are virtual,
+    and which one is the assistant's own display (its workspace off the user's screens)."""
+    monitors = _monitor_list()
+    return {"ok": True, "monitors": monitors,
+            "assistant_display": next((m["monitor"] for m in monitors if m["assistant_display"]), None)}
+
+
+@mcp.tool()
+def move_window(window: str, monitor: int = 0, maximize: bool = False) -> dict[str, Any]:
+    """Move a window to a monitor without focusing it. monitor 0 = the assistant's own display."""
+    try:
+        hwnd = _window_hwnd(window)
+        monitors = _monitor_list()
+        target = _assistant_monitor() if monitor == 0 else next((m for m in monitors if m["monitor"] == monitor), None)
+        if target is None:
+            return {"ok": False, "error": "No assistant display is set up; give a monitor number."
+                    if monitor == 0 else f"No monitor {monitor}"}
+        _move(hwnd, target, maximize)
+        return {"ok": True, "monitor": target["monitor"], "title": win32gui.GetWindowText(hwnd)}
+    except WindowNotFoundError as exc:
+        return {"ok": False, "error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        return _exc_error("move_window", exc)
+
+
+@mcp.tool()
+def bring_to_user(window: str, monitor: int = 0, focus: bool = False) -> dict[str, Any]:
+    """Hand a finished window to the user: move it to their screen (monitor 0 = the primary, or the
+    one they're using) and optionally focus it. Say so when you do; it appears in front of them."""
+    try:
+        hwnd = _window_hwnd(window)
+        monitors = [m for m in _monitor_list() if not m["assistant_display"]]
+        if monitor:
+            target = next((m for m in monitors if m["monitor"] == monitor), None)
+        else:
+            fg = win32gui.GetForegroundWindow()
+            cx = sum(win32gui.GetWindowRect(fg)[0::2]) / 2 if fg else 0
+            target = next((m for m in monitors if m["rect"]["left"] <= cx < m["rect"]["right"]), None) \
+                or next((m for m in monitors if m["primary"]), monitors[0] if monitors else None)
+        if target is None:
+            return {"ok": False, "error": "No user monitor found"}
+        _move(hwnd, target, maximize=False)
+        if focus:
+            try:
+                _focus_hwnd(hwnd)
+            except FocusRefusedError:
+                win32gui.FlashWindow(hwnd, True)
+                return {"ok": True, "monitor": target["monitor"], "focused": False,
+                        "note": "Windows kept focus on the user's app; the window is flashing in the taskbar."}
+        return {"ok": True, "monitor": target["monitor"], "focused": focus}
+    except WindowNotFoundError as exc:
+        return {"ok": False, "error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        return _exc_error("bring_to_user", exc)
+
+
+@mcp.tool()
+def open_app(command: str, args: list[str] | None = None, on_assistant_display: bool = True,
+             wait_seconds: float = 8.0) -> dict[str, Any]:
+    """Start an app without taking focus and return its new window(s). command: an exe, a path, or a
+    URI/shell target (notepad, ms-settings:display, a file path, https://...). With
+    on_assistant_display the new window opens on the assistant's own display when one exists."""
+    import shutil
+    import time
+    before = {w["handle"] for w in _enum_top_level_windows()}
+    previous = win32gui.GetForegroundWindow()
+    try:
+        exe = shutil.which(command) or shutil.which(command + ".exe")
+        if exe:
+            startup = subprocess.STARTUPINFO()
+            startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startup.wShowWindow = win32con.SW_SHOWNOACTIVATE
+            subprocess.Popen([exe, *(args or [])], startupinfo=startup, close_fds=True)
+        else:  # shell targets: URIs (ms-settings:, https:), documents, folders
+            os.startfile(command, "open", " ".join(args or []) or None, None, win32con.SW_SHOWNOACTIVATE)
+    except Exception as exc:  # noqa: BLE001
+        return _exc_error(f"open_app {command!r}", exc)
+    target = _assistant_monitor() if on_assistant_display else None
+    deadline = time.time() + max(1.0, min(float(wait_seconds), 30.0))
+    new: list[dict[str, Any]] = []
+    while time.time() < deadline and not new:
+        time.sleep(0.25)
+        new = [w for w in _enum_top_level_windows()
+               if w["handle"] not in before and w["visible"] and w["title"] != ""]
+    for w in new:
+        if target:
+            try:
+                _move(int(w["handle"]), target, maximize=False)
+            except Exception:  # noqa: BLE001
+                pass
+    # Store apps (Windows 11 Notepad...) activate themselves despite SW_SHOWNOACTIVATE: hand the
+    # keyboard straight back to whatever the user was in.
+    focus_returned = False
+    time.sleep(0.5)
+    if previous and win32gui.IsWindow(previous) and win32gui.GetForegroundWindow() != previous:
+        try:
+            _focus_hwnd(previous)
+            focus_returned = True
+        except FocusRefusedError:
+            pass
+    return {"ok": True, "windows": [{"title": w["title"], "handle": w["handle"]} for w in new],
+            "on_assistant_display": bool(target), "focus_returned_to_user": focus_returned,
+            **({} if new else {"note": "no new window yet (it may have opened as a tab); check list_windows"})}
+
+
+# ---------------------------------------------------------------------------
 # Mouse + global input actuators — the "hands". Pair coordinates from the
 # perception MCP (ocr_screen / find_on_screen) with click_at to act on what
 # the agent sees.
@@ -621,7 +1189,7 @@ def mouse_position() -> dict[str, Any]:
 
 @mcp.tool()
 def press_hotkey(keys: str) -> dict[str, Any]:
-    """Send a global hotkey to whatever is focused (not tied to a window title).
+    """Send a global hotkey to whatever has focus -- possibly the user's app; prefer send_keys_background.
     Syntax matches send_keys: '^c', '%{F4}', '{ENTER}', '^+{ESC}'."""
     try:
         pyautogui.hotkey(*_parse_send_keys(keys))
@@ -632,7 +1200,8 @@ def press_hotkey(keys: str) -> dict[str, Any]:
 
 @mcp.tool()
 def type_now(text: str) -> dict[str, Any]:
-    """Type text into whatever currently has focus (no window targeting)."""
+    """Type into whatever has focus right now -- possibly the app the user is using. Only after
+    telling the user; prefer ui_set_value or type_text with a target window."""
     try:
         pyautogui.typewrite(text, interval=0.02)
         return {"ok": True, "chars_sent": len(text)}

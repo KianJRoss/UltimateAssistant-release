@@ -31,7 +31,7 @@ Each device dict has:
     last_handshake – ISO-8601 string or None
     ssh_alias  – primary SSH alias (e.g. "pc", "pi", "laptop") or None
     ssh_aliases – all aliases including alternates
-    ssh_user   – OS user for SSH (e.g. "your-user") or None
+    ssh_user   – OS user for SSH (the destination account name) or None
     ssh_reachable – True if online and a configured SSH alias exists
     self       – True for the machine running this code
 """

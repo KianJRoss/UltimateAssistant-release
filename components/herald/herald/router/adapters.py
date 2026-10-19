@@ -183,12 +183,28 @@ def call_api_key(config: dict[str, Any], prompt: str) -> dict[str, Any]:
     }
 
 
+def _brief_arguments(value: Any, limit: int = 300) -> Any:
+    """Tool arguments for a progress line: small values as-is, long strings and big inputs cut."""
+    if isinstance(value, dict):
+        out = {}
+        for key, item in list(value.items())[:8]:
+            if isinstance(item, str) and len(item) > 120:
+                item = item[:117] + "..."
+            elif isinstance(item, (dict, list)):
+                item = "..."
+            out[str(key)[:40]] = item
+        return out
+    return str(value)[:limit] if value is not None else None
+
+
 def _parse_codex_line(parsed: dict[str, Any], state: dict[str, Any]) -> dict[str, Any] | None:
     """codex exec --json: {"type": "item.started"/"item.completed"/
     "turn.completed"/"error"/..., "item": {"type": "command_execution"/
     "agent_message", "command", "status", "exit_code", "text"}}"""
     event_type = parsed.get("type", "?")
     item = parsed.get("item", {})
+    if event_type == "thread.started" and parsed.get("thread_id"):
+        state["native_session_id"] = parsed["thread_id"]
     if event_type == "item.completed" and item.get("type") == "agent_message":
         state.setdefault("agent_messages", []).append(item.get("text", ""))
     elif event_type == "turn.completed":
@@ -202,6 +218,12 @@ def _parse_codex_line(parsed: dict[str, Any], state: dict[str, Any]) -> dict[str
         **({"item_type": item.get("type"), "command": item.get("command"),
             "status": item.get("status"), "exit_code": item.get("exit_code")} if item else {}),
         **({"text": item.get("text")} if item.get("type") == "agent_message" else {}),
+        # What the step is doing, so interfaces can show "list_windows" rather than "mcp tool call".
+        **({"server": item.get("server"), "tool_name": item.get("tool"), "arguments": _brief_arguments(item.get("arguments"))}
+           if item.get("type") == "mcp_tool_call" else {}),
+        **({"query": item.get("query")} if item.get("type") == "web_search" else {}),
+        **({"paths": [c.get("path") for c in item.get("changes") or [] if isinstance(c, dict)][:10]}
+           if item.get("type") == "file_change" else {}),
     }
 
 
@@ -210,6 +232,8 @@ def _parse_claude_line(parsed: dict[str, Any], state: dict[str, Any]) -> dict[st
     "result"/"system", "message": {"content": [{"type": "tool_use"/
     "tool_result"/"text", "name", "input", "content", "text"}]}}"""
     mtype = parsed.get("type", "?")
+    if parsed.get("session_id"):
+        state["native_session_id"] = parsed["session_id"]
     if mtype == "result":
         state["usage"] = parsed.get("usage") or {}
         state["cost_usd"] = parsed.get("total_cost_usd")
@@ -226,7 +250,8 @@ def _parse_claude_line(parsed: dict[str, Any], state: dict[str, Any]) -> dict[st
     block = blocks[0]
     btype = block.get("type")
     if btype == "tool_use":
-        return {"kind": "tool_use", "name": block.get("name"), "input": block.get("input")}
+        return {"kind": "tool_use", "name": block.get("name"), "tool_name": block.get("name"),
+                "arguments": _brief_arguments(block.get("input")), "input": block.get("input")}
     if btype == "tool_result":
         content = block.get("content")
         return {"kind": "tool_result", "content": content if isinstance(content, str) else str(content)[:500]}
@@ -241,7 +266,23 @@ def _parse_antigravity_line(parsed: dict[str, Any], state: dict[str, Any]) -> di
     "init", "step_update": {"step_type": "tool"/"agent_response", "state":
     "ACTIVE"/"DONE", "tool_name", "tool_info", "text_delta", "usage"}}"""
     etype = parsed.get("event", "?")
+    if etype == "init":
+        import re
+        info=parsed.get("init") if isinstance(parsed.get("init"),dict) else {}
+        metadata={"kind":"session.init"}
+        identity=parsed.get("conversation_id") or info.get("conversation_id") or info.get("session_id")
+        if isinstance(identity,str) and re.fullmatch(r'[A-Za-z0-9_.:-]{1,200}',identity):
+            state["conversation_id"]=metadata["conversation_id"]=identity
+        permission=parsed.get("permission_mode") or info.get("permission_mode")
+        if isinstance(permission,str) and re.fullmatch(r'[A-Za-z0-9_.:-]{1,80}',permission):
+            state["permission_mode"]=metadata["permission_mode"]=permission
+        tools=parsed.get("tools",info.get("tools"))
+        if isinstance(tools,list) and len(tools)<=512 and all(isinstance(tool,str) and 0<len(tool)<=200 for tool in tools):
+            state["available_tools"]=metadata["available_tools"]=len(tools)
+        return metadata
     if etype == "result":
+        state["result_seen"]=True
+        state["result_status"]=(parsed.get("result") or {}).get("status")
         result = parsed.get("result", {})
         state["usage"] = result.get("usage") or {}
         if result.get("response"):
@@ -255,7 +296,7 @@ def _parse_antigravity_line(parsed: dict[str, Any], state: dict[str, Any]) -> di
         return None
     step = parsed.get("step_update", {})
     step_type = step.get("step_type")
-    if step_type == "tool":
+    if step_type == "tool" and step.get("state") == "ACTIVE":
         state["native_tools_started"] = state.get("native_tools_started", 0) + 1
     if step_type == "agent_response" and step.get("text_delta"):
         state.setdefault("response_deltas", []).append(step["text_delta"])
@@ -264,7 +305,15 @@ def _parse_antigravity_line(parsed: dict[str, Any], state: dict[str, Any]) -> di
         info = step.get("tool_info") or {}
         error = info.get("error") or {}
         message = error.get("message") if isinstance(error, dict) else str(error)
-        state.setdefault("stderr_lines", []).append(
+        # A missing-file reconnaissance probe is recoverable in the native loop.
+        # Permission failures and all other tool errors remain fatal; terminal
+        # SUCCESS and independent scope/test gates are still required.
+        missing_probe = (step.get("tool_name") == "view_file"
+                         and isinstance(message, str)
+                         and "no such file or directory" in message.lower()
+                         and not any(term in message.lower() for term in
+                                     ("permission denied", "access denied", "not authorized")))
+        state.setdefault("tool_warnings" if missing_probe else "stderr_lines", []).append(
             f"Antigravity tool {step.get('tool_name') or 'unknown'} failed: {message or 'reported ERROR'}"
         )
     return {
@@ -309,219 +358,89 @@ def _partial_content(state: dict[str, Any]) -> str:
 
 
 def _call_cli_streaming(
-    cmd: list[str], env: dict[str, str], client: Any, timeout: int, cli_kind: str,
-    *, stdin_text: str | None = None,
-) -> dict[str, Any]:
-    """Run a CLI in its own real-time JSONL streaming mode (codex exec
-    --json / claude --output-format stream-json / agy --output-format
-    stream-json) with a live-reading Popen loop instead of a single
-    blocking subprocess.run(), emitting one event_bus `agent.step` per
-    line AS IT ARRIVES -- real live visibility into what each CLI is
-    actually doing internally (shell commands, file edits, tool calls),
-    not just Herald's own orchestration wrapper around the call. Tagged
-    with event_bus.get_scope() (project/part), set by the request handler
-    in server.py before dispatching here.
-
-    Falls back to the old accumulate-everything-then-return behavior for
-    the actual return value (content/usage) -- streaming only changes
-    *when* the data becomes visible (live, via events), not the final
-    contract callers of call_cli() already depend on.
-    """
+    cmd: list[str], env: dict[str,str], client: Any, timeout: int, cli_kind: str,
+    *, stdin_text: str | None = None, health_check_interval: float | None = None,
+) -> dict[str,Any]:
+    """Stream the native CLI, draining both pipes within a wall-clock deadline."""
     from herald.router import event_bus
-
-    parse_line = _STREAMING_PARSERS[cli_kind]
-    scope = event_bus.get_scope()
-    state: dict[str, Any] = {}
-    deadline = time.monotonic() + timeout
-
+    from herald.router.native_process import OwnedCLI
+    parse_line=_STREAMING_PARSERS[cli_kind]
+    scope=event_bus.get_scope()
+    state={}
+    if health_check_interval is not None:
+        import math
+        if type(health_check_interval) not in (int,float) or not math.isfinite(health_check_interval) or health_check_interval<=0:
+            raise ValueError("Health check interval must be positive and finite")
+    started=time.monotonic();deadline=started+timeout;last=None
+    next_health=started+(health_check_interval or 0)
+    try:owned=OwnedCLI(cmd,env,str(client.working_dir) if client.working_dir else None,stdin_text)
+    except FileNotFoundError:return {'ok':False,'error_kind':'missing_executable','error':f'{cmd[0]} not found on PATH'}
+    def failure(kind,message):
+        value={'ok':False,'error_kind':kind,'error':message,'partial_content':(state.get('result_response') or ''.join(state.get('response_deltas') or [])) if cli_kind=='antigravity' else _partial_content(state),
+               'native_tools_started':state.get('native_tools_started',0),'elapsed_seconds':time.monotonic()-started}
+        if last is not None:value['since_last_event_seconds']=time.monotonic()-last
+        if state.get('conversation_id'):value['conversation_id']=state['conversation_id']
+        return value
+    ended=set()
     try:
-        proc = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-            encoding="utf-8", errors="replace",
-            stdin=subprocess.PIPE if stdin_text is not None else subprocess.DEVNULL,
-            env=env, bufsize=1,
-            cwd=str(client.working_dir) if client.working_dir else None,
-        )
-    except FileNotFoundError:
-        return {"ok": False, "error": f"{cmd[0]} not found on PATH"}
-
-    if stdin_text is not None and proc.stdin is not None:
-        try:
-            proc.stdin.write(stdin_text)
-            proc.stdin.close()
-        except (BrokenPipeError, OSError) as exc:
-            proc.kill()
-            return {"ok": False, "error": f"could not send prompt to {cli_kind} stdin: {sanitize_error(exc)}"}
-
-    # proc.stdout.readline() is a blocking call with no timeout of its own --
-    # checking `deadline` only between readline() calls does NOT actually
-    # enforce the timeout if the CLI goes silent (an internal hang, a stuck
-    # network call inside its own process) and never produces another line:
-    # the thread just parks inside the blocking read forever and the check
-    # code never runs again. Confirmed live -- this is what several
-    # multi-hour "stuck" native CLI sessions turned out to be, not
-    # legitimately slow work. Read on a background daemon thread instead and
-    # consume lines through a queue with a real timeout, so a silent CLI
-    # gets detected and killed on schedule instead of blocking forever.
-    line_queue: queue.Queue[str | None] = queue.Queue()
-
-    def _reader() -> None:
-        try:
-            for raw_line in proc.stdout:
-                line_queue.put(raw_line)
-        except Exception:
-            pass
-        finally:
-            line_queue.put(None)  # sentinel: stdout closed / process done
-
-    reader_thread = threading.Thread(target=_reader, daemon=True)
-    reader_thread.start()
-
-    # stderr was previously only read in one blocking chunk after the
-    # process exited or was killed on timeout -- meaning a stuck CLI (an
-    # internal hang, a blocked handshake to its own MCP subprocess, a stalled
-    # network call) was completely invisible for the entire timeout window.
-    # Confirmed live 2026-09-01: three swarm workers sat idle for 30+ minutes
-    # with zero visibility into why. Stream stderr the same way as stdout --
-    # line-by-line, live, via event_bus -- so a stuck worker's own diagnostic
-    # output shows up as it happens instead of only after the kill.
-    stderr_lines_buf: list[str] = []
-
-    def _stderr_reader() -> None:
-        try:
-            for raw_line in proc.stderr:
-                stderr_lines_buf.append(raw_line)
-                stripped = raw_line.strip()
-                if stripped:
-                    # event_bus is in-process only -- an SSE client attached to
-                    # the router server (a separate process from a standalone
-                    # `herald swarm` CLI run) never sees these. Log directly
-                    # too so a CLI-launched swarm/admin run is watchable in its
-                    # own terminal/log file, not just via /event-bus/stream.
-                    _logger.info("[%s stderr] %s", cli_kind, stripped)
-                    event_bus.emit_nowait(
-                        "agent.stderr", importance=0.1,
-                        payload={**scope, "line": stripped}, source=f"{cli_kind}_cli",
-                    )
-        except Exception:
-            pass
-
-    stderr_reader_thread = threading.Thread(target=_stderr_reader, daemon=True)
-    stderr_reader_thread.start()
-
-    try:
-        while True:
-            if env.get("HERALD_ADMIN_CALL") == "1":
+        while len(ended)<2:
+            try:
+                from herald.router.execution_control import execution_cancel
+                cancellation=execution_cancel.get()
+            except ImportError:cancellation=None
+            if cancellation is not None and cancellation.is_set():
+                return failure('cancelled','Delegated native execution cancelled')
+            if env.get('HERALD_ADMIN_CALL')=='1':
+                from herald.router.admin_control import stop_requested
+                if stop_requested():return failure('cancelled','Admin execution stopped by operator')
+            now=time.monotonic()
+            if health_check_interval is not None and now>=next_health:
+                code=owned.proc.poll()
+                if code is not None and code!=0:return failure("health_failed",f"Owned native process exited with code {code}")
+                event_bus.emit_nowait("agent.step",importance=.2,payload={**scope,"kind":"health.check","status":"unknown" if code is None else "exited","elapsed":now-started},source=f"{cli_kind}_cli")
+                next_health=now+health_check_interval
+            remaining=deadline-now if health_check_interval is None else .2
+            if remaining<=0:return failure('deadline_exceeded',f'{cli_kind} exceeded its {timeout}s wall-clock deadline')
+            try:kind,line=owned.queue.get(timeout=min(remaining,.2))
+            except queue.Empty:continue
+            if kind=='oversize':
+                _logger.info('%s: skipped one stdout line over %s bytes', cli_kind, owned.MAX_LINE)
+                continue
+            if kind=='stdin_error':return failure('stdin_failed','Could not send native prompt')
+            if line is None:ended.add(kind);continue
+            try:parsed=json.loads(line)
+            except json.JSONDecodeError:continue
+            if not isinstance(parsed,dict):continue
+            step=parse_line(parsed,state)
+            if step:
+                last=time.monotonic()
                 try:
-                    from herald.router.admin_control import stop_requested
-                    if stop_requested():
-                        proc.kill()
-                        proc.wait(timeout=5)
-                        return {
-                            "ok": False, "error_kind": "cancelled",
-                            "error": "Admin execution stopped by operator",
-                            "partial_content": _partial_content(state),
-                        }
-                except Exception:
-                    pass
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                proc.kill()
-                return {
-                    "ok": False, "error": f"{cmd[0]} timed out after {timeout}s "
-                    "(no output for the full timeout window -- likely an internal hang)",
-                    "partial_content": _partial_content(state),
-                }
-            try:
-                line = line_queue.get(timeout=min(remaining, 5.0))
-            except queue.Empty:
-                continue
-            if line is None:
-                break
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                parsed = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            try:
-                step = parse_line(parsed, state)
-                if step:
-                    # Same reasoning as the stderr logging above: event_bus is
-                    # in-process only, so a standalone `herald swarm`/admin CLI
-                    # run needs its own direct log line to be trackable in its
-                    # own terminal/log file.
-                    step_desc = step.get("summary") or step.get("kind") or step.get("type") or str(step)[:200]
-                    _logger.info("[%s step] %s", cli_kind, step_desc)
-                    event_bus.emit_nowait(
-                        "agent.step", importance=0.2, payload={**scope, **step}, source=f"{cli_kind}_cli",
-                    )
-            except Exception:
-                pass
-        # EOF on the stdout pipe does not update Popen.returncode. Reap the
-        # child explicitly so a fast CLI crash cannot masquerade as an empty
-        # successful response while its real error sits unread on stderr.
-        remaining = max(0.1, deadline - time.monotonic())
-        try:
-            proc.wait(timeout=remaining)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait(timeout=5)
-            return {
-                "ok": False,
-                "error": f"{cmd[0]} did not exit after closing stdout",
-                "partial_content": _partial_content(state),
-            }
-    finally:
-        stderr_reader_thread.join(timeout=5)
-        stderr_tail = "".join(stderr_lines_buf)
-        proc.stdout.close()
-        if proc.stderr:
-            proc.stderr.close()
-
-    stderr_lines = state.get("stderr_lines") or []
-    if proc.returncode != 0 or stderr_lines:
-        diagnostics = list(filter(None, stderr_lines))
-        native_stderr = sanitize_error(stderr_tail.strip())
-        if native_stderr and native_stderr not in diagnostics:
-            diagnostics.append(native_stderr[-4000:])
-        error_text = "; ".join(diagnostics) or f"exit code {proc.returncode}"
-        try:
-            from herald.router.cli_auth import check_one_status
-            status = check_one_status(cli_kind if cli_kind != "antigravity" else "antigravity")
-        except Exception:  # noqa: BLE001
-            status = None
-        if status and status.get("status") == "logged_out":
-            return {
-                "ok": False, "error_kind": "auth",
-                "error": f"{cli_kind} appears logged out; original error: {error_text}",
-                "partial_content": _partial_content(state),
-            }
-        return {"ok": False, "error": error_text, "partial_content": _partial_content(state),
-                "native_tools_started": state.get("native_tools_started", 0)}
-
-    agent_messages = state.get("agent_messages") or []
-    usage = state.get("usage") or {}
-    if cli_kind == "antigravity":
-        content = state.get("result_response") or "".join(state.get("response_deltas") or [])
-    else:
-        content = agent_messages[-1] if agent_messages else ""
-    if not content.strip():
-        return {
-            "ok": False,
-            "error": f"{cli_kind} exited successfully but returned no assistant response",
-            "partial_content": content or _partial_content(state),
-        }
-    return {
-        "ok": True, "content": content,
-        "usage": {
-            "input_tokens": usage.get("input_tokens"),
-            "output_tokens": usage.get("output_tokens"),
-            "cost_usd": state.get("cost_usd"),
-        },
-        "thinking": None, "thinking_tokens": usage.get("reasoning_output_tokens") or usage.get("thinking_tokens"),
-    }
+                    from herald.router.execution_control import execution_progress
+                    progress=execution_progress.get()
+                except ImportError:progress=None
+                if progress:progress({key:step.get(key) for key in ('kind','tool_name','status','state')})
+                event_bus.emit_nowait('agent.step',importance=.2,payload={**scope,**step},source=f'{cli_kind}_cli')
+        try:owned.proc.wait(timeout=max(.1,deadline-time.monotonic()) if health_check_interval is None else None)
+        except subprocess.TimeoutExpired:return failure('deadline_exceeded',f'{cli_kind} exceeded its {timeout}s wall-clock deadline')
+        stderr_lines=state.get('stderr_lines') or []
+        if owned.proc.returncode or stderr_lines:
+            diagnostics=list(filter(None,stderr_lines))
+            native_stderr=sanitize_error(owned.stderr.strip())
+            if native_stderr and native_stderr not in diagnostics:diagnostics.append(native_stderr[-4000:])
+            details='; '.join(diagnostics) or f'exit code {owned.proc.returncode}'
+            return failure('cli_failed',sanitize_error(details[-4000:]))
+        if cli_kind=='antigravity' and (not state.get('result_seen') or state.get('result_status')!='SUCCESS'):
+            return failure('missing_result','Antigravity exited without a successful final result')
+        messages=state.get('agent_messages') or []
+        content=(state.get('result_response') or ''.join(state.get('response_deltas') or [])) if cli_kind=='antigravity' else (messages[-1] if messages else '')
+        if not content.strip():return failure('missing_response',f'{cli_kind} exited successfully but returned no assistant response')
+        usage=state.get('usage') or {}
+        return {'ok':True,'content':content,'native_tools_started':state.get('native_tools_started',0),
+                **({'conversation_id':state['conversation_id']} if state.get('conversation_id') else {}),
+                **({'native_session_id':state['native_session_id']} if state.get('native_session_id') else {}),
+                'usage':{'input_tokens':usage.get('input_tokens'),'output_tokens':usage.get('output_tokens'),'cost_usd':state.get('cost_usd')},
+                'thinking':None,'thinking_tokens':usage.get('reasoning_output_tokens') or usage.get('thinking_tokens')}
+    finally:owned.close()
 
 
 def call_cli(
@@ -579,7 +498,14 @@ def call_cli(
     # how project/part scope already reaches _call_cli_streaming below.
     try:
         from herald.router import event_bus
-        depth = event_bus.get_scope().get("consult_depth")
+        native_scope = event_bus.get_scope()
+        if native_scope.get("run_id"):
+            for field, variable in (("run_id", "HERALD_ASSISTANT_PARENT_ID"),
+                                    ("project", "HERALD_ASSISTANT_PROJECT"),
+                                    ("part", "HERALD_ASSISTANT_PART"),
+                                    ("activity_id", "HERALD_ASSISTANT_ACTIVITY_ID")):
+                env[variable] = str(native_scope.get(field) or "")
+        depth = native_scope.get("consult_depth")
         if depth:
             env["HERALD_CONSULT_DEPTH"] = str(depth)
     except Exception:
@@ -632,6 +558,12 @@ def call_cli(
         return out
 
     base_args = _strip_output_format([*client.internal_args, *client.config_args])
+    from herald.router import event_bus
+    if event_bus.get_scope().get("assistant_work_slot") is not None:
+        resume_flags = {"--continue", "--resume", "--conversation", "--conversation-id", "--session-id", "resume"}
+        if any(str(arg).split("=", 1)[0] in resume_flags for arg in base_args):
+            return {"ok": False, "error": "Delegated workers require independent native sessions; this profile has shared conversation/resume flags. Configure a separate worker profile without those flags."}
+
     cli_kind = _detect_streaming_cli_kind(exec_name)
     if config.get("model"):
         # A per-call model selection must replace the profile flag, not duplicate it.
@@ -656,6 +588,30 @@ def call_cli(
     }.get(cli_kind)
     if permission_flag and permission_flag not in base_args:
         base_args.append(permission_flag)
+    # Every router-launched CLI gets Herald's tools (global groups, the
+    # caller's project/part, its profile's groups, paired devices) through
+    # one scoped `herald` MCP server -- see cli_gateway.py.
+    from herald.router import cli_gateway
+    if cli_kind and cli_gateway.enabled(config):
+        gateway_scope = event_bus.get_scope()
+        gateway_kwargs = {
+            "project": gateway_scope.get("project"), "part": gateway_scope.get("part"),
+            "profile": config.get("herald_profile"),
+        }
+        env.update(cli_gateway.scope_env(**gateway_kwargs))
+        base_args = [*base_args, *cli_gateway.cli_args(cli_kind, **gateway_kwargs)]
+    # A whole-CLI instance (cli_instances.py): its own workspace and instructions, and its native session
+    # resumed so the CLI keeps its own history; only the new message (+ this turn's context) is sent.
+    instance = event_bus.get_scope().get("cli_instance") if cli_kind else None
+    resume_id = None
+    if instance:
+        from herald.router import cli_instances
+        client = client.model_copy(update={"working_dir": cli_instances.workspace(
+            instance["instance"], instance["parts"]["instructions"])})
+        if cli_kind in cli_instances.RESUMABLE and instance.get("session"):
+            resume_id = cli_instances.native_session(instance["instance"], instance["session"], cli_kind)
+        prompt = cli_instances.turn_prompt(instance["parts"], fresh=resume_id is None)
+    stream_stdin = None
     if cli_kind == "codex":
         # On Windows, codex is normally a .cmd shim. Passing a multiline
         # prompt as one argv value through that shim truncates it at the first
@@ -664,25 +620,35 @@ def call_cli(
         codex_args = list(base_args)
         if "--skip-git-repo-check" not in codex_args:
             codex_args.append("--skip-git-repo-check")
-        cmd = [resolved_exec, *client.executable[1:], *codex_args, "--json", "-"]
+        cmd = [resolved_exec, *client.executable[1:], *codex_args, "--json",
+               *(["resume", resume_id] if resume_id else []), "-"]
     elif cli_kind == "claude":
-        cmd = [resolved_exec, *client.executable[1:], *base_args,
+        cmd = [resolved_exec, *client.executable[1:], *base_args, *(["--resume", resume_id] if resume_id else []),
                "-p", "--output-format", "stream-json", "--verbose", prompt]
     elif cli_kind == "antigravity":
-        # agy's --print/-p/--prompt all greedily take the very next arg as
-        # their value (confirmed empirically -- not a boolean flag like
-        # codex/claude's -p/--print) -- the prompt must be immediately
-        # adjacent to --print, so --output-format has to come before it.
-        cmd = [resolved_exec, *client.executable[1:], *base_args,
-               "--output-format", "stream-json", "--print", prompt]
+        from .prompt_transport import antigravity_stream_input
+        cmd, stream_stdin = antigravity_stream_input(
+            [resolved_exec, *client.executable[1:]], base_args, prompt,
+            output_schema=config.get('output_schema'),
+        )
     else:
         cmd = [resolved_exec, *client.executable[1:], *client.internal_args, *client.config_args, "-p", prompt]
 
     if cli_kind:
         result = _call_cli_streaming(
             cmd, env, client, timeout, cli_kind,
-            stdin_text=prompt if cli_kind == "codex" else None,
+            stdin_text=prompt if cli_kind == "codex" else stream_stdin,
+            health_check_interval=config.get("health_check_interval"),
         )
+        if instance and instance.get("session"):
+            from herald.router import cli_instances
+            if result.get("ok") and result.get("native_session_id"):
+                cli_instances.remember_session(instance["instance"], instance["session"], cli_kind,
+                                               result["native_session_id"])
+            elif resume_id and not result.get("ok") and not result.get("native_tools_started"):
+                # The native session is gone (pruned, other machine...): start it fresh with the history.
+                cli_instances.forget_session(instance["instance"], instance["session"], cli_kind)
+                return call_cli(config, prompt, timeout, working_dir=working_dir)
         if (cli_kind == "antigravity" and not result.get("ok") and not result.get("native_tools_started")
                 and result.get("error_kind") != "auth" and config.get("model_fallback", True)
                 and any(word in str(result.get("error", "")).lower() for word in ("quota", "rate limit", "resource_exhausted", "429"))):
@@ -694,7 +660,7 @@ def call_cli(
             except Exception:
                 candidates = []
             for model in candidates[:2]:
-                event_bus.emit_nowait("agent.step", payload={**event_bus.get_scope(), "kind": "model.fallback", "tool_name": model, "status": "switching"}, source="antigravity_cli")
+                event_bus.emit_nowait("agent.step", importance=.2, payload={**event_bus.get_scope(), "kind": "model.fallback", "tool_name": model, "status": "switching"}, source="antigravity_cli")
                 attempt = call_cli({**config, "model": model, "model_fallback": False}, prompt, timeout, working_dir=working_dir)
                 if attempt.get("ok"):
                     return {**attempt, "native_model": model, "fallback_used": True}

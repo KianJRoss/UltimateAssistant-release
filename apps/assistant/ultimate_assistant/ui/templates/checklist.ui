@@ -1,0 +1,10 @@
+{@body const items = data.items || []}
+{@body const [done, setDone] = DIL.useState(data.done || [])}
+<row justify="between">
+  <title size="md">{data.title || "Checklist"}</title>
+  <caption>{done.length} of {items.length}</caption>
+</row>
+<progress value={items.length ? done.length / items.length * 100 : 0} color="success"/>
+{#each items as item}
+  <checkbox checked={done.includes(item)} lineThrough onChange={on => { const next = on ? [...done, item] : done.filter(x => x !== item); setDone(next); UA.action("checked", {item, done: on, all: next}); }}>{item}</checkbox>
+{/each}

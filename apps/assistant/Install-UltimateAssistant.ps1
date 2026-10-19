@@ -37,6 +37,7 @@ New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $installRoot "apps") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $installRoot "components\herald") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $installRoot "components\perception-mcp") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $installRoot "components\canvas-overlay") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $installRoot "components\ai-workspace\win-ui-mcp") -Force | Out-Null
 
 Copy-Item -LiteralPath $assistantSource -Destination (Join-Path $installRoot "apps") -Recurse -Force
@@ -50,6 +51,8 @@ Get-ChildItem -LiteralPath (Join-Path $bundleRoot "components\ai-workspace\win-u
     Copy-Item -Destination (Join-Path $installRoot "components\ai-workspace\win-ui-mcp") -Recurse -Force
 
 $setup = Join-Path $installRoot "apps\assistant\setup.ps1"
+Get-ChildItem -LiteralPath (Join-Path $bundleRoot "components\canvas-overlay") -Force |
+    Copy-Item -Destination (Join-Path $installRoot "components\canvas-overlay") -Recurse -Force
 & $setup
 if ($LASTEXITCODE -ne 0) { throw "Assistant dependency setup did not complete successfully." }
 

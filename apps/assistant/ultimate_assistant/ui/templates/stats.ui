@@ -1,0 +1,17 @@
+{@body const items = data.items || []}
+<row justify="between">
+  <title size="md">{data.title || ""}</title>
+  {#if data.status}<badge color={data.live ? "danger" : "secondary"}>{data.status}</badge>{/if}
+</row>
+<grid columns={Math.max(1, Math.min(data.columns || items.length || 1, 4))} gap={2}>
+  {#each items as it}
+    <grid-item>
+      <box background="surface-secondary" radius="md" padding={2} gap={1}>
+        <caption>{it.label}</caption>
+        <title size="xl" tabularNums color={it.color || "default"}>{it.value}</title>
+        {#if it.note}<caption>{it.note}</caption>{/if}
+      </box>
+    </grid-item>
+  {/each}
+</grid>
+{#if data.caption}<caption>{data.caption}</caption>{/if}

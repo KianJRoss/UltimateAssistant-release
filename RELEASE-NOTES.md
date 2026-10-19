@@ -1,3 +1,12 @@
+# 0.2.3 ? Friend-test update
+
+- Preview support reports before sending. Reports now contain versions and fixed action status/timing fields; free-form labels and backend names are excluded.
+- Optional daily diagnostic sharing is off by default on every installation. Enable it explicitly after reviewing the report and destination; turn it off at any time. Manual download and one-time send remain available.
+- Reports go to the configured private support receiver, not GitHub issues. No chat, prompts, files, paths, account names, credentials, screenshots or raw logs are sent. The receiver sees the network IP. Turning sharing off stops future sends; it does not delete already received reports.
+- Windows bundles now include the required canvas renderer and all seven optional module packages. Modules are installed only when requested.
+
+This is a friend-test prerelease, not a general availability release. Existing sign-in, voice, browser, memory, study and optional integration features remain available for testing. Provider sign-in and optional account connections happen on the user's device.
+
 # 0.2.2 ? Friend diagnostics update
 
 - Timestamped assistant action history remains visible after completion and after reopening a conversation.
@@ -51,5 +60,3 @@ Official browser instructions: https://github.com/williamkapke/kapture and https
 Provider setup also discovers Herald?s supported Claude and Antigravity profile login options. The secure API-key form stores Windows-encrypted secret references and supports OpenAI, Gemini, Anthropic, OpenRouter, DeepSeek, xAI and compatible endpoints. Saved credentials are unverified until an actual provider test succeeds.
 
 Optional g4f 8.5.9 runs locally, with a separate worker and session directory per user-created account. ChatGPT session capture reuses Herald?s protected Kapture flow; other providers can use the native g4f interface or import their own HAR/cookie export. Imported or captured sessions require restart and a successful provider test. Provider availability, model access and subscription eligibility depend on the provider and account. No browser sessions or accounts are supplied with the installer.
-
-Restart app and Quit app controls stop the app-owned Router cleanly. Restart loads an installed update while preserving conversations and accounts. Existing app desktop shortcuts are refreshed on launch.

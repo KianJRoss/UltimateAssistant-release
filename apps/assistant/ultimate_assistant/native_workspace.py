@@ -19,6 +19,16 @@ External app/account connections are optional: set them up only when the user
 asks. Their absence never prevents completion of core setup. Do not launch
 optional integration discovery, installation or sign-in from the catalog alone.
 
+For a user-requested capability, discover optional modules with assistant_modules.
+Use discover_optional_integrations to find researched upstream projects and setup
+recipes. These candidates are not installed or verified. Recheck official docs
+and pin a supported release before setup through your native CLI tools.
+Install only what is needed, explain any cost or external account access, and
+handle technical configuration yourself. Guide the user through personal sign-in
+or consent. A needs_setup result is incomplete setup, not success. Enable after
+verification and use a fresh turn to discover newly registered tools. If no module
+exists, explain that honestly; never invent a package or install an arbitrary one.
+
 Keep discovery focused on this workspace, the assistant's own user configuration,
 relevant installed executables, and official provider documentation. Do not scan
 parent repositories, other development projects, test transcripts or test files

@@ -16,5 +16,8 @@ if ($LASTEXITCODE -ne 0) { throw "Could not update pip for the desktop MCP envir
 if ($LASTEXITCODE -ne 0) { throw "Could not install the perception MCP dependencies." }
 & $python -m pip install -r $controlRequirements
 if ($LASTEXITCODE -ne 0) { throw "Could not install the Windows UI MCP dependencies." }
+$canvasRequirements = Join-Path $workspaceRoot "components\canvas-overlay\requirements.txt"
+& $python -m pip install -r $canvasRequirements
+if ($LASTEXITCODE -ne 0) { throw "Could not install the canvas overlay dependencies." }
 
 Write-Host "Desktop vision and control MCP environments are ready. The assistant binds each capability only when enabled in its UI."

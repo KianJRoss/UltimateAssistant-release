@@ -59,7 +59,10 @@ def configure_logging(*, force: bool = False) -> None:
     level = getattr(logging, level_name, logging.INFO)
     fmt = os.environ.get("HERALD_LOG_FORMAT", "plain").lower()
 
-    handler = logging.StreamHandler(sys.stdout)
+    # stderr, never stdout: stdout carries real output -- the MCP gateway's JSON-RPC stream
+    # (`herald mcp serve`) and CLI results. Log lines there corrupted the MCP stream: the client got
+    # '2026-... INFO ...' where it expected JSON, ~56 'Internal Server Error's per Codex start.
+    handler = logging.StreamHandler(sys.stderr)
     if fmt == "json":
         handler.setFormatter(_JsonFormatter())
     else:

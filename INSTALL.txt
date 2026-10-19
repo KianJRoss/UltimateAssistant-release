@@ -10,4 +10,4 @@ and internet access for Python packages. Node.js/npm is recommended for the
 official filesystem MCP. The Herald Router is bundled. Provider accounts and credentials are never bundled.
 Public HTTPS updates need no GitHub account or Git.
 
-Build version: 0.2.1
+Build version: 0.2.3

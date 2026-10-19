@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from .onboarding import router_request
+from .node_link import link
 from .settings import settings
 
 EXTENSION_URL = "https://chromewebstore.google.com/detail/kapture-mcp-browser-autom/ejfnegenodbdcodemkibocefmajjjjbn"
@@ -145,10 +146,10 @@ def configure(browser: str, assistant) -> dict:
         config = {"url":"http://127.0.0.1:18793/mcp","timeout":120}
         transport = "http"
         assistant._save_capability("playwright_enabled", True)
-    router_request("POST", "/tool-instances", {"name":name, "transport":transport, "scope":"project", "project":settings.herald_project,
+    router_request("POST", "/tool-instances", link.localize({"name":name, "transport":transport, "scope":"project", "project":settings.herald_project,
                    "package_name":package, "version":metadata["version"], "tags":["browser",browser],
                    "config":config,
-                   "description":"Existing connected browser tabs via Kapture" if browser == "kapture" else "Playwright browser automation with a separate persistent profile"})
+                   "description":"Existing connected browser tabs via Kapture" if browser == "kapture" else "Playwright browser automation with a separate persistent profile"}))
     router_request("POST", f"/projects/{quote(settings.herald_project,safe='')}/parts/{quote(settings.herald_part,safe='')}/tools",
                    {"tool":name,"alias":browser})
     return verify(browser, assistant)

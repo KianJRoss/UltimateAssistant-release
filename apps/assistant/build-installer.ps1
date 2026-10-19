@@ -1,6 +1,6 @@
 param(
     [string]$OutputDirectory = (Join-Path $PSScriptRoot "..\..\dist"),
-    [string]$Version = "0.2.2"
+    [string]$Version = "0.2.3"
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,6 +32,8 @@ try {
         "components\herald\herald\mcp_gateway.py",
         "components\herald\herald\router\math_tools.py",
         "components\perception-mcp\requirements.txt",
+        "components\canvas-overlay\requirements.txt",
+        "components\canvas-overlay\overlay.py",
         "components\ai-workspace\win-ui-mcp\requirements.txt"
     )
     foreach ($relative in $required) {
@@ -41,6 +43,9 @@ try {
     }
     py -3.13 --version *> $null
     if ($LASTEXITCODE -ne 0) { throw "Build requires Python 3.13 and the Windows py launcher." }
+    $env:UA_BUILD_ROOT = $workspaceRoot
+    py -3.13 -c "import hashlib,json,os,pathlib; p=pathlib.Path(os.environ['UA_BUILD_ROOT'])/'apps/assistant/ultimate_assistant'; c=json.loads((p/'module_catalog.json').read_text()); assert all((p/'module_packages'/m['bundled_archive']).is_file() and hashlib.sha256((p/'module_packages'/m['bundled_archive']).read_bytes()).hexdigest()==m['sha256'] for m in c['modules'] if m.get('bundled_archive')), 'Missing or invalid optional module archive; run optional-modules/build-node.py'"
+    if ($LASTEXITCODE -ne 0) { throw "Optional module package validation failed." }
 
     New-Item -ItemType Directory -Path $bundleRoot -Force | Out-Null
     $appsTarget = Join-Path $bundleRoot "apps"
@@ -67,6 +72,10 @@ try {
     }
     $perceptionTarget = Join-Path $bundleRoot "components\perception-mcp"
     $controlTarget = Join-Path $bundleRoot "components\ai-workspace\win-ui-mcp"
+    $canvasTarget = Join-Path $bundleRoot "components\canvas-overlay"
+    New-Item -ItemType Directory -Path $canvasTarget -Force | Out-Null
+    Get-ChildItem -LiteralPath (Join-Path $workspaceRoot "components\canvas-overlay") -Force |
+        Copy-Item -Destination $canvasTarget -Recurse -Force
     New-Item -ItemType Directory -Path $perceptionTarget -Force | Out-Null
     New-Item -ItemType Directory -Path $controlTarget -Force | Out-Null
     Get-ChildItem -LiteralPath (Join-Path $workspaceRoot "components\perception-mcp") -Force |
@@ -79,7 +88,7 @@ try {
         Sort-Object FullName -Descending |
         Remove-Item -Recurse -Force
     Get-ChildItem -LiteralPath $bundleRoot -File -Recurse -Force |
-        Where-Object { $_.Extension -in @(".pyc", ".pyo") -or $_.Name -match '\.(db|sqlite|sqlite3)(-wal|-shm)?$' } |
+        Where-Object { $_.Name -like "test_*.py" -or $_.Name -like "*_test.py" -or $_.Extension -in @(".pyc", ".pyo") -or $_.Name -match '\.(db|sqlite|sqlite3)(-wal|-shm)?$' } |
         Remove-Item -Force
 
     $readme = @"

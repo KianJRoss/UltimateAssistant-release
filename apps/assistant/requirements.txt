@@ -12,3 +12,8 @@ python-pptx>=0.6.23
 openpyxl>=3.1.0
 pillow>=10.0.0
 rapidocr-onnxruntime>=1.2.0
+# ACP interface (Obsidian, Zed...) and the node link to Herald
+agent-client-protocol>=0.12,<0.13
+websockets>=13
+# Optional: the assistant as an A2A agent (protocols.py serves it when installed)
+# a2a-sdk[http-server]==1.2.2

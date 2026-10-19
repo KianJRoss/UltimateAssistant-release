@@ -1,0 +1,16 @@
+{@body const variants = data.variants && data.variants.length ? data.variants : [{label: "Message", body: data.body || ""}]}
+{@body const [pick, setPick] = DIL.useState(0)}
+{@body const [edited, setEdited] = DIL.useState(null)}
+{@body const body = edited ?? (variants[pick] || variants[0]).body}
+<row justify="between">
+  <title size="md">{data.title || "Draft"}</title>
+  {#if data.to}<caption>To {data.to}</caption>{/if}
+</row>
+{#if variants.length > 1}
+  <segmented-control block value={pick} onChange={v => { setPick(v); setEdited(null); }} options={variants.map((v, i) => ({label: v.label || `Option ${i + 1}`, value: i}))}/>
+{/if}
+<textarea value={body} onChange={setEdited} rows={4} autoResize/>
+<row gap={2}>
+  <box flex="1"><button block onClick={() => GenUI.copy(body)}><icon name="copy" inline/> Copy</button></box>
+  <button variant="outline" color="secondary" onClick={() => UA.action("use", {text: body, variant: (variants[pick] || {}).label || pick})}>Use this ↗</button>
+</row>

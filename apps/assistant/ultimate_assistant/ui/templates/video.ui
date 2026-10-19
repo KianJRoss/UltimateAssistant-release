@@ -1,0 +1,3 @@
+{#if data.title}<title size="md">{data.title}</title>{/if}
+<video src={data.src || data.url} autoplay={data.autoplay} loop={data.loop} poster={data.poster}/>
+{#if data.caption}<caption>{data.caption}</caption>{/if}

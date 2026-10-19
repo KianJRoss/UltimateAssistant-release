@@ -1,8 +1,8 @@
 # Ultimate Assistant for Windows
 
-## Friend-test release: v0.2.2
+## Friend-test release: v0.2.3
 
-[Download the Windows installer ZIP](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.2.2/UltimateAssistant-0.2.2-windows-x64.zip) ? [Release notes](https://github.com/KianJRoss/UltimateAssistant-release/releases/tag/v0.2.2)
+[Download the Windows installer ZIP](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.2.3/UltimateAssistant-0.2.3-windows-x64.zip) ? [Release notes](https://github.com/KianJRoss/UltimateAssistant-release/releases/tag/v0.2.3)
 
 This build is being sent to a friend for practical testing and feedback. It is a public prerelease, not a claim that all real-world setup paths are finished.
 
@@ -33,7 +33,7 @@ The standard and friend-test update manifests point to this diagnostics update a
 This repository contains the curated source used for the friend-test Windows bundle. Runtime environments, accounts, captures, databases, development probes, and maintainer-only AdminLoop modules are excluded.
 
 ```powershell
-./apps/assistant/build-installer.ps1 -Version 0.2.2
+./apps/assistant/build-installer.ps1 -Version 0.2.3
 ```
 
 The release ZIP bundles the licensed Kokoro speech model and voice pack. Their large binaries are distributed as release assets rather than Git source files; a source installation downloads the same upstream files and verifies their checksums when absent.
@@ -46,4 +46,4 @@ Report friend-test problems in [Issues](https://github.com/KianJRoss/UltimateAss
 
 ## Diagnostics and startup
 
-Actions stay visible as a timestamped conversation history. Use Send diagnostics to explicitly share app version and action timings with support, or Download diagnostics to save a ZIP. Chat text, employee records and credentials are excluded. Models and usage reads Antigravity's native inventory and separate quota groups. The app opens at Windows sign-in; configure-startup.ps1 -Disable opts out. Voice preferences survive restarts and updates.
+Actions stay visible as a timestamped conversation history. Use Preview and send diagnostics to review and send one report, or Download diagnostics to save it. Automatic daily sharing is OFF by default. Enable it explicitly after reviewing the report and support destination; uncheck it to stop future sends. Reports contain versions and fixed status/timing fields, excluding chats, prompts, free-form labels, files, paths, account/model names, screenshots, credentials and raw logs. Reports are private to support, not posted to GitHub. The support server sees the network IP; opting out does not delete reports already received. Models and usage reads Antigravity's native inventory and separate quota groups. The app opens at Windows sign-in; configure-startup.ps1 -Disable opts out. Voice preferences survive restarts and updates.

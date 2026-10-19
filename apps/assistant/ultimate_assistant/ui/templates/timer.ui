@@ -1,0 +1,27 @@
+{@body const total = Math.max(1, Number(data.seconds) || 60) * 1000}
+{@body const [endAt, setEndAt] = DIL.useState(data.autostart === false ? 0 : Date.now() + total)}
+{@body const [remaining, setRemaining] = DIL.useState(total)}
+{@body const [announced, setAnnounced] = DIL.useState(false)}
+{@body const now = DIL.useTick(500)}
+{@body const left = endAt ? Math.max(0, endAt - now) : remaining}
+{@body const secs = Math.ceil(left / 1000)}
+{@body const clock = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`}
+{@body if (endAt && left === 0 && !announced) { setAnnounced(true); UA.action("done", {label: data.label || ""}); }}
+{@body const [unpinned, setUnpinned] = DIL.useState(false)}
+{@body if (announced && data.unpin !== false && !unpinned && now - endAt > (data.unpin_after || 15) * 1000) { setUnpinned(true); UA.close(); }}
+<row justify="between">
+  <box gap={1}>
+    <caption>{data.label || "Timer"}</caption>
+    <title size="2xl" tabularNums color={left === 0 ? "success" : "default"}>{left === 0 ? "Done" : clock}</title>
+  </box>
+  <icon name="timer" size="xl" color={endAt && left > 0 ? "primary" : "secondary"}/>
+</row>
+<progress value={(total - left) / total * 100} color={left === 0 ? "success" : "primary"}/>
+<row gap={2}>
+  {#if endAt && left > 0}
+    <box flex="1"><button block variant="outline" color="secondary" onClick={() => { setRemaining(left); setEndAt(0); }}>Pause</button></box>
+  {:else if left > 0}
+    <box flex="1"><button block onClick={() => setEndAt(Date.now() + remaining)}>Start</button></box>
+  {/if}
+  <box flex="1"><button block variant="outline" color="secondary" onClick={() => { setEndAt(0); setRemaining(total); setAnnounced(false); }}>Reset</button></box>
+</row>

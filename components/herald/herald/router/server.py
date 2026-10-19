@@ -51,7 +51,7 @@ from typing import Any
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -256,6 +256,8 @@ async def _stop_event_bus() -> None:
     await idle_unload.stop()
     await scheduler.stop()
     await quota_watcher.stop()
+    if _assistant_work_service is not None:
+        _assistant_work_service.close()
     await event_bus.stop()
 
 
@@ -482,6 +484,13 @@ def _attempt_backend(backend, prompt: str, *, branch_id: str | None, depth: int 
     elif backend.backend_type == "cli":
         cli_name = backend.config.get("cli_name", backend.name)
         runtime = f"cli:{cli_name}"
+        # Scoped workers start independent native sessions. Sharing the parent's
+        # single profile slot deadlocks a parent that is awaiting its children.
+        # AssistantWork enforces a separate Router-wide admission budget.
+        from herald.router import event_bus
+        worker_id = event_bus.get_scope().get("assistant_work_slot")
+        if worker_id:
+            runtime += f":worker:{worker_id}"
         governed = True
 
     if governed and runtime:
@@ -506,7 +515,11 @@ def _attempt_backend(backend, prompt: str, *, branch_id: str | None, depth: int 
     )
     try:
         try:
-            result = adapter(backend.config, prompt)
+            config = backend.config
+            if backend.backend_type == "cli":
+                # The profile name scopes the CLI's Herald gateway to groups bound to it.
+                config = {**config, "herald_profile": backend.name}
+            result = adapter(config, prompt)
         except Exception as exc:  # noqa: BLE001 - an adapter bug must not abort the whole fallback loop
             result = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
     finally:
@@ -522,7 +535,9 @@ def _attempt_backend(backend, prompt: str, *, branch_id: str | None, depth: int 
             backend=backend.name, duration_ms=duration_ms,
             error=str(result.get("error") or "unknown failure")[:1000],
         )
-        registry.record_failure(backend.name)
+        # Operator cancellation is not evidence that the provider is unhealthy.
+        if result.get("error_kind") != "cancelled":
+            registry.record_failure(backend.name)
         telemetry.log_call(
             backend_name=backend.name, backend_type=backend.backend_type, prompt=prompt,
             success=False, duration_ms=duration_ms, error=result.get("error"),
@@ -739,6 +754,10 @@ class OpenAIChatRequest(BaseModel):
     force_harness: bool = False
     consult_depth: int = 0
     cli_account: str | None = None
+    # Whole-CLI instances (cli_instances.py): run the CLI in its own workspace, the first system message
+    # as its AGENTS.md/CLAUDE.md, and resume its native session for this `session` key across calls.
+    instance: str | None = Field(default=None, max_length=80)
+    session: str | None = Field(default=None, max_length=200)
 
 
 def _external_tool_catalog(tools: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -1269,10 +1288,16 @@ def openai_chat_completions(request: OpenAIChatRequest) -> Any:
     # and not worth the indentation-rewrite risk of wrapping this whole
     # multi-return-point function body in a try/finally.
     from herald.router import event_bus
+    instance_scope = None
+    if request.instance:
+        from herald.router import cli_instances
+        instance_scope = {"instance": request.instance, "session": request.session,
+                          "parts": cli_instances.split_messages(request.messages)}
     event_bus.set_scope({
         "project": request.project, "part": request.part,
         "activity_id": request.activity_id,
         "consult_depth": request.consult_depth,
+        **({"cli_instance": instance_scope} if instance_scope else {}),
     })
     direct_cli_backend = registry.get(selected_model)
     if (
@@ -2240,7 +2265,7 @@ def _callable_tool_catalog(instances=None) -> tuple[list[dict[str, Any]], list[d
                 "package": instance.package_name,
                 "version": instance.version,
                 "scope": instance.scope,
-                "description": tool.get("description", ""),
+                "description": _describe_tool(instance, tool.get("description", "")),
                 "input_schema": tool.get("inputSchema") or tool.get("input_schema") or {},
                 "transport": instance.transport,
                 "tags": instance.tags,
@@ -2253,6 +2278,13 @@ def _callable_tool_catalog(instances=None) -> tuple[list[dict[str, Any]], list[d
         if counts[row["name"]] > 1:
             row["name"] = row["qualified_name"]
     return discovered, errors
+
+
+def _describe_tool(instance, description: str) -> str:
+    """Say whose machine a device's tool acts on. Without it a model asked
+    about "my PC" saw a bare "Capture the primary screen" and reached for SSH."""
+    device = instance.config.get("device_name") if instance.config.get("node") else None
+    return f"[On the user's device {device}] {description}" if device else description
 
 
 def _catalog_scope(project: str | None, part: str | None):
@@ -2363,6 +2395,7 @@ class AgentSessionCreateRequest(BaseModel):
 class AgentSessionMessageRequest(BaseModel):
     prompt: str
     request_id: str | None = None
+    activity_id: str | None = None
 
 
 class AgentSessionImportRequest(BaseModel):
@@ -2538,6 +2571,10 @@ def _execute_agent_session_message(
     elif not lock.acquire(blocking=False):
         raise HTTPException(409, "agent session is busy with another sequential call")
 
+    from herald.router import event_bus
+    activity_token = event_bus.set_scope({"project": session.project, "part": session.part,
+                                         "activity_id": request.activity_id or request.request_id or session_id})
+
     try:
         _emit_run_progress("preparing", "Preparing memory, device context, and coding tools.")
         prompt_parts = []
@@ -2657,6 +2694,7 @@ def _execute_agent_session_message(
             response["budget"] = result.get("budget", {})
         return response
     finally:
+        event_bus.reset_scope(activity_token)
         lock.release()
 
 
@@ -3608,6 +3646,26 @@ def http_set_quiet_mode(request: QuietModeRequest) -> dict[str, Any]:
     return {"quiet_mode": event_bus.quiet_mode()}
 
 
+class EventEmitRequest(BaseModel):
+    event_type: str = Field(min_length=3, max_length=120)
+    importance: float = Field(default=0.5, ge=0.0, le=1.0)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    source: str = Field(default="api", max_length=80)
+
+
+@app.post("/event-bus/emit")
+async def http_emit_event(request: EventEmitRequest) -> dict[str, Any]:
+    """Publish an event (apps and their nodes use the ``app.<name>.*`` namespace).
+    Event schedules fire on it; stream listeners and notification sinks see it."""
+    from herald.router import event_bus
+    try:
+        await event_bus.emit(request.event_type, importance=request.importance,
+                             payload=request.payload, source=request.source)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+    return {"status": "emitted", "event_type": request.event_type}
+
+
 @app.get("/event-bus/stream")
 async def http_event_bus_stream() -> StreamingResponse:
     """SSE stream of live event-bus events. Registers a temporary sink for
@@ -3797,6 +3855,80 @@ def http_run_mcp_access_tool(request: MCPAccessRunRequest) -> dict[str, Any]:
     if not result.get("ok") and "ambiguous" in result.get("error", ""):
         raise HTTPException(409, result["error"])
     return result
+
+
+# ---------------------------------------------------------------------------
+# Assistant nodes (node_relay): each device's assistant node holds one
+# outbound WebSocket here; its MCP servers and HTTP API are relayed over it.
+# ---------------------------------------------------------------------------
+
+_RELAY_HOP_HEADERS = {"host", "content-length", "connection", "transfer-encoding", "authorization",
+                      "x-api-key", "origin", "accept-encoding", "keep-alive", "upgrade"}
+
+
+def _node_authorized(headers) -> bool:
+    expected = os.environ.get("HERALD_API_KEY")
+    if not expected:
+        return True  # a loopback-only router; see require_public_bind_token
+    supplied = headers.get("x-api-key") or ""
+    authorization = headers.get("authorization", "")
+    if authorization.lower().startswith("bearer "):
+        supplied = authorization[7:].strip()
+    return bool(supplied) and secrets.compare_digest(supplied, expected)
+
+
+@app.websocket("/nodes/connect")
+async def nodes_connect(websocket: WebSocket) -> None:
+    from herald.router.node_relay import relay
+    if not _node_authorized(websocket.headers):
+        await websocket.close(code=4401, reason="valid HERALD_API_KEY required")
+        return
+    await websocket.accept()
+    send_lock = asyncio.Lock()
+
+    async def send(frame: dict[str, Any]) -> None:
+        async with send_lock:
+            await websocket.send_json(frame)
+
+    try:
+        node = relay.attach(await websocket.receive_json(), send)
+    except (ValueError, WebSocketDisconnect, json.JSONDecodeError) as exc:
+        await websocket.close(code=4400, reason=str(exc)[:120])
+        return
+    await send({"type": "welcome", "node": node.name})
+    try:
+        while True:
+            relay.receive(node, await websocket.receive_json())
+    except (WebSocketDisconnect, RuntimeError, json.JSONDecodeError):
+        pass
+    finally:
+        relay.detach(node)
+
+
+@app.get("/nodes")
+def nodes_list() -> dict[str, Any]:
+    from herald.router.node_relay import relay
+    return {"nodes": relay.describe()}
+
+
+@app.api_route("/nodes/{node}/http/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+async def nodes_http(node: str, path: str, request: Request):
+    """Relay a request to a node's own HTTP API ('main' = the assistant's main node)."""
+    from herald.router.node_relay import relay
+    headers = {k: v for k, v in request.headers.items() if k.lower() not in _RELAY_HOP_HEADERS}
+    # So the node can build public links to itself (e.g. an A2A agent card).
+    headers.update({"x-forwarded-host": request.headers.get("host", ""),
+                    "x-forwarded-proto": request.url.scheme,
+                    "x-forwarded-prefix": f"/nodes/{node}/http"})
+    try:
+        status, reply_headers, body = await relay.http(
+            node, request.method, "/" + path, request.url.query, headers, await request.body())
+    except LookupError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except ConnectionError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    reply_headers = {k: v for k, v in reply_headers.items() if k.lower() not in _RELAY_HOP_HEADERS}
+    return StreamingResponse(body, status_code=status, headers=reply_headers)
 
 
 # ---------------------------------------------------------------------------
@@ -4226,3 +4358,64 @@ def governor_idle_backends(idle_sec: float = 600.0) -> dict[str, Any]:
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8790)
+
+
+# Optional native assistant delegation; scope is checked on every operation.
+class AssistantWorkRequest(BaseModel):
+    request_id: str = Field(min_length=1, max_length=100)
+    project: str = Field(min_length=1, max_length=200)
+    part: str = Field(min_length=1, max_length=200)
+    model: str = Field(min_length=1, max_length=200)
+    prompt: str = Field(min_length=1, max_length=12000)
+    kind: str = "agent"
+    parent_id: str | None = None
+    activity_id: str | None = Field(default=None, max_length=100)
+    context: str = Field(default="", max_length=16000)
+    tasks: list[str] | None = None
+    max_iterations: int = Field(default=3, ge=1, le=6)
+    stop_marker: str = Field(default="TASK_COMPLETE", min_length=1, max_length=80)
+
+
+_assistant_work_service = None
+_assistant_work_guard = threading.Lock()
+
+
+def _assistant_work():
+    global _assistant_work_service
+    with _assistant_work_guard:
+        if _assistant_work_service is None:
+            from herald.router.assistant_work import AssistantWork
+            _assistant_work_service = AssistantWork(_data_dir() / "assistant-work", _execute_full)
+        return _assistant_work_service
+
+
+@app.post("/assistant-work", status_code=202)
+def start_assistant_work(request: AssistantWorkRequest):
+    backend = registry.get(request.model)
+    if backend is None or backend.backend_type != "cli" or not backend.enabled:
+        raise HTTPException(400, "Choose an enabled native CLI backend from this Router")
+    try:
+        return {"job": _assistant_work().start(**request.model_dump())}
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
+@app.get("/assistant-work")
+def list_assistant_work(project: str, part: str, activity_id: str | None = None):
+    return {"jobs": _assistant_work().list(project, part, activity_id)}
+
+
+@app.get("/assistant-work/{job_id}")
+def inspect_assistant_work(job_id: str, project: str, part: str):
+    try:
+        return {"job": _assistant_work().inspect(job_id, project, part)}
+    except KeyError:
+        raise HTTPException(404, "No delegated job in this assistant scope") from None
+
+
+@app.post("/assistant-work/{job_id}/cancel")
+def cancel_assistant_work(job_id: str, project: str, part: str):
+    try:
+        return _assistant_work().cancel(job_id, project, part)
+    except KeyError:
+        raise HTTPException(404, "No delegated job in this assistant scope") from None

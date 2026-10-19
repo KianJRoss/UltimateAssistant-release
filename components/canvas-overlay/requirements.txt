@@ -1,0 +1,6 @@
+# the PC canvas renderer (overlay.py); installed into the desktop-tools environment
+PySide6-Essentials>=6.12,<7
+# Qt WebEngine (its own package since Qt 6.12; pulls PySide6-Addons) runs interactive ui cards
+PySide6-WebEngine>=6.12,<7
+httpx>=0.27
+pywin32>=310
