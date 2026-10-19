@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from herald.router.run_liveness import classify_run_liveness
 from herald.router.secret_vault import SecretVault
 
 
@@ -33,6 +34,8 @@ class AgentRun:
     started_at: str | None
     completed_at: str | None
     updated_at: str
+    liveness: str | None
+    liveness_reason: str | None
 
     def public(self) -> dict[str, Any]:
         start = datetime.fromisoformat(self.started_at or self.created_at)
@@ -42,6 +45,7 @@ class AgentRun:
             "request_id": self.request_id,
             "created_at": self.created_at, "started_at": self.started_at,
             "completed_at": self.completed_at, "updated_at": self.updated_at,
+            "liveness": self.liveness, "liveness_reason": self.liveness_reason,
             "elapsed_seconds": max(0, round((end - start).total_seconds(), 1)),
         }
 
@@ -62,9 +66,17 @@ class AgentRunStore:
                     status TEXT NOT NULL, request_id TEXT,
                     state_ref TEXT NOT NULL, created_at TEXT NOT NULL,
                     started_at TEXT, completed_at TEXT, updated_at TEXT NOT NULL,
+                    liveness TEXT, liveness_reason TEXT,
                     UNIQUE(session_id, request_id)
                 )
             """)
+            columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(agent_runs)")
+            }
+            if "liveness" not in columns:
+                conn.execute("ALTER TABLE agent_runs ADD COLUMN liveness TEXT")
+            if "liveness_reason" not in columns:
+                conn.execute("ALTER TABLE agent_runs ADD COLUMN liveness_reason TEXT")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_agent_runs_session "
                 "ON agent_runs(session_id, created_at DESC)"
@@ -200,6 +212,15 @@ class AgentRunStore:
             if response.get("trace"):
                 state["response"]["trace_steps"] = len(response["trace"])
             state["error"] = None
+            liveness = classify_run_liveness(
+                "completed", state["content"], None,
+                [
+                    state.get("events", []),
+                    response.get("trace", []),
+                    response.get("orchestration_trace", []),
+                ],
+                request_text=state.get("prompt", ""),
+            )
             state.setdefault("events", []).append({
                 "at": now, "kind": "completed",
                 "message": "Response saved. Claimed code changes may still require deployment.",
@@ -209,21 +230,29 @@ class AgentRunStore:
             return self._update(
                 run_id, status="completed", state_ref=reference,
                 completed_at=now, updated_at=now,
+                liveness=liveness.liveness, liveness_reason=liveness.reason,
             )
 
-    def fail(self, run_id: str, error: str) -> AgentRun:
+    def fail(self, run_id: str, error: str, *, partial_content: str | None = None) -> AgentRun:
         with self._lock:
             run = self.require(run_id)
             state = self._state(run)
             now, detail = _now(), str(error)[:8000]
             state["error"] = detail
+            if partial_content:
+                state["content"] = partial_content
             state.setdefault("events", []).append({
                 "at": now, "kind": "failed", "message": detail, "data": {},
             })
+            liveness = classify_run_liveness(
+                "failed", state.get("content", ""), detail,
+                state.get("events", []), request_text=state.get("prompt", ""),
+            )
             reference = self._write(run_id, state)
             return self._update(
                 run_id, status="failed", state_ref=reference,
                 completed_at=now, updated_at=now,
+                liveness=liveness.liveness, liveness_reason=liveness.reason,
             )
 
     def _state(self, run: AgentRun) -> dict[str, Any]:
@@ -242,7 +271,10 @@ class AgentRunStore:
         )
 
     def _update(self, run_id: str, **values: Any) -> AgentRun:
-        allowed = {"status", "state_ref", "started_at", "completed_at", "updated_at"}
+        allowed = {
+            "status", "state_ref", "started_at", "completed_at", "updated_at",
+            "liveness", "liveness_reason",
+        }
         values = {key: value for key, value in values.items() if key in allowed}
         assignments = ",".join(f"{key}=?" for key in values)
         with closing(self._connect()) as conn, conn:
@@ -259,4 +291,5 @@ class AgentRunStore:
             request_id=row["request_id"], state_ref=row["state_ref"],
             created_at=row["created_at"], started_at=row["started_at"],
             completed_at=row["completed_at"], updated_at=row["updated_at"],
+            liveness=row["liveness"], liveness_reason=row["liveness_reason"],
         )

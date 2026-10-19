@@ -131,6 +131,9 @@ def build_server(
         "herald-mcp-gateway", version="0.2.0",
         instructions="Tools are selected by Herald MCP groups and scope bindings. Assistant schedule tools are restricted to this gateway's project and part.",
     )
+    inherited_parent = os.environ.get("HERALD_ASSISTANT_PARENT_ID")
+    inherited_scope = (os.environ.get("HERALD_ASSISTANT_PROJECT"), os.environ.get("HERALD_ASSISTANT_PART"))
+    from herald.assistant_work_tools import NAMES as work_tools, tools as work_schemas
     schedule_tools = {
         "herald_list_assistant_schedules", "herald_create_assistant_loop",
         "herald_disable_assistant_loop", "herald_assistant_schedule_history",
@@ -150,6 +153,7 @@ def build_server(
             inputSchema=tool.get("input_schema") or {"type": "object", "properties": {}},
         ) for tool in payload.get("tools", [])]
         if project and part:
+            tools.extend(work_schemas())
             tools.extend([
                 types.Tool(
                     name="herald_list_assistant_schedules",
@@ -185,6 +189,29 @@ def build_server(
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any]):
+        if name in work_tools:
+            if not project or not part:
+                result = {"error": "Delegation requires a scoped assistant gateway"}
+            elif name == "herald_start_assistant_work":
+                allowed = {"request_id", "model", "prompt", "kind", "parent_id", "activity_id", "context", "tasks", "max_iterations", "stop_marker"}
+                body = {**{k: v for k, v in arguments.items() if k in allowed}, "project": project, "part": part}
+                if inherited_parent:
+                    if inherited_scope != (project, part):
+                        return types.CallToolResult(isError=True, content=[types.TextContent(type="text", text="Delegated gateway scope does not match its parent job")])
+                    body["parent_id"] = inherited_parent
+                    body["activity_id"] = os.environ.get("HERALD_ASSISTANT_ACTIVITY_ID") or None
+                result = await _schedule_request(client, "POST", "/assistant-work", body=body)
+            elif name == "herald_list_assistant_work":
+                query = f"project={quote(project, safe='')}&part={quote(part, safe='')}"
+                if arguments.get("activity_id"):
+                    query += "&activity_id=" + quote(str(arguments["activity_id"]), safe='')
+                result = await _schedule_request(client, "GET", "/assistant-work?" + query)
+            else:
+                job = quote(str(arguments.get("job_id", "")), safe='')
+                query = f"project={quote(project, safe='')}&part={quote(part, safe='')}"
+                path = f"/assistant-work/{job}" + ("/cancel" if name == "herald_cancel_assistant_work" else "")
+                result = await _schedule_request(client, "POST" if name == "herald_cancel_assistant_work" else "GET", path + "?" + query)
+            return types.CallToolResult(isError=bool(result.get("error")), content=[types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False))])
         if name in schedule_tools and project and part:
             if name == "herald_list_assistant_schedules":
                 payload = await _schedule_request(client, "GET", "/schedules")
@@ -236,12 +263,21 @@ def build_server(
             part=part, profile=profile,
         )
         failed = bool(result.get("error")) or result.get("ok") is False
-        return types.CallToolResult(
-            isError=failed,
-            content=[types.TextContent(
-                type="text", text=json.dumps(result, ensure_ascii=False, indent=2),
-            )],
-        )
+        payload = result.get("result")
+        if isinstance(payload, dict) and isinstance(payload.get("content"), list):
+            # Hand the tool's own MCP result through (text, images) instead of
+            # flattening it into JSON text -- a screenshot then reaches the model
+            # as an image, not as a base64 string or a path on another machine.
+            return types.CallToolResult.model_validate({**payload, "isError": failed or bool(payload.get("isError"))})
+        # Errors and plain-string results (Herald custom tools) go to the model
+        # as the text itself, not wrapped in a JSON envelope.
+        if failed and result.get("error"):
+            text = str(result["error"])
+        elif isinstance(result.get("content"), str):
+            text = result["content"]
+        else:
+            text = json.dumps(result, ensure_ascii=False, indent=2)
+        return types.CallToolResult(isError=failed, content=[types.TextContent(type="text", text=text)])
 
     return server
 
@@ -271,9 +307,12 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Herald controlled MCP stdio gateway")
     parser.add_argument("--url", default=os.environ.get("HERALD_URL", "http://127.0.0.1:8790"))
     parser.add_argument("--group", action="append", default=[])
-    parser.add_argument("--project")
-    parser.add_argument("--part")
-    parser.add_argument("--profile")
+    # Scope defaults come from HERALD_GATEWAY_* so one persisted, scope-less
+    # entry in a CLI's own MCP config (antigravity has no per-call flag)
+    # still gets the scope the router set for that CLI invocation.
+    parser.add_argument("--project", default=os.environ.get("HERALD_GATEWAY_PROJECT") or None)
+    parser.add_argument("--part", default=os.environ.get("HERALD_GATEWAY_PART") or None)
+    parser.add_argument("--profile", default=os.environ.get("HERALD_GATEWAY_PROFILE") or None)
     args = parser.parse_args(argv)
     if bool(args.project) != bool(args.part):
         parser.error("--project and --part must be provided together")
