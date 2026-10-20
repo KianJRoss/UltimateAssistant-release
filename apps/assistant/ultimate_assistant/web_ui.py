@@ -2298,6 +2298,21 @@ def start_canvas_overlay(base_url: str) -> bool:
         return False
 
 
+def _check_layers() -> None:
+    """Warn when the released core was changed, and after an update ask for this device's setup
+    fixes to be re-checked (layers.py)."""
+    from . import layers
+    try:
+        core = layers.core_status()
+        if core["status"] == "modified":
+            _LOGGER.warning("The assistant's core differs from release %s (%d changed, %d missing, %d added files); "
+                            "updates will replace these changes.", core["version"], len(core["modified"]),
+                            len(core["missing"]), len(core["added"]))
+        layers.after_start()
+    except Exception:  # noqa: BLE001 - a check must never stop the app
+        _LOGGER.exception("Could not check the assistant's layers")
+
+
 def main() -> bool:
     global _UI_SERVER, _UI_RESTART
     _UI_RESTART = False
@@ -2314,6 +2329,7 @@ def main() -> bool:
     start_signals()
     from .life_clock import start_on_main_node
     start_on_main_node()  # reminders and escalation, on the main node only
+    _check_layers()
     link.start()
     from .diagnostics import start_reporter
     reporting_stop = start_reporter()

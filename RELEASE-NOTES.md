@@ -1,3 +1,10 @@
+# 0.3.1 — Your changes survive updates
+
+- The assistant keeps its released core, this device's setup, and what you built apart. Updates replace only the core; your own agents, skills, scripts and modules, and what was done to set up this device, stay.
+- It checks at start whether the core was changed and says so: changing the core on purpose can make updates unreliable. When it finishes setup on your device, it records each fix and re-checks them after an update.
+- When something needs a change to the assistant itself, or you've built something others could use, it can write it up and, if you choose, send it to the developer after showing you exactly what would be sent.
+- Guided-test results for the newer features (reminders, free time) are accepted by the support server again.
+
 # 0.3.0 — Proactive help, modules on demand, Herald as its own product
 
 - It keeps track of what you have to do: plans you mention in chat are noted (you'll see a "Noted" card), and you're reminded ahead of time, more insistently as things get close. When you're on something else near a deadline, it nudges you to switch.

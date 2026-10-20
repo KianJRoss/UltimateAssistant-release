@@ -28,7 +28,7 @@ class Settings:
             return Path(configured_root)
         spec = importlib.util.find_spec("herald")
         if not spec or not spec.origin:
-            raise RuntimeError("Herald is not installed in this environment; run apps\assistant\setup.ps1")
+            raise RuntimeError("Herald is not installed in this environment; run apps/assistant/setup.ps1")
         return Path(spec.origin).resolve().parents[1]
 
     @property

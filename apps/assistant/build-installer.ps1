@@ -1,6 +1,6 @@
 param(
     [string]$OutputDirectory = (Join-Path $PSScriptRoot "..\..\dist"),
-    [string]$Version = "0.3.0"
+    [string]$Version = "0.3.1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -57,6 +57,12 @@ try {
     Get-ChildItem -LiteralPath $bundleRoot -File -Recurse -Force |
         Where-Object { $_.Name -like "test_*.py" -or $_.Name -like "*_test.py" -or $_.Extension -in @(".pyc", ".pyo") -or $_.Name -match '\.(db|sqlite|sqlite3)(-wal|-shm)?$' } |
         Remove-Item -Force
+    # Every core file's SHA-256: the installed app checks itself against it (layers.py), so a
+    # changed core is noticed before an update replaces it.
+    $env:UA_BUNDLE_ROOT = $bundleRoot
+    $env:UA_BUNDLE_VERSION = $Version
+    py -3.13 -c "import os,sys,pathlib; sys.path.insert(0, os.path.join(os.environ['UA_BUILD_ROOT'], 'apps', 'assistant')); from ultimate_assistant.layers import write_manifest; print(write_manifest(pathlib.Path(os.environ['UA_BUNDLE_ROOT']), os.environ['UA_BUNDLE_VERSION']))"
+    if ($LASTEXITCODE -ne 0) { throw "Could not write the core manifest." }
 
     $readme = @"
 Ultimate Assistant for Windows

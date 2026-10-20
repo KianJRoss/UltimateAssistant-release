@@ -1,6 +1,6 @@
 # Source and verification
 
-Version: 0.3.0. The implementation source commit and installer checksum are recorded in `release.json`.
+Version: 0.3.1. The implementation source commit and installer checksum are recorded in `release.json`.
 
 This curated source matches the Windows release bundle exactly. Large speech model files download during
 setup with upstream checksum verification. Developer accounts, runtime state, tests, captures and
@@ -11,6 +11,8 @@ maintainer-only tools are excluded.
   `apps/assistant/herald.json`.
 - **Optional modules** are separate downloads listed in `modules/catalog.json`, each a release here
   (tag `module-<id>-v<version>`) with its SHA-256 in the catalog. The assistant installs one only when it's needed.
+
+The installed app checks itself against `apps/assistant/core-manifest.json` (every core file's SHA-256) so a changed core is noticed before an update replaces it; device setup fixes and the user's own agents, skills and extensions live in the user data folder and survive updates.
 
 Optional daily diagnostic sharing stays off on every fresh installation; consent lives only in user data,
 is bound to the reviewed destination, and can be revoked.

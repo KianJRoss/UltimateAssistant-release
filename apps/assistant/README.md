@@ -256,6 +256,24 @@ and voice pack. ElevenLabs uses each user's own API key and available account
 voices. Device voices depend on voices installed in Windows. This does not copy
 credentials or synchronize preferences between separate computers.
 
+## Your changes and updates
+
+The assistant keeps three things apart so updates can replace it without losing anyone's work:
+
+- **The core** is the app as released. Updates replace it whole, and the app checks itself
+  against the release's file list (`core-manifest.json`) at start. **Changing the core on purpose
+  can make updates unreliable**: those edits are lost on the next update and may stop it working.
+- **This device's setup.** Every install is a little different (where things are, drivers, what
+  was already installed), and the assistant finishes whatever the installer couldn't. What it did
+  is recorded with how to re-check it, kept across updates, and re-checked after one.
+- **What you built or taught it**: your own agents, skills, scripts, automations and modules, in
+  `agents/`, `skills/` and `extensions/` in its user data folder. Updates never touch them.
+
+When something only a core change would fix, or you've built something others could use, the
+assistant can write it up and, **if you choose**, send it to the developer. You see exactly what
+would be sent first; nothing else (conversations, files, settings, accounts) goes with it. Sending
+fixes back is how they reach everyone, instead of living on in one changed copy.
+
 ## Diagnostic sharing
 
 Assistant activity stays in each conversation as timestamped actions and statuses,
