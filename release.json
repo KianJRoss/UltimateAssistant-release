@@ -4,5 +4,5 @@
   "sha256": "9d6dc18e66ae49bc190ffccf426807443d3143032de2baf3710ed5baeb91e199",
   "source_commit": "71c2fff69bfa838d002011e55b78cebc888bd912",
   "channel": "release",
-  "diagnostics_upload_url": "https://kianserver-2.taile4f97e.ts.net:9443/assistant-diagnostics"
+  "diagnostics_upload_url": "https://kianserver-2.taile4f97e.ts.net:10000/assistant-diagnostics"
 }
