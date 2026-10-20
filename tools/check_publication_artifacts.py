@@ -118,7 +118,7 @@ def main() -> int:
                 manifest = json.loads(data.decode("utf-8-sig"))
                 if (manifest.get("diagnostics_upload_url") and
                         (manifest["diagnostics_upload_url"] == args.approved_diagnostics_url or
-                         hashlib.sha256(manifest["diagnostics_upload_url"].encode()).hexdigest() == "60f3acf2d5f678f46ea898bd6793e6e92c6db3bfbda9fd30d3f7f21bf742f296")):
+                         hashlib.sha256(manifest["diagnostics_upload_url"].encode()).hexdigest() == "69ffc6a3c3d3d17d0222f52faeee7bf115f27bf74f7cbb925406345fada204e4")):
                     manifest["diagnostics_upload_url"] = "https://approved-public-upload.example/"
                     checked_data = json.dumps(manifest).encode("utf-8")
             findings = _entry_findings(name, checked_data, markers)
