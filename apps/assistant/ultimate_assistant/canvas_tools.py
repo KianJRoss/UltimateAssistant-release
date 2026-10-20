@@ -11,6 +11,7 @@ import os
 import re
 import time
 import uuid
+from urllib.parse import quote
 from pathlib import Path
 
 import httpx
@@ -34,11 +35,14 @@ def _call(method: str, path: str, **kwargs) -> httpx.Response:
 def canvas_show(kind: str, title: str = "", body: str = "", devices: list[str] | None = None,
                 position: str | dict = "top-right", monitor: str | int = "active", ttl_seconds: int = 120,
                 id: str = "", image: str = "", shapes: list[dict] | None = None, color: str = "",
-                template: str = "", data: dict | None = None, ui: str = "", bare: bool = False) -> str:
+                template: str = "", data: dict | None = None, ui: str = "", bare: bool = False, draggable: bool = False) -> str:
     """Put something on the canvas: your whiteboard and pinboard over the user's screens. Draw on it,
     pin photos, videos, notes and cards, or show small working tools, without taking their focus.
 
     kind: text | markdown | reminder | image | drawing | ui. Reuse an id to update a thing in place.
+    draggable: allow the user to move this item on the phone using its handle. Enable for floating
+    references/notes when useful; keep false for annotations aligned to app content. Content updates
+    preserve the user placement; changing position resets it. Use finite TTLs for demonstrations.
     ttl_seconds: how long it stays (0 = until cleared). position: top-left ... bottom-right, center, or
     {"x", "y", "w"} in 0-1 of the monitor; monitor: "active", "all", "assistant" or a number;
     devices: ["pc"], ["phone"], a device name or ["everywhere"]. image: https URL or a file on the main PC.
@@ -50,7 +54,7 @@ def canvas_show(kind: str, title: str = "", body: str = "", devices: list[str] |
     Read canvas_guide("templates") or canvas_guide("markup") before your first card of a kind, and
     canvas_events for what the user did. Keep things small; clear them when done."""
     element = {"kind": kind, "devices": devices or ["pc"], "position": position, "monitor": monitor,
-               "ttl_seconds": ttl_seconds, "agent": os.environ.get("HERALD_GATEWAY_PART", "")[-40:]}
+               "ttl_seconds": ttl_seconds, "draggable": draggable, "agent": os.environ.get("HERALD_GATEWAY_PART", "")[-40:]}
     for key, value in (("id", id), ("title", title), ("body", body), ("image", image), ("color", color),
                        ("template", template), ("ui", ui), ("data", data), ("bare", bare)):
         if value:
@@ -62,14 +66,36 @@ def canvas_show(kind: str, title: str = "", body: str = "", devices: list[str] |
         return "Error: " + response.text[:400]
     shown = response.json()["shown"]
     what = shown.get("template") or shown["kind"]
-    return f"Showing {what} '{shown['id']}' on {', '.join(shown['devices'])}" + (
+    text = f"Published {what} '{shown['id']}' on {', '.join(shown['devices'])}" + (
         f" for {shown['ttl_seconds']}s." if shown["ttl_seconds"] else " until cleared.")
+    if {"phone", "everywhere"} & set(shown["devices"]):
+        text += " " + _phone_delivery(shown["id"])
+    return text
+
+
+def _phone_delivery(element_id: str, wait: float = 6) -> str:
+    """What the phone app got: published on the canvas is not the same as on the user's phone."""
+    deadline = time.monotonic() + wait
+    while True:
+        try:
+            response = _call("GET", "/phone-delivery", params={"id": element_id}, timeout=10)
+        except httpx.HTTPError:
+            response = None
+        if response is None or response.status_code >= 400:
+            return "Phone: delivery can't be checked from here; don't tell the user it's showing until they say so."
+        status = response.json()
+        if status["state"] in ("sent", "not_forwarded") or time.monotonic() >= deadline:
+            break
+        time.sleep(0.5)
+    if status["state"] == "sent":
+        return "Phone: the app received it (the app doesn't confirm drawing it; if the user doesn't see it, believe them)."
+    return f"Phone: NOT delivered yet: {status['detail']}. Tell the user that, don't say it's showing."
 
 
 @mcp.tool()
 def canvas_guide(topic: str = "") -> str:
     """How to use the canvas, one part at a time. No topic: the overview and the list of topics.
-    Topics: kinds, drawing, templates, markup, components, talking back, example, keep in mind."""
+    Topics: kinds, drawing, templates, markup, components, talking back, example, keep in mind, feeds."""
     text = GUIDE.read_text(encoding="utf-8")
     sections = re.split(r"(?m)^## ", text)
     if not topic.strip():
@@ -131,7 +157,7 @@ def canvas_list(device: str = "") -> str:
         return "Error: " + response.text[:400]
     elements = response.json()["elements"]
     return json.dumps([{k: e.get(k) for k in ("id", "kind", "template", "title", "devices", "monitor",
-                                               "ttl_seconds", "state")
+                                               "ttl_seconds", "draggable", "state")
                         if e.get(k) is not None and (k != "state" or e.get("kind") == "ui")}
                        for e in elements], ensure_ascii=False) if elements else "The canvas is empty."
 
@@ -150,6 +176,43 @@ def canvas_events(id: str = "", after: int = 0, wait_seconds: int = 0) -> str:
         return "Error: " + response.text[:400]
     events = response.json()["events"]
     return json.dumps(events, ensure_ascii=False) if events else "No new card events."
+
+
+@mcp.tool()
+def canvas_feed_save(spec: dict) -> str:
+    """Save a live data feed and its canvas card. Read canvas_guide('feeds') for sources,
+    field mapping, refresh intervals and conditions that can wake an assistant."""
+    response = _call("POST", "/feeds", json=spec)
+    if response.status_code >= 400:
+        return "Error: " + response.text[:400]
+    return json.dumps(response.json(), ensure_ascii=False)
+
+
+@mcp.tool()
+def canvas_feed_list() -> str:
+    """List saved canvas feeds, their current state and recent refresh errors."""
+    response = _call("GET", "/feeds")
+    if response.status_code >= 400:
+        return "Error: " + response.text[:400]
+    return json.dumps(response.json(), ensure_ascii=False)
+
+
+@mcp.tool()
+def canvas_feed_remove(id: str) -> str:
+    """Remove a saved canvas feed so it stops refreshing."""
+    response = _call("DELETE", "/feeds/" + quote(id, safe=""))
+    if response.status_code >= 400:
+        return "Error: " + response.text[:400]
+    return json.dumps(response.json(), ensure_ascii=False)
+
+
+@mcp.tool()
+def canvas_feed_refresh(id: str) -> str:
+    """Refresh one saved canvas feed now and return its observed result."""
+    response = _call("POST", "/feeds/" + quote(id, safe="") + "/refresh", timeout=90)
+    if response.status_code >= 400:
+        return "Error: " + response.text[:400]
+    return json.dumps(response.json(), ensure_ascii=False)
 
 
 if __name__ == "__main__":

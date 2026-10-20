@@ -1,4 +1,4 @@
-﻿"""Content-free support reports; automatic sharing requires revocable local consent."""
+"""Content-free support reports; automatic sharing requires revocable local consent."""
 from contextlib import closing
 from datetime import datetime, timezone
 import io
@@ -14,20 +14,21 @@ from urllib.parse import urlsplit
 import zipfile
 import httpx
 from .settings import settings
+from .release_experience import REPORT_SCOPE, shared_checks
 
 _LOCK = threading.RLock()
 _INTERVAL = 24 * 60 * 60
 DESCRIPTION = ("App/Python/OS versions, fixed activity status categories and elapsed seconds "
-               "for the latest 2,000 actions. No chats, labels, prompts, files, paths, account/model "
+               "for the latest 2,000 actions, plus your fixed guided-feature test choices. No chats, labels, prompts, files, paths, account/model "
                "names, credentials, screenshots or raw logs. The receiving server sees your network IP.")
 
 
 def report() -> dict:
     version_file = Path(__file__).resolve().parents[1] / "VERSION"
-    system = {"schema_version": 2, "created_at": datetime.now(timezone.utc).isoformat(),
+    system = {"schema_version": REPORT_SCOPE, "created_at": datetime.now(timezone.utc).isoformat(),
               "app_version": version_file.read_text().strip() if version_file.exists() else "development",
               "python_version": platform.python_version(), "os": platform.system(),
-              "os_release": platform.release(), "contents": DESCRIPTION}
+              "os_release": platform.release(), "contents": DESCRIPTION, "feature_checks": shared_checks()}
     events = []
     if settings.conversations_db.exists():
         with closing(sqlite3.connect(settings.conversations_db, timeout=2)) as connection:
@@ -88,7 +89,7 @@ def consent(enabled: bool, endpoint: str = "") -> dict:
     with _LOCK:
         if enabled and endpoint != destination()["url"]:
             raise ValueError("Support destination changed. Preview the report and approve again.")
-        data = {"enabled": enabled, "url": endpoint if enabled else "", "schema_version": 2,
+        data = {"enabled": enabled, "url": endpoint if enabled else "", "schema_version": REPORT_SCOPE,
                 "changed_at": datetime.now(timezone.utc).isoformat()}
         _save(data)
         return data
@@ -113,7 +114,7 @@ def automatic_tick() -> None:
     # Serialize revocation with an in-flight send, bounded by the HTTP timeout.
     with _LOCK:
         data = preferences()
-        if data.get("enabled") is not True or data.get("schema_version") != 2:
+        if data.get("enabled") is not True or data.get("schema_version") != REPORT_SCOPE:
             return
         if time.time() - data.get("last_attempt", 0) < _INTERVAL:
             return

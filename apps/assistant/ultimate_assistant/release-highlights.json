@@ -1,0 +1,39 @@
+{
+  "0.3.0": [
+    {
+      "id": "life",
+      "title": "It keeps track of what you have to do",
+      "summary": "Mention a plan in chat and it's noted, then you're reminded at the right time.",
+      "prompt": "I'm trying the reminders feature. Pretend I just said: 'I need to call the bank tomorrow at 2pm.' Show me what you would note and when you would remind me, but mark it as a practice item and delete it afterwards.",
+      "expected": "A 'Noted' card appears, and the practice item can be removed."
+    },
+    {
+      "id": "free-time",
+      "title": "Finds your free time",
+      "summary": "Ask when you're free; it checks your appointments and outings.",
+      "prompt": "When am I free tomorrow between 9am and 9pm for at least an hour? Only look; don't add anything.",
+      "expected": "A list of free stretches around what you already have."
+    },
+    {
+      "id": "modules",
+      "title": "Features that arrive when you need them",
+      "summary": "Optional features (school, phone control, calendar and more) download only when you need them.",
+      "prompt": "Show me the optional modules available and explain which might fit what I do. This is a guided feature test: don't install or connect anything until I choose to.",
+      "expected": "The assistant explains available modules and waits for your choice."
+    },
+    {
+      "id": "canvas",
+      "title": "A canvas over your work",
+      "summary": "Ask for a visual explanation or interactive card, then close it when finished.",
+      "prompt": "I am trying the canvas feature. Show a small temporary interactive card explaining the three steps of planning a day. Do not open or change any of my files. Tell me how to dismiss it and let me confirm whether it appeared.",
+      "expected": "An interactive card appears and can be dismissed."
+    },
+    {
+      "id": "memory",
+      "title": "Memory you can inspect",
+      "summary": "Choose a harmless practice fact, check what was saved, and remove it afterwards.",
+      "prompt": "Help me try your memory feature. Explain what you can remember and ask me to choose a harmless practice fact. Save it only after I confirm, show what was saved, and offer to remove that practice memory afterwards.",
+      "expected": "You choose the fact, can inspect it, and can remove it."
+    }
+  ]
+}

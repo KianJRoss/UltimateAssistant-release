@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import os
 import json
 from dataclasses import dataclass
@@ -20,8 +21,15 @@ class Settings:
 
     @property
     def herald_source_root(self) -> Path:
+        """The directory holding the `herald` package: a development checkout named by
+        HERALD_SOURCE_ROOT, else wherever setup installed the pinned Herald release."""
         configured_root = os.environ.get("HERALD_SOURCE_ROOT")
-        return Path(configured_root) if configured_root else self.workspace_root / "components" / "herald"
+        if configured_root:
+            return Path(configured_root)
+        spec = importlib.util.find_spec("herald")
+        if not spec or not spec.origin:
+            raise RuntimeError("Herald is not installed in this environment; run apps\assistant\setup.ps1")
+        return Path(spec.origin).resolve().parents[1]
 
     @property
     def web_search_server(self) -> Path:
@@ -51,14 +59,6 @@ class Settings:
     @property
     def tasks_db(self) -> Path:
         return self.user_data_dir / "tasks.sqlite3"
-
-    @property
-    def study_sessions_db(self) -> Path:
-        return self.user_data_dir / "study_sessions.sqlite3"
-
-    @property
-    def flashcards_db(self) -> Path:
-        return self.user_data_dir / "flashcards.sqlite3"
 
     @property
     def memory_db(self) -> Path:

@@ -1,6 +1,6 @@
 param(
     [string]$OutputDirectory = (Join-Path $PSScriptRoot "..\..\dist"),
-    [string]$Version = "0.2.3"
+    [string]$Version = "0.3.0"
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,30 +20,13 @@ try {
         "apps\assistant\ultimate_assistant\onboarding.py",
         "apps\assistant\ultimate_assistant\browser_setup.py",
         "apps\assistant\ultimate_assistant\updater.py",
+        "apps\assistant\ultimate_assistant\release_experience.py",
+        "apps\assistant\ultimate_assistant\release-highlights.json",
         "apps\assistant\ultimate_assistant\g4f_setup.py",
         "apps\assistant\ultimate_assistant\g4f_worker.py",
         "apps\assistant\ultimate_assistant\g4f_gateway.py",
-        "components\herald\herald\router\provider_discovery.py",
-        "components\herald\herald\router\antigravity_models.py",
-        "components\herald\herald\router\cli_gateway.py",
-        "components\herald\herald\router\prompt_transport.py",
-        "components\herald\herald\router\execution_control.py",
-        "components\herald\herald\router\node_relay.py",
-        "components\herald\herald\router\assistant_work.py",
-        "components\herald\herald\assistant_work_tools.py",
-        "components\herald\herald\router\agent_runs.py",
-        "components\herald\herald\router\run_liveness.py",
-        "apps\assistant\ultimate_assistant\study_store.py",
-        "apps\assistant\ultimate_assistant\study_tools.py",
-        "apps\assistant\ultimate_assistant\flashcard_store.py",
-        "components\herald\pyproject.toml",
-        "components\herald\herald\math_tools.py",
-        "components\herald\herald\mcp_gateway.py",
-        "components\herald\herald\router\math_tools.py",
-        "components\perception-mcp\requirements.txt",
         "components\canvas-overlay\requirements.txt",
-        "components\canvas-overlay\overlay.py",
-        "components\ai-workspace\win-ui-mcp\requirements.txt"
+        "components\canvas-overlay\overlay.py"
     )
     foreach ($relative in $required) {
         if (-not (Test-Path (Join-Path $workspaceRoot $relative))) {
@@ -53,44 +36,19 @@ try {
     py -3.13 --version *> $null
     if ($LASTEXITCODE -ne 0) { throw "Build requires Python 3.13 and the Windows py launcher." }
     $env:UA_BUILD_ROOT = $workspaceRoot
-    py -3.13 -c "import hashlib,json,os,pathlib; p=pathlib.Path(os.environ['UA_BUILD_ROOT'])/'apps/assistant/ultimate_assistant'; c=json.loads((p/'module_catalog.json').read_text()); assert all((p/'module_packages'/m['bundled_archive']).is_file() and hashlib.sha256((p/'module_packages'/m['bundled_archive']).read_bytes()).hexdigest()==m['sha256'] for m in c['modules'] if m.get('bundled_archive')), 'Missing or invalid optional module archive; run optional-modules/build-node.py'"
-    if ($LASTEXITCODE -ne 0) { throw "Optional module package validation failed." }
+    # Modules aren't bundled: each downloads on demand. The built-in catalog must list them with URL + SHA-256.
+    py -3.13 -c "import json,os,pathlib,re; c=json.loads((pathlib.Path(os.environ['UA_BUILD_ROOT'])/'apps/assistant/ultimate_assistant/module_catalog.json').read_text('utf-8')); assert all(m.get('url','').startswith('https://') and re.fullmatch(r'[a-f0-9]{64}', m.get('sha256','')) for m in c['modules']), 'Module catalog entries need an HTTPS url and SHA-256; run optional-modules/build.py --app'"
+    if ($LASTEXITCODE -ne 0) { throw "Module catalog validation failed." }
 
     New-Item -ItemType Directory -Path $bundleRoot -Force | Out-Null
     $appsTarget = Join-Path $bundleRoot "apps"
     New-Item -ItemType Directory -Path $appsTarget -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $workspaceRoot "apps\assistant") -Destination (Join-Path $appsTarget "assistant") -Recurse
-    $heraldTarget = Join-Path $bundleRoot "components\herald"
-    New-Item -ItemType Directory -Path $heraldTarget -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $workspaceRoot "components\herald\herald") -Destination $heraldTarget -Recurse
-    foreach ($file in @("pyproject.toml", "setup.py", "README.md", "LICENSE")) {
-        Copy-Item -LiteralPath (Join-Path $workspaceRoot "components\herald\$file") -Destination $heraldTarget
-    }
     Set-Content -LiteralPath (Join-Path $appsTarget "assistant\VERSION") -Value $Version -Encoding ascii
-    $maintainerOnlyHeraldFiles = @(
-        "herald\admin_gui.py",
-        "herald\router\admin_control.py",
-        "herald\router\admin_loop.py",
-        "herald\router\admin_state.py",
-        "herald\router\admin_workspace.py",
-        "herald\router\static\admin_review.html",
-        "herald\router\static\admin_review.js"
-    )
-    foreach ($relative in $maintainerOnlyHeraldFiles) {
-        Remove-Item -LiteralPath (Join-Path $heraldTarget $relative) -Force -ErrorAction SilentlyContinue
-    }
-    $perceptionTarget = Join-Path $bundleRoot "components\perception-mcp"
-    $controlTarget = Join-Path $bundleRoot "components\ai-workspace\win-ui-mcp"
     $canvasTarget = Join-Path $bundleRoot "components\canvas-overlay"
     New-Item -ItemType Directory -Path $canvasTarget -Force | Out-Null
     Get-ChildItem -LiteralPath (Join-Path $workspaceRoot "components\canvas-overlay") -Force |
         Copy-Item -Destination $canvasTarget -Recurse -Force
-    New-Item -ItemType Directory -Path $perceptionTarget -Force | Out-Null
-    New-Item -ItemType Directory -Path $controlTarget -Force | Out-Null
-    Get-ChildItem -LiteralPath (Join-Path $workspaceRoot "components\perception-mcp") -Force |
-        Copy-Item -Destination $perceptionTarget -Recurse -Force
-    Get-ChildItem -LiteralPath (Join-Path $workspaceRoot "components\ai-workspace\win-ui-mcp") -Force |
-        Copy-Item -Destination $controlTarget -Recurse -Force
 
     Get-ChildItem -LiteralPath $bundleRoot -Directory -Recurse -Force |
         Where-Object { $_.Name -in @(".git", "__pycache__", ".venv", "venv", "node_modules", ".playwright-mcp", ".runtime") } |
@@ -106,11 +64,11 @@ Ultimate Assistant for Windows
 1. Extract this entire ZIP to a writable folder.
 2. Double-click apps\assistant\Install-UltimateAssistant.cmd.
    Or run apps\assistant\Install-UltimateAssistant.ps1 from PowerShell.
-3. The app starts its bundled Herald Router on this device. Select Antigravity or Codex, install it if needed, and sign in in the app.
+3. Setup downloads the Herald Router (the release pinned in herald.json, checksum-verified) and the app starts it on this device. Select Antigravity or Codex, install it if needed, and sign in in the app.
 
 Requirements: Windows PowerShell 5.1 or newer, Python 3.13 with the py launcher,
 and internet access for Python packages. Node.js/npm is recommended for the
-official filesystem MCP. The Herald Router is bundled. Provider accounts and credentials are never bundled.
+official filesystem MCP. Optional modules download when needed. Provider accounts and credentials are never bundled.
 Public HTTPS updates need no GitHub account or Git.
 
 Build version: $Version

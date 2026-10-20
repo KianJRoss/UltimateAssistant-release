@@ -1,3 +1,20 @@
+# 0.3.0 — Proactive help, modules on demand, Herald as its own product
+
+- It keeps track of what you have to do: plans you mention in chat are noted (you'll see a "Noted" card), and you're reminded ahead of time, more insistently as things get close. When you're on something else near a deadline, it nudges you to switch.
+- Ask when you're free: it checks your appointments, time blocks and outings.
+- Optional features are separate downloads, installed only when needed: school and studying (flashcards with spaced repetition, Canvas or Moodle), Android phone control, Windows controls (sound, brightness, windows, power), screen vision, Windows app control, documents and research, budgeting, calendar, Obsidian and more.
+- Herald, the Router the assistant runs on, now installs as its own product from its public release, each package checked against its published checksum.
+- Includes everything from the 0.2.4 candidate below.
+
+# 0.2.4 — Guided updates and optional feature feedback
+
+- After setup, a new version offers an explanation and optional guided tests. Try features one at a time, record worked/blocked/skipped, skip a version, or defer the offer. Reopen the tour from Settings and tools.
+- Separately offers diagnostics sharing with report preview, one-time send, daily opt-in, decline and snooze choices. Declining is remembered. An expanded report requires renewed consent before automatic sharing resumes.
+- Reports include only fixed feature IDs/status choices alongside version and activity timings. Test conversations, free-form notes, files, screenshots and credentials are excluded.
+- Windows MCP bridges gain a process-local memory cap and avoid the SDK warning-replay path that can grow without bound.
+
+This is a friend-test candidate. Guided tests use your connected AI only when you choose to try them; results are your assessment, not an automatic success claim.
+
 # 0.2.3 ? Friend-test update
 
 - Preview support reports before sending. Reports now contain versions and fixed action status/timing fields; free-form labels and backend names are excluded.

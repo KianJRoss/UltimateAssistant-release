@@ -23,7 +23,7 @@ jobs:
           for root in ('apps', 'components', 'tools'):
               for path in Path(root).rglob('*.py'):
                   ast.parse(path.read_text(encoding='utf-8-sig'), filename=str(path))
-          for path in ('apps/assistant/Install-UltimateAssistant.cmd', 'apps/assistant/Install-UltimateAssistant.ps1', 'apps/assistant/VERSION', 'components/herald/LICENSE', 'apps/assistant/models/kokoro/LICENSE-Apache-2.0.txt'):
+          for path in ('apps/assistant/Install-UltimateAssistant.cmd', 'apps/assistant/Install-UltimateAssistant.ps1', 'apps/assistant/VERSION', 'apps/assistant/herald.json', 'apps/assistant/models/kokoro/LICENSE-Apache-2.0.txt'):
               assert Path(path).is_file(), path
           version = Path('apps/assistant/VERSION').read_text().strip()
           assert re.fullmatch(r'\d+\.\d+\.\d+', version)

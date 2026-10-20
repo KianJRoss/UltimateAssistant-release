@@ -1,11 +1,11 @@
 """This device's eyes and hands, offered to the assistant through Herald.
 
-Screen/OCR (perception) and window/input control (win-ui) run on the device
-they act on. Each device registers its own copy, named for the node
-(``ultimate-assistant-perception-<node>``) and labelled with the device, in
-Herald's global ``device`` group, so every model and CLI the router runs can
-see and operate any of the user's devices -- through the node link, never
-through SSH or a second router.
+Screen vision and Windows UI control are modules (optional-modules/screen-vision,
+windows-ui) that run on the device they act on; turning a capability on installs the
+module here. Each device's copy is named for the node and joins Herald's global
+``device`` group, with the user's own app servers (device_mcp_servers), so every
+model and CLI the router runs can see and operate any of the user's devices -- through
+the node link, never through SSH or a second router.
 """
 from __future__ import annotations
 
@@ -20,11 +20,12 @@ from .node_link import device_instance, link
 from .settings import settings
 
 DEVICE_GROUP = "device"
-SERVERS = {
-    "vision": ("ultimate-assistant-perception", ("components", "perception-mcp", "server.py"),
-               "Screen capture of every monitor, OCR, and optional vision-model description."),
-    "control": ("ultimate-assistant-win-ui", ("components", "ai-workspace", "win-ui-mcp", "server.py"),
-                "Windows window list (z-order, what is actually visible) and user-opted input control."),
+# Screen vision and Windows control are modules: turning a capability on installs its module on
+# this device the first time, then enables it (module_manager binds it into the device group).
+MODULES = {"vision": "screen-vision", "control": "windows-ui"}
+DESCRIPTIONS = {
+    "vision": "Screen capture of every monitor, OCR, and optional vision-model description.",
+    "control": "Windows window list (z-order, what is actually visible) and user-opted input control.",
 }
 CAPABILITY_SETTING = {"vision": "desktop_vision", "control": "desktop_control"}
 
@@ -35,32 +36,21 @@ def _router() -> tuple[str, dict[str, str]]:
 
 
 def instance_name(capability: str) -> str:
-    return device_instance(SERVERS[capability][0])
+    from .module_manager import ModuleManager
+    return ModuleManager.tool_name(MODULES[capability])
 
 
 def register(capability: str) -> str:
-    """Offer one desktop server from this device; returns its Herald instance name."""
-    base_name, script_parts, description = SERVERS[capability]
-    python = settings.workspace_root / ".venvs" / "desktop-tools" / "Scripts" / "python.exe"
-    if not python.is_file():
-        raise ValueError("Desktop MCP dependencies are not installed. Run apps\\assistant\\setup-desktop-tools.ps1 first.")
-    script = settings.workspace_root.joinpath(*script_parts)
-    if not script.is_file():
-        raise ValueError(f"The bundled {capability} MCP source is missing from this installation.")
-    env = {"PYTHONIOENCODING": "utf-8"}
-    if capability == "vision":
-        env.update(PERCEPTION_MCP_TRANSPORT="stdio",
-                   PERCEPTION_CAPTURE_DIR=str(settings.user_data_dir / "perception" / "captures"))
-    name = device_instance(base_name)
-    base, headers = _router()
-    httpx.post(f"{base}/tool-instances", headers=headers, timeout=20, json=link.localize({
-        "name": name, "transport": "stdio", "scope": "global", "description": description,
-        "tags": ["assistant", "desktop", capability],
-        "package_name": "ultimate-assistant-desktop-tools", "version": "local",
-        "config": {"command": [str(python), str(script)], "cwd": str(script.parent), "env": env, "timeout": 180},
-    })).raise_for_status()
-    set_membership(name, True)
-    return name
+    """Turn on one desktop capability on this device; returns its Herald instance name."""
+    from .module_manager import ModuleManager
+    from .module_tools import _locked
+    manager = ModuleManager()
+    with _locked(manager):
+        result = manager.install(MODULES[capability])
+    if result.get("status") != "ready":
+        missing = ", ".join(result.get("missing") or result.get("setup") or []) or "setup"
+        raise ValueError(f"The {MODULES[capability]} module isn't ready on this device yet: {missing}")
+    return instance_name(capability)
 
 
 def set_membership(name: str, enabled: bool) -> None:

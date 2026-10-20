@@ -12,7 +12,9 @@ without taking focus; clicking it lets the user type. Without WebEngine a ui
 card is drawn as a plain card saying where to open it.
 
 Env: ULTIMATE_ASSISTANT_URL (the node's HTTP), ULTIMATE_ASSISTANT_APP_TOKEN,
-ULTIMATE_ASSISTANT_CANVAS_DEVICE (default "pc"),
+ULTIMATE_ASSISTANT_CANVAS_DEVICE (default "pc"), ULTIMATE_ASSISTANT_ROUTER_KEY (a device that
+follows the main node's canvas through Herald, /nodes/main/http, sends Herald's key with every
+request, including the cards' pages),
 ULTIMATE_ASSISTANT_CANVAS_CAPTURE=1 to let screenshots include the overlay.
 Works over normal and borderless-windowed apps and games, not over exclusive
 fullscreen.
@@ -37,7 +39,7 @@ from PySide6.QtGui import (QAbstractTextDocumentLayout, QColor, QDesktopServices
 from PySide6.QtWidgets import QApplication, QWidget
 
 try:  # interactive cards need Qt WebEngine (PySide6-Addons); everything else works without it
-    from PySide6.QtWebEngineCore import QWebEnginePage
+    from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineUrlRequestInterceptor
     from PySide6.QtWebEngineWidgets import QWebEngineView
 except ImportError:  # pragma: no cover - depends on the installed Qt
     QWebEnginePage = QWebEngineView = None
@@ -46,6 +48,13 @@ BASE = os.environ.get("ULTIMATE_ASSISTANT_URL", "http://127.0.0.1:8841").rstrip(
 TOKEN = os.environ.get("ULTIMATE_ASSISTANT_APP_TOKEN", "")
 DEVICE = os.environ.get("ULTIMATE_ASSISTANT_CANVAS_DEVICE", "pc")
 CAPTURE = os.environ.get("ULTIMATE_ASSISTANT_CANVAS_CAPTURE") == "1"
+ROUTER_KEY = os.environ.get("ULTIMATE_ASSISTANT_ROUTER_KEY", "")
+
+
+def _router_auth(headers: dict) -> dict:
+    if ROUTER_KEY:
+        headers["Authorization"] = f"Bearer {ROUTER_KEY}"
+    return headers
 ACCENT = QColor("#7aa2f7")
 CARD = QColor(22, 24, 32, 225)
 INK = QColor("#e6e8ef")
@@ -58,7 +67,7 @@ class Feed(QObject):
     changed = Signal(list)
 
     def run(self) -> None:
-        headers = {"x-ultimate-assistant-token": TOKEN, "Accept": "text/event-stream"}
+        headers = _router_auth({"x-ultimate-assistant-token": TOKEN, "Accept": "text/event-stream"})
         while True:
             try:
                 with httpx.stream("GET", f"{BASE}/api/canvas/stream", params={"device": DEVICE},
@@ -323,6 +332,14 @@ class ExternalPage(QWebEnginePage if QWebEnginePage else object):
         return False
 
 
+class RouterAuth(QWebEngineUrlRequestInterceptor if QWebEngineView else object):
+    """Adds Herald's key to the cards' own requests when the canvas comes through Herald."""
+
+    def interceptRequest(self, info) -> None:
+        if ROUTER_KEY and info.requestUrl().toString().startswith(BASE):
+            info.setHttpHeader(b"Authorization", f"Bearer {ROUTER_KEY}".encode())
+
+
 class CardWindow(QWebEngineView if QWebEngineView else object):
     """One interactive card: a frameless always-on-top web view running /api/canvas/ui/card."""
 
@@ -539,6 +556,9 @@ def main() -> int:
         _log_to_file()
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QApplication(sys.argv)
+    if QWebEngineView and ROUTER_KEY:
+        app.router_auth = RouterAuth()  # kept alive with the app
+        QWebEngineProfile.defaultProfile().setUrlRequestInterceptor(app.router_auth)
     app.setQuitOnLastWindowClosed(False)
     canvas = Canvas()  # noqa: F841 - lives for the app
     return app.exec()

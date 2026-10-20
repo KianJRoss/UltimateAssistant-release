@@ -113,6 +113,10 @@ def validate(element: dict[str, Any]) -> dict[str, Any]:
         if not _COLOR.match(str(color)):
             raise ValueError("color must be #rrggbb or #rrggbbaa")
         out["color"] = str(color)
+    draggable = element.get("draggable", False)
+    if type(draggable) is not bool:
+        raise ValueError("draggable must be a boolean")
+    out["draggable"] = draggable
     ttl = element.get("ttl_seconds", 120 if kind != "reminder" else 600)
     out["ttl_seconds"] = int(_number(ttl, "ttl_seconds", 0, MAX_TTL))  # 0 = until cleared
     out["agent"] = str(element.get("agent") or "")[:40]
@@ -185,6 +189,7 @@ class CanvasStore:
         self._elements: dict[str, dict[str, Any]] = {}
         self._events: list[dict[str, Any]] = []
         self._event_seq = 0
+        self.removal_listeners = []
         self.revision = 0
         self._changed: asyncio.Condition | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -228,6 +233,7 @@ class CanvasStore:
     def remove(self, element_id: str | None = None, *, device: str | None = None) -> int:
         with self._lock:
             if element_id:
+                keys = [element_id]
                 removed = 1 if self._elements.pop(element_id, None) else 0
             else:
                 keys = [k for k, e in self._elements.items() if device is None or device in e["devices"]
@@ -237,7 +243,15 @@ class CanvasStore:
                 removed = len(keys)
             if removed:
                 self._notify()
-            return removed
+        # Local close/clear wins over an in-flight data refresh. Call outside the store lock.
+        for key in keys:
+            for listener in self.removal_listeners:
+                try:
+                    listener(key)
+                except Exception:
+                    import logging
+                    logging.getLogger(__name__).exception('Canvas removal listener failed')
+        return removed
 
     def get(self, element_id: str) -> dict[str, Any] | None:
         with self._lock:
@@ -324,8 +338,9 @@ def overlay_command(workspace_root: Path) -> list[str] | None:
     return [str(python), str(script)]
 
 
-def start_overlay(workspace_root: Path, base_url: str, token: str, device: str = "pc") -> bool:
-    """Start the canvas overlay for this device (once); it follows /api/canvas/stream."""
+def start_overlay(workspace_root: Path, base_url: str, token: str, device: str = "pc", router_key: str = "") -> bool:
+    """Start the canvas overlay for this device (once); it follows /api/canvas/stream. A device that
+    isn't the main node follows the main node's canvas through Herald (router_key authenticates)."""
     global _overlay
     if _overlay and _overlay.poll() is None:
         return True
@@ -333,7 +348,8 @@ def start_overlay(workspace_root: Path, base_url: str, token: str, device: str =
     if not command:
         return False
     env = {**os.environ, "ULTIMATE_ASSISTANT_URL": base_url.rstrip("/"),
-           "ULTIMATE_ASSISTANT_APP_TOKEN": token, "ULTIMATE_ASSISTANT_CANVAS_DEVICE": device}
+           "ULTIMATE_ASSISTANT_APP_TOKEN": token, "ULTIMATE_ASSISTANT_CANVAS_DEVICE": device,
+           **({"ULTIMATE_ASSISTANT_ROUTER_KEY": router_key} if router_key else {})}
     _overlay = subprocess.Popen(command, env=env, close_fds=True,
                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     return True

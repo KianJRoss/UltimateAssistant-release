@@ -11,7 +11,7 @@ This build is being sent to a friend for practical testing and feedback. It is a
 3. In the app, choose a subscription or an API key and connect your own provider account.
 4. Once the account is verified, the app automatically sends **Help me set up my assistant.** Answer the assistant's questions; it handles technical setup and guides actions that need you.
 
-The app includes its own local Herald Router. No GitHub account, Git, developer configuration, provider credentials, or test accounts are required or supplied. Windows and internet access are required. The installer provisions Python 3.13 when Windows Package Manager is available; otherwise install Python 3.13 with its launcher and retry. Dependencies are downloaded during installation.
+The app runs its own local Herald Router, which setup downloads from [Herald's public release](https://github.com/KianJRoss/herald-release) and checks against its pinned checksum. Optional features (school, phone control, Windows controls, calendar, budgeting and more) are separate downloads listed in [modules/catalog.json](modules/catalog.json) and install only when needed. No GitHub account, Git, developer configuration, provider credentials, or test accounts are required or supplied. Windows and internet access are required. The installer provisions Python 3.13 when Windows Package Manager is available; otherwise install Python 3.13 with its launcher and retry. Dependencies are downloaded during installation.
 
 ## Browser and desktop tools
 
@@ -38,7 +38,7 @@ This repository contains the curated source used for the friend-test Windows bun
 
 The release ZIP bundles the licensed Kokoro speech model and voice pack. Their large binaries are distributed as release assets rather than Git source files; a source installation downloads the same upstream files and verifies their checksums when absent.
 
-See [app documentation](apps/assistant/README.md), [release notes](RELEASE-NOTES.md), and [third-party notices](apps/assistant/THIRD_PARTY_NOTICES.md). Herald's MIT license and the Kokoro model's Apache-2.0 license are included in their component directories.
+See [app documentation](apps/assistant/README.md), [release notes](RELEASE-NOTES.md), and [third-party notices](apps/assistant/THIRD_PARTY_NOTICES.md). Herald's MIT license ships with its packages; the Kokoro model's Apache-2.0 license is in `apps/assistant/models/kokoro`.
 
 ## Feedback
 

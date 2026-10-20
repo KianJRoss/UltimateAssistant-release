@@ -23,23 +23,17 @@
       "scope": "friend-assistant/conversation",
       "enabled_by_default": true,
       "availability": "same-device Router",
-      "dependencies": ["sympy", "matplotlib", "numpy"]
-    },
-    {
-      "id": "assistant-study-sessions",
-      "kind": "assistant-local-mcp",
-      "source": "ultimate_assistant.study_tools",
-      "scope": "friend-assistant/conversation",
-      "enabled_by_default": true,
-      "availability": "same-device Router",
-      "storage": "local SQLite; no reminder delivery",
-      "flashcard_schedule": "Leitner intervals; learner self-rates each review"
+      "dependencies": [
+        "sympy",
+        "matplotlib",
+        "numpy"
+      ]
     },
     {
       "id": "filesystem",
       "kind": "official-herald-native",
       "package": "@modelcontextprotocol/server-filesystem",
-      "source": "components/herald/herald/native_integrations.py",
+      "source": "herald (installed package): herald/native_integrations.py",
       "version": "2026.7.10",
       "scope": "configured assistant workspace",
       "enabled_by_default": true
@@ -47,21 +41,21 @@
     {
       "id": "shell",
       "kind": "herald-native",
-      "source": "components/herald/herald/native_mcp.py",
+      "source": "herald (installed package): herald/native_mcp.py",
       "scope": "configured assistant workspace",
       "enabled_by_default": true
     },
     {
       "id": "desktop-perception",
-      "kind": "bundled-python-mcp",
-      "source": "components/perception-mcp/server.py",
+      "kind": "optional-module",
+      "source": "module screen-vision (optional-modules/screen-vision)",
       "scope": "friend-assistant/conversation",
       "enabled_by_default": true
     },
     {
       "id": "desktop-control",
-      "kind": "bundled-python-mcp",
-      "source": "components/ai-workspace/win-ui-mcp/server.py",
+      "kind": "optional-module",
+      "source": "module windows-ui (optional-modules/windows-ui)",
       "scope": "friend-assistant/conversation",
       "enabled_by_default": false
     }
@@ -74,8 +68,7 @@
     "voice transcription and synthesis",
     "local conversation/task persistence",
     "local math graphing panel with symbolic curve analysis",
-    "school independent active recall, flashcard, worked example, and study planning support using user-provided material and local tasks",
-    "persistent local study-session tracking and spaced-review flashcards"
+    "school study support (sessions, FSRS flashcards, understanding checks, Canvas/Moodle) through the school module, installed when needed"
   ],
   "optional_connectors_in_setup_catalog": [
     {

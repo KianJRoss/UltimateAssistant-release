@@ -17,6 +17,8 @@ import httpx
 from .settings import settings
 
 MEMORY_CATEGORIES = {"rule", "preference", "context", "episode"}
+_PRIVATE_MEMORY_FIELDS = {"embedding_model", "embedding_dimension"}
+_UNSPECIFIED_EMBEDDING_MODEL = "__unspecified__"
 
 
 def configured_embedding_model() -> str:
@@ -49,12 +51,26 @@ def ollama_embedding(text: str) -> list[float] | None:
 def _cosine(left: list[float], right: list[float]) -> float:
     if len(left) != len(right):
         return 0.0
+    if not left or not all(math.isfinite(value) for value in (*left, *right)):
+        return 0.0
     numerator = sum(a * b for a, b in zip(left, right))
     left_norm = math.sqrt(sum(value * value for value in left))
     right_norm = math.sqrt(sum(value * value for value in right))
     if not left_norm or not right_norm:
         return 0.0
     return numerator / (left_norm * right_norm)
+
+
+def _public_memory(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    """Return the established public row shape without storage metadata."""
+    return {key: value for key, value in dict(row).items() if key not in _PRIVATE_MEMORY_FIELDS}
+
+
+def _embedding_provenance(vector: Any) -> tuple[str | None, int | None]:
+    if not isinstance(vector, list) or not vector:
+        return None, None
+    model = configured_embedding_model() or _UNSPECIFIED_EMBEDDING_MODEL
+    return model, len(vector)
 
 
 class MemoryStore:
@@ -82,7 +98,84 @@ class MemoryStore:
             columns = {r["name"] for r in connection.execute("PRAGMA table_info(memories)")}
             if "superseded_by" not in columns:
                 connection.execute("ALTER TABLE memories ADD COLUMN superseded_by TEXT")
+            if "embedding_model" not in columns:
+                connection.execute("ALTER TABLE memories ADD COLUMN embedding_model TEXT")
+            if "embedding_dimension" not in columns:
+                connection.execute("ALTER TABLE memories ADD COLUMN embedding_dimension INTEGER")
             connection.execute("CREATE INDEX IF NOT EXISTS memories_active ON memories(status, importance DESC)")
+            self._initialize_lexical_index(connection)
+
+    @staticmethod
+    def _initialize_lexical_index(connection: sqlite3.Connection) -> None:
+        """Create and repair the optional FTS index.
+
+        Triggers keep the index coherent even when callers modify ``memories``
+        directly.  Rebuilding on open also repairs databases created by older
+        versions and any initialization that was interrupted mid-transaction.
+        """
+        try:
+            connection.execute(
+                "CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5("
+                "memory_id UNINDEXED, title, content)"
+            )
+            connection.executescript(
+                """
+                CREATE TRIGGER IF NOT EXISTS memories_fts_insert AFTER INSERT ON memories BEGIN
+                    INSERT INTO memories_fts(memory_id, title, content)
+                    VALUES (new.id, new.title, new.content);
+                END;
+                CREATE TRIGGER IF NOT EXISTS memories_fts_update
+                AFTER UPDATE OF id, title, content ON memories BEGIN
+                    DELETE FROM memories_fts WHERE memory_id = old.id;
+                    INSERT INTO memories_fts(memory_id, title, content)
+                    VALUES (new.id, new.title, new.content);
+                END;
+                CREATE TRIGGER IF NOT EXISTS memories_fts_delete AFTER DELETE ON memories BEGIN
+                    DELETE FROM memories_fts WHERE memory_id = old.id;
+                END;
+                """
+            )
+            connection.execute("DELETE FROM memories_fts")
+            connection.execute(
+                "INSERT INTO memories_fts(memory_id, title, content) "
+                "SELECT id, title, content FROM memories"
+            )
+        except sqlite3.Error:
+            # Some SQLite builds omit FTS5. Search transparently uses LIKE.
+            return
+
+    @staticmethod
+    def _lexical_ids(
+        connection: sqlite3.Connection, terms: set[str], *, force_like: bool = False,
+    ) -> set[str]:
+        if not force_like:
+            # Quoting each token makes punctuation user data rather than FTS syntax.
+            expression = " OR ".join(f'"{term.replace(chr(34), chr(34) * 2)}"' for term in sorted(terms))
+            try:
+                return {
+                    row["id"]
+                    for row in connection.execute(
+                        "SELECT m.id FROM memories_fts f JOIN memories m ON m.id = f.memory_id "
+                        "WHERE memories_fts MATCH ? AND m.status = 'active'",
+                        (expression,),
+                    )
+                }
+            except sqlite3.Error:
+                pass
+
+        clauses: list[str] = []
+        parameters: list[str] = []
+        for term in sorted(terms):
+            escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            clauses.append("lower(title || ' ' || content) LIKE ? ESCAPE '\\'")
+            parameters.append(f"%{escaped.lower()}%")
+        return {
+            row["id"]
+            for row in connection.execute(
+                "SELECT id FROM memories WHERE status = 'active' AND (" + " OR ".join(clauses) + ")",
+                parameters,
+            )
+        }
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database, timeout=10)
@@ -108,6 +201,8 @@ class MemoryStore:
             vector = embedder(f"{title}\n{content}") if embedder else None
         except Exception:
             vector = None
+        embedding_model, embedding_dimension = _embedding_provenance(vector)
+        serialized_embedding = json.dumps(vector) if vector else None
         now = datetime.now(timezone.utc).isoformat()
         memory_id = str(uuid.uuid4())
         with self._lock, closing(self._connect()) as connection, connection:
@@ -120,21 +215,26 @@ class MemoryStore:
                     "UPDATE memories SET title = ?, importance = ?, updated_at = ?, "
                     "source_conversation_id = COALESCE(?, source_conversation_id), "
                     "source_message_id = COALESCE(?, source_message_id), "
-                    "embedding = COALESCE(?, embedding) WHERE id = ?",
+                    "embedding = COALESCE(?, embedding), "
+                    "embedding_model = CASE WHEN ? IS NOT NULL THEN ? ELSE embedding_model END, "
+                    "embedding_dimension = CASE WHEN ? IS NOT NULL THEN ? ELSE embedding_dimension END "
+                    "WHERE id = ?",
                     (title, importance, now, source_conversation_id, source_message_id,
-                     json.dumps(vector) if vector else None, existing["id"]),
+                     serialized_embedding, serialized_embedding, embedding_model,
+                     serialized_embedding, embedding_dimension, existing["id"]),
                 )
                 memory_id = existing["id"]
             else:
                 connection.execute(
                     "INSERT INTO memories(id, category, title, content, importance, "
-                    "source_conversation_id, source_message_id, created_at, updated_at, embedding) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "source_conversation_id, source_message_id, created_at, updated_at, embedding, "
+                    "embedding_model, embedding_dimension) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (memory_id, category, title, content, importance, source_conversation_id,
-                     source_message_id, now, now, json.dumps(vector) if vector else None),
+                     source_message_id, now, now, serialized_embedding,
+                     embedding_model, embedding_dimension),
                 )
             row = connection.execute("SELECT * FROM memories WHERE id = ?", (memory_id,)).fetchone()
-        return dict(row)
+        return _public_memory(row)
 
     def list_memories(self, *, limit: int = 200) -> list[dict[str, Any]]:
         with self._lock, closing(self._connect()) as connection, connection:
@@ -142,17 +242,39 @@ class MemoryStore:
                 "SELECT * FROM memories WHERE status = 'active' "
                 "ORDER BY importance DESC, updated_at DESC LIMIT ?", (max(1, min(limit, 500)),),
             ).fetchall()
-        return [dict(row) for row in rows]
+        return [_public_memory(row) for row in rows]
 
     def search(self, query: str, *, limit: int = 8, embedder=ollama_embedding) -> list[dict[str, Any]]:
         terms = {term.casefold() for term in re.findall(r"[\w'-]{2,}", query)}
         if not terms:
             return []
-        memories = self.list_memories(limit=500)
+        query_model = (
+            configured_embedding_model() or _UNSPECIFIED_EMBEDDING_MODEL
+            if embedder else ""
+        )
+        with self._lock, closing(self._connect()) as connection:
+            lexical_ids = self._lexical_ids(connection, terms)
+            rows = connection.execute(
+                "SELECT * FROM memories WHERE status = 'active' AND embedding IS NOT NULL "
+                "AND embedding_model = ? AND embedding_dimension IS NOT NULL",
+                (query_model,),
+            ).fetchall()
+            has_semantic_candidates = bool(rows)
+            memories_by_id = {row["id"]: dict(row) for row in rows}
+            missing_ids = sorted(lexical_ids - memories_by_id.keys())
+            for offset in range(0, len(missing_ids), 500):
+                batch = missing_ids[offset:offset + 500]
+                placeholders = ",".join("?" for _ in batch)
+                for row in connection.execute(
+                    f"SELECT * FROM memories WHERE status = 'active' AND id IN ({placeholders})",
+                    batch,
+                ):
+                    memories_by_id[row["id"]] = dict(row)
+        memories = list(memories_by_id.values())
         if not memories:
             return []
         try:
-            query_vector = embedder(query) if embedder and any(memory.get("embedding") for memory in memories) else None
+            query_vector = embedder(query) if embedder and has_semantic_candidates else None
         except Exception:
             query_vector = None
         ranked: list[tuple[float, dict[str, Any]]] = []
@@ -162,7 +284,12 @@ class MemoryStore:
             words = set(re.findall(r"[\w'-]{2,}", haystack))
             overlap = len(terms & words) / max(1, len(terms))
             vector_score = 0.0
-            if query_vector and memory.get("embedding"):
+            uses_vector = bool(
+                query_vector and memory.get("embedding")
+                and memory.get("embedding_model") == query_model
+                and memory.get("embedding_dimension") == len(query_vector)
+            )
+            if uses_vector:
                 try:
                     vector_score = max(0.0, _cosine(query_vector, json.loads(memory["embedding"])))
                 except (TypeError, ValueError, json.JSONDecodeError):
@@ -173,7 +300,7 @@ class MemoryStore:
             except (TypeError, ValueError):
                 age_days = 365.0
             recency_score = 1.0 / (1.0 + age_days / 180.0)
-            if query_vector:
+            if uses_vector:
                 score = 0.62 * vector_score + 0.20 * overlap + 0.13 * importance_score + 0.05 * recency_score
                 threshold = 0.28
             else:
@@ -183,7 +310,10 @@ class MemoryStore:
                 score = max(score, 0.95)
             if score >= threshold:
                 ranked.append((score, memory))
-        ranked.sort(key=lambda item: (item[0], item[1]["importance"], item[1]["updated_at"]), reverse=True)
+        ranked.sort(
+            key=lambda item: (item[0], item[1]["importance"], item[1]["updated_at"], item[1]["id"]),
+            reverse=True,
+        )
         selected = [memory for _, memory in ranked[:max(1, min(limit, 30))]]
         if selected:
             accessed = datetime.now(timezone.utc).isoformat()
@@ -192,7 +322,7 @@ class MemoryStore:
                     "UPDATE memories SET last_accessed_at = ? WHERE id = ?",
                     [(accessed, item["id"]) for item in selected],
                 )
-        return selected
+        return [_public_memory(memory) for memory in selected]
 
     def supersede(self, memory_id: str, replacement_id: str) -> bool:
         """Retain a corrected memory for audit, excluding it from future retrieval."""
@@ -227,12 +357,15 @@ class MemoryStore:
             vector = embedder(f"{title}\n{content}") if embedder else None
         except Exception:
             vector = None
+        embedding_model, embedding_dimension = _embedding_provenance(vector)
         now = datetime.now(timezone.utc).isoformat()
         with self._lock, closing(self._connect()) as connection, connection:
             connection.execute(
                 "UPDATE memories SET category = ?, title = ?, content = ?, importance = ?, "
-                "updated_at = ?, embedding = ? WHERE id = ?",
-                (category, title, content, importance, now, json.dumps(vector) if vector else None, memory_id),
+                "updated_at = ?, embedding = ?, embedding_model = ?, embedding_dimension = ? "
+                "WHERE id = ?",
+                (category, title, content, importance, now, json.dumps(vector) if vector else None,
+                 embedding_model, embedding_dimension, memory_id),
             )
             row = connection.execute("SELECT * FROM memories WHERE id = ?", (memory_id,)).fetchone()
-        return dict(row) if row else None
+        return _public_memory(row) if row else None

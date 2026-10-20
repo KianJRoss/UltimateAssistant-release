@@ -1461,7 +1461,7 @@
         statusText.textContent = 'Diagnostics downloaded. Send the ZIP to the person helping you.';
       } catch (error) { statusText.textContent = error.message; }
     };
-    const reportDescription = 'Shares app/Python/OS versions, fixed activity status categories and elapsed seconds for the latest 2,000 actions. No chats, prompts, files, paths, names, credentials, screenshots or raw logs. The support server sees your network IP.';
+    const reportDescription = 'Shares app/Python/OS versions, fixed activity status categories and elapsed seconds for the latest 2,000 actions, plus your fixed guided-feature test choices. No chats, prompts, files, paths, names, credentials, screenshots or raw logs. The support server sees your network IP.';
     async function approveReport(automatic) {
       const preview = await api('/api/diagnostics/preview');
       return new Promise(resolve => {
@@ -1506,7 +1506,7 @@
     const sharingStatus = document.createElement('small');
     async function refreshSharing() {
       const info = await api('/api/diagnostics/preferences');
-      sharing.checked = info.enabled === true && info.schema_version === 2;
+      sharing.checked = info.enabled === true && info.schema_version === 3;
       sharingStatus.textContent = sharing.checked
         ? ('Daily reports enabled. Last result: ' + (info.last_result || 'not sent yet') + (info.last_sent ? ' ? ' + info.last_sent : ''))
         : 'Automatic sharing is off.';
@@ -1568,6 +1568,87 @@
     document.querySelector('.voice-settings').append(diagnosticButton, uploadDiagnostics, sharingLabel, sharingStatus, inventoryButton, restartApp, quitApp);
     document.querySelector('.voice-settings').after(inventoryOutput);
     refreshModels();
+    const releaseWelcome = document.createElement('section');
+    releaseWelcome.id = 'releaseWelcome'; releaseWelcome.hidden = true;
+    releaseWelcome.style.cssText = 'border:1px solid #414d76;border-radius:12px;padding:14px;background:#1a2032';
+    document.querySelector('.shell header').after(releaseWelcome);
+    let releaseState = null;
+    const el = (tag, text) => { const node = document.createElement(tag); if (text) node.textContent = text; return node; };
+    const releaseButton = (text, handler) => { const b = el('button', text); b.onclick = async () => { b.disabled = true; try { await handler(); } catch (e) { statusText.textContent = e.message; } finally { b.disabled = false; } }; return b; };
+    async function releaseAction(action, extra = {}) {
+      releaseState = await api('/api/update-experience', { action, version: releaseState.version, ...extra });
+      renderReleaseWelcome(); return releaseState;
+    }
+    async function refreshReleaseWelcome() {
+      releaseState = await api('/api/update-experience'); renderReleaseWelcome();
+    }
+    function renderReleaseWelcome() {
+      releaseWelcome.replaceChildren();
+      releaseWelcome.hidden = !releaseState || (!releaseState.offer_tour && !releaseState.offer_sharing);
+      if (releaseWelcome.hidden) return;
+      if (releaseState.offer_tour) {
+        releaseWelcome.append(el('h2', 'New in Ultimate Assistant ' + releaseState.version),
+          el('p', 'Would you like an explanation of the new features and a few optional things to try?'),
+          releaseButton('Show me and let me try', openReleaseTour),
+          releaseButton('Later', () => releaseAction('later')),
+          releaseButton('Skip this version', () => releaseAction('skip')));
+      }
+      if (releaseState.offer_sharing) {
+        releaseWelcome.append(el('h3', 'Help check how this build works for you?'),
+          el('p', 'Optional reports share versions, action status/timings and your feature-test choices with support. No chats, files, prompts, screenshots, account names or credentials. Automatic sharing is off until you agree. You can inspect the report first.'),
+          releaseButton('Review daily sharing', async () => {
+            const destination = await approveReport(true); if (!destination) return;
+            await api('/api/diagnostics/preferences', { enabled: true, destination });
+            await refreshSharing(); await refreshReleaseWelcome();
+          }),
+          releaseButton('Review and send one report', async () => {
+            const destination = await approveReport(false); if (!destination) return;
+            await api('/api/diagnostics/upload', { destination });
+            await releaseAction('sharing_decline');
+            statusText.textContent = 'Report accepted. Daily sharing remains off.';
+          }),
+          releaseButton('No thanks', () => releaseAction('sharing_decline')),
+          releaseButton('Ask later', () => releaseAction('sharing_later')));
+      }
+    }
+    async function openReleaseTour() {
+      releaseState = await api('/api/update-experience');
+      const dialog = document.createElement('dialog'); dialog.id = 'releaseTour';
+      dialog.style.cssText = 'max-width:min(760px,90vw);max-height:85vh;overflow:auto;color:inherit;background:#191e28;border:1px solid #414d76;border-radius:14px';
+      dialog.append(el('h2', 'Explore version ' + releaseState.version),
+        el('p', 'Choose what you want to try. Each test sends a request to your connected AI and may use provider quota. Results below are your assessment, not an automatic claim that a feature worked.'));
+      for (const feature of releaseState.features) {
+        const card = el('section'); card.style.cssText = 'padding:12px 0;border-bottom:1px solid #303848';
+        card.append(el('h3', feature.title), el('p', feature.summary), el('p', 'What to look for: ' + feature.expected));
+        card.append(releaseButton('Try this with my assistant', async () => {
+          if (sendButton.disabled) { statusText.textContent = 'Wait for the current reply before starting a test.'; return; }
+          await releaseAction('test', {feature_id: feature.id, result: 'started'});
+          dialog.close(); await sendMessage(feature.prompt);
+        }));
+        const label = el('label', ' My result: '), result = el('select'); result.setAttribute('aria-label', feature.title + ' result');
+        for (const [value, text] of [['','Not tried'],['started','Started, not checked yet'],['worked','Worked for me'],['blocked','Did not work / blocked'],['skipped','Skipped']]) {
+          const option = el('option', text); option.value = value; option.disabled = !value; result.append(option);
+        }
+        result.value = releaseState.checks[feature.id] || '';
+        result.onchange = async () => {
+          if (!result.value) return;
+          result.disabled = true;
+          try { await releaseAction('test', {feature_id: feature.id, result: result.value}); }
+          catch (e) { statusText.textContent = e.message; }
+          finally { result.disabled = false; }
+        };
+        label.append(result); card.append(label); dialog.append(card);
+      }
+      if (!releaseState.features.length) dialog.append(el('p', 'There are no guided tests listed for this version. You can ask the assistant to explain the release notes.'));
+      dialog.append(el('p', 'Test choices stay on this device unless you separately choose to share a diagnostic report.'),
+        releaseButton('Done for now', async () => { await releaseAction('done'); dialog.close(); }),
+        releaseButton('Close', () => dialog.close()));
+      dialog.onclose = () => dialog.remove(); document.body.append(dialog); dialog.showModal();
+    }
+    const releaseMenu = releaseButton("What's new / try features", openReleaseTour);
+    document.querySelector('.voice-settings').append(releaseMenu);
+    window.addEventListener('assistant-ready', () => { void refreshReleaseWelcome().catch(e => { statusText.textContent = e.message; }); });
+
     refreshIntegrations();
     refreshTasks();
     refreshMemories();
@@ -1580,7 +1661,7 @@
     const options=document.createElement('details');options.id='appSettings';options.className='integrations';
     const optionsTitle=document.createElement('summary');optionsTitle.textContent='Settings and tools';options.append(optionsTitle);
     for(const child of [...shell.children]){
-      if(child.tagName==='HEADER'||['setupWizard','manageAccounts','chat'].includes(child.id)||child.classList.contains('composer'))continue;
+      if(child.tagName==='HEADER'||['setupWizard','manageAccounts','chat','releaseWelcome'].includes(child.id)||child.classList.contains('composer'))continue;
       options.append(child);
     }
     shell.append(options);
@@ -1593,7 +1674,7 @@
     function error(message){const e=$('setupError');if(e){e.textContent=message;e.hidden=false;}}
     function button(label,description,action){const b=document.createElement('button');const title=document.createElement('strong');title.textContent=label;b.append(title);if(description){const d=document.createElement('small');d.textContent=description;b.append(d);}b.onclick=action;return b;}
     async function inventory(){state=await api('/api/onboarding');return state;}
-    function enterChat(){clearTimeout(timer);generation++;wizard.hidden=true;document.body.classList.remove('setup-active');$('providerPanel').open=false;}
+    function enterChat(){clearTimeout(timer);generation++;wizard.hidden=true;document.body.classList.remove('setup-active');$('providerPanel').open=false;window.dispatchEvent(new Event('assistant-ready'));}
     async function handoff(){
       if(handingOff)return;handingOff=true;
       try{

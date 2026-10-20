@@ -19,7 +19,7 @@ External app/account connections are optional: set them up only when the user
 asks. Their absence never prevents completion of core setup. Do not launch
 optional integration discovery, installation or sign-in from the catalog alone.
 
-For a user-requested capability, discover optional modules with assistant_modules.
+When the user needs a capability (asked for, or clear from what they are doing), discover optional modules with assistant_modules and install what fits without waiting to be asked.
 Use discover_optional_integrations to find researched upstream projects and setup
 recipes. These candidates are not installed or verified. Recheck official docs
 and pin a supported release before setup through your native CLI tools.

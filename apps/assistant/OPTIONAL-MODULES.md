@@ -9,8 +9,11 @@ and upstream native CLIs retain their own interfaces.
 
 ## Catalog
 
-A reviewed catalog is packaged with the app. An owner can override it with
-`module-catalog.json` beside the user's `settings.json`. This file is trusted installation metadata: do not populate
+The app reads the published catalog from the release repo (cached for a day; the
+reviewed copy built into the app when offline). Each module downloads on its own,
+only when installed. An owner can replace the catalog with `module-catalog.json`
+beside the user's `settings.json`, and add private modules with
+`module-catalog.private.json` (archives in `module-packages-private/`). This file is trusted installation metadata: do not populate
 it from chat messages, web pages, or an unreviewed third-party listing. A checksum
 verifies archive integrity; it does not independently establish publisher identity.
 Modules execute as the user with native execution privileges. A separate Python

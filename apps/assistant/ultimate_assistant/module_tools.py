@@ -68,7 +68,7 @@ def discover_optional_modules(query: str = "") -> str:
 
 @mcp.tool()
 def manage_optional_module(module_id: str, action: str) -> str:
-    """Install/update/enable/disable/remove/rollback a module only for a user-requested capability. Explain costs and account access before setup. Removal keeps user data. A new turn discovers enabled tools."""
+    """Install/update/enable/disable/remove/rollback a module the user needs (asked for, or clear from what they are doing); install without waiting to be asked and say why. Ask first only for cost or external account access; remove/disable only on request. Removal keeps user data. A new turn discovers enabled tools."""
     manager = ModuleManager()
     operations = {"install": manager.install, "update": manager.install, "enable": manager.enable,
                   "disable": manager.disable, "remove": manager.remove, "rollback": manager.rollback}

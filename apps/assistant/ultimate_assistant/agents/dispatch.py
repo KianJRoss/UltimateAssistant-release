@@ -11,6 +11,51 @@ from typing import Any, Callable
 
 from . import DEFAULT_AGENT, Agent
 
+# Triggers that indicate the user wants real work, device control, file/code actions,
+# task/memory/schedule mutations, web research, study sessions, or setup/modules.
+_WORK_OR_TOOL_RE = re.compile(
+    r"\b(?:"
+    r"open|launch|close|click|type|press|window|screen|screenshot|monitor|display|canvas|overlay|"
+    r"run|execute|command|powershell|terminal|bash|script|code|file|folder|directory|path|edit|write|create|delete|remove|install|uninstall|setup|configure|connect|fix|debug|restart|service|process|"
+    r"task|todo|to-do|commitment|deadline|due|remind|reminder|schedule|cron|every morning|every day|timer|alarm|plan my|"
+    r"remember|forget|save to memory|update memory|earlier conversation|previous conversation|last conversation|"
+    r"search|look up|google|find out|research|zotero|paper|citation|price|latest|news|weather|"
+    r"flashcard|quiz me|study session|practice problem|homework|assignment|portal"
+    r")\b",
+    re.I,
+)
+
+
+def needs_specialist_or_tools(message: str, current_agent: str | None = None) -> bool:
+    """Return True if the message might need a specialist agent or tool execution."""
+    if current_agent and current_agent != DEFAULT_AGENT:
+        return True
+    text = (message or "").strip()
+    if not text:
+        return False
+    if _WORK_OR_TOOL_RE.search(text):
+        return True
+    # Paths, URLs, or shell/code snippets always count as work
+    if any(tok in text for tok in ("http://", "https://", "C:\\", "D:\\", "/home/", "```", "--")):
+        return True
+    return False
+
+
+def is_conversational_turn(
+    message: str,
+    agent_name: str,
+    *,
+    web_search: bool = False,
+    has_attachments: bool = False,
+    setup_intro: bool = False,
+) -> bool:
+    """Return True when this turn can run on the fast conversational lane (no CLI/MCP tool loop needed)."""
+    if setup_intro or web_search or has_attachments:
+        return False
+    if agent_name != DEFAULT_AGENT:
+        return False
+    return not needs_specialist_or_tools(message, current_agent=DEFAULT_AGENT)
+
 
 def prompt(message: str, recent: list[dict[str, Any]], agents: dict[str, Agent],
            current_agent: str | None = None, interface: str = "") -> str:
@@ -52,6 +97,8 @@ def choose(message: str, recent: list[dict[str, Any]], agents: dict[str, Agent],
     """(agent name, brief). Falls back to the companion on any failure."""
     if len(agents) == 1:
         return next(iter(agents)), ""
+    if not needs_specialist_or_tools(message, current_agent=current_agent):
+        return DEFAULT_AGENT, ""
     try:
         return parse(ask_model(prompt(message, recent, agents, current_agent, interface)), agents)
     except Exception:  # noqa: BLE001 - routing is best effort

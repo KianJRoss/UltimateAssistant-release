@@ -57,8 +57,12 @@ def command(release: Path, manifest: dict) -> list[str]:
 def configuration(data: Path, manifest: dict | None = None) -> dict:
     file = data / "configuration.json"
     values = json.loads(file.read_text("utf-8")) if file.exists() else {}
-    defaults = {key: str(local_path(data, relative)) for key, relative in (manifest or {}).get("data_environment", {}).items()}
-    return {"env": {**defaults, **values.get("env", {})}, "env_refs": values.get("env_refs", {})}
+    manifest = manifest or {}
+    # Fixed, nonsecret values the module always runs with (module.json "environment"), then
+    # data-folder paths, then what the user configured.
+    fixed = {str(k): str(v) for k, v in manifest.get("environment", {}).items()}
+    defaults = {key: str(local_path(data, relative)) for key, relative in manifest.get("data_environment", {}).items()}
+    return {"env": {**fixed, **defaults, **values.get("env", {})}, "env_refs": values.get("env_refs", {})}
 
 
 def readiness(release: Path, manifest: dict, data: Path) -> dict:

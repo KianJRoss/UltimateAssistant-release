@@ -12,9 +12,29 @@ Push-Location $appRoot
 try {
     & $python -m pip install --upgrade pip
     if ($LASTEXITCODE -ne 0) { throw "Could not update pip in the assistant environment." }
+    # Herald is its own product. A development checkout (HERALD_SOURCE_ROOT) installs
+    # editable; otherwise the release pinned in herald.json, checked against its SHA-256.
+    if ($env:HERALD_SOURCE_ROOT -and (Test-Path (Join-Path $env:HERALD_SOURCE_ROOT "pyproject.toml"))) {
+        & $python -m pip install -e $env:HERALD_SOURCE_ROOT
+    } else {
+        $pin = Get-Content -Raw (Join-Path $appRoot "herald.json") | ConvertFrom-Json
+        if (-not $pin.parts) { throw "No Herald release is pinned in herald.json. Set HERALD_SOURCE_ROOT to a Herald checkout." }
+        $wheels = foreach ($part in $pin.parts) {
+            $wheel = Join-Path ([System.IO.Path]::GetTempPath()) $part.file
+            Invoke-WebRequest -Uri $part.url -OutFile $wheel -UseBasicParsing
+            if ((Get-FileHash -Algorithm SHA256 -LiteralPath $wheel).Hash.ToLowerInvariant() -ne $part.sha256) {
+                Remove-Item -LiteralPath $wheel -Force
+                throw "The downloaded $($part.name) $($part.version) does not match its published checksum."
+            }
+            $wheel
+        }
+        & $python -m pip install @wheels
+        $wheels | Remove-Item -Force -ErrorAction SilentlyContinue
+    }
+    if ($LASTEXITCODE -ne 0) { throw "Could not install Herald." }
     & $python -m pip install -r (Join-Path $appRoot "requirements.txt")
     if ($LASTEXITCODE -ne 0) { throw "Could not install assistant runtime dependencies." }
-    & $python -c "import matplotlib, numpy, sympy; import herald.math_tools, ultimate_assistant.flashcard_store; print('Math and study features are ready.')"
+    & $python -c "import matplotlib, numpy, sympy; import herald.math_tools, ultimate_assistant.life_tools; print('Math and life features are ready.')"
     if ($LASTEXITCODE -ne 0) { throw "Math MCP dependencies failed their import check." }
 } finally {
     Pop-Location

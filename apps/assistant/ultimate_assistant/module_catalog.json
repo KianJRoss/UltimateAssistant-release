@@ -2,121 +2,8 @@
   "schema_version": 1,
   "modules": [
     {
-      "id": "planning",
-      "version": "0.1.0",
-      "description": "Local time blocks, overlap checks, and available-time searches",
-      "sha256": "263ea9b9ed79f37d4c59ee2ba1498c8e5f4ec721a9042b2031f8f87790529234",
-      "entrypoint": "planning_module.server",
-      "healthcheck": "planning_module.healthcheck",
-      "setup": [],
-      "accounts": [],
-      "cost": "No charge",
-      "dependencies": [],
-      "limitations": "Local records only; no account sync, notifications, or external transactions",
-      "bundled_archive": "planning-0.1.0.zip"
-    },
-    {
-      "id": "work",
-      "version": "0.1.0",
-      "description": "Local shifts, worked hours, and straight-time gross earnings estimates",
-      "sha256": "1e5e6a2c74e88d576dbbe6a68a17bef9bf2f7158a0229f9dfa4d35e0d50fbd22",
-      "entrypoint": "work_module.server",
-      "healthcheck": "work_module.healthcheck",
-      "setup": [],
-      "accounts": [],
-      "cost": "No charge",
-      "dependencies": [],
-      "limitations": "Local records only; no account sync, notifications, or external transactions",
-      "bundled_archive": "work-0.1.0.zip"
-    },
-    {
-      "id": "finance",
-      "version": "0.1.0",
-      "description": "Local income, expenses, bills, and cash-flow forecasts from supplied data",
-      "sha256": "97ca52cf79e77c1f0821af77bb8765e6563fa53608a0867895fcab6d74e6bfe3",
-      "entrypoint": "finance_module.server",
-      "healthcheck": "finance_module.healthcheck",
-      "setup": [],
-      "accounts": [],
-      "cost": "No charge",
-      "dependencies": [],
-      "limitations": "Local records only; no account sync, notifications, or external transactions",
-      "bundled_archive": "finance-0.1.0.zip"
-    },
-    {
-      "id": "management",
-      "version": "0.1.0",
-      "description": "Private employee skills, availability, manager observations, pairing rules and draft schedule checks",
-      "sha256": "9309a82b7eb905917405458d91920abcca7411acc8aafb7bc1ec9b690bfefaeb",
-      "entrypoint": "management_module.server",
-      "healthcheck": "management_module.healthcheck",
-      "setup": [
-        "Ask what manager work they want help with first. Ask one simple question at a time using manager_setup_questions.",
-        "Learn workplace coverage and scheduling rules, then employees, trained roles and skills, availability, concrete work observations, and avoid/prefer pairings.",
-        "Store manager observations as attributed information. Keep missing availability and unverified claims explicit. Check draft schedules and ask the manager to review before publication."
-      ],
-      "accounts": [],
-      "cost": "No charge",
-      "dependencies": [],
-      "limitations": "Local records only; no account sync, notifications, or external transactions",
-      "bundled_archive": "management-0.1.0.zip"
-    },
-    {
-      "id": "obsidian",
-      "version": "0.1.0",
-      "description": "The assistant as a chat pane inside the user's Obsidian vault",
-      "sha256": "4d4d79555b965327d7a02745c65e37904df90b8145328d16d335282ff94f2c12",
-      "entrypoint": "obsidian_module.server",
-      "healthcheck": "obsidian_module.healthcheck",
-      "setup": [
-        "Ask which Obsidian vault(s) the user wants you in; the vault folder is the one that contains .obsidian.",
-        "Call connect_obsidian_vault with that folder and your assistant memory name (shown in your memory header). It installs the chat plugin and makes you its default agent; any older copy of the plugin is backed up first.",
-        "Tell the user to reload Obsidian and open the Agent Client chat, then confirm with obsidian_status."
-      ],
-      "accounts": [],
-      "cost": "No charge",
-      "dependencies": [],
-      "limitations": "Installs the open-source Agent Client plugin (downloaded from its GitHub release and checksum-verified); desktop Obsidian only; the user reloads Obsidian after setup",
-      "bundled_archive": "obsidian-0.1.0.zip"
-    },
-    {
-      "id": "google-calendar",
-      "description": "Google Calendar events, availability and conflicts through the upstream native MCP server",
-      "entrypoint": "node_modules/@cocal/google-calendar-mcp/build/index.js",
-      "interface": "mcp",
-      "minimum_node_major": 20,
-      "required_environment": [
-        "GOOGLE_OAUTH_CREDENTIALS"
-      ],
-      "allowed_environment": [
-        "GOOGLE_OAUTH_CREDENTIALS",
-        "GOOGLE_CALENDAR_MCP_TOKEN_PATH"
-      ],
-      "required_tools": [
-        "list-calendars",
-        "list-events",
-        "get-freebusy"
-      ],
-      "verification_tool": {
-        "name": "list-calendars",
-        "arguments": {}
-      },
-      "setup": [
-        "Only connect Google Calendar when requested. Use the user's Desktop OAuth credentials file and guide browser consent; never reuse developer credentials.",
-        "Use the installed native upstream auth command if sign-in is needed; save its token state in the module data directory. Verify a live calendar list before enabling."
-      ],
-      "accounts": [
-        "Google account and Desktop OAuth client"
-      ],
-      "cost": "Upstream MCP has no charge; account/provider terms apply",
-      "limitations": "OAuth configuration and sign-in required; no verified account is bundled",
-      "version": "0.1.0",
-      "runtime": "node",
-      "bundled_archive": "google-calendar-0.1.0.zip",
-      "sha256": "a4cdf57cad554cf671b13d72f7bd32324aaae3d5e4b73bcd3e14cfe70f92bef4"
-    },
-    {
       "id": "actual-budget",
+      "name": "Actual Budget",
       "description": "Actual Budget's official native CLI with a native Node sync-server package; no Docker required",
       "entrypoint": "node_modules/@actual-app/cli/dist/cli.js",
       "interface": "cli",
@@ -159,8 +46,386 @@
       "limitations": "Native local server lifecycle is handled by the assistant's native tools; module activation does not start a server or enable bank sync automatically",
       "version": "0.1.0",
       "runtime": "node",
-      "bundled_archive": "actual-budget-0.1.0.zip",
-      "sha256": "6eae2d3c9cb0ffb9f94a3eff6b4131ad6b8cc741b78d48c875995bc009bc999c"
+      "needed_when": "the user uses the Actual Budget app or wants budgeting with bank transactions",
+      "needed_examples": [
+        "I use actual budget",
+        "sync my budget"
+      ],
+      "sha256": "8fba2ee43103148db3f278eaa2dacb5bdd1820bd4d4c7c292a0c8e6911e4c810",
+      "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/module-actual-budget-v0.1.0/actual-budget-0.1.0.zip"
+    },
+    {
+      "id": "android-control",
+      "name": "Android control",
+      "version": "0.1.0",
+      "description": "Control an Android phone or tablet from the computer it's connected to: screenshots, taps, typing, keys, apps, files, shell, screen mirroring (scrcpy) and ring/share (KDE Connect)",
+      "runtime": "python",
+      "runs_on": "device",
+      "platforms": [
+        "win32",
+        "linux",
+        "darwin"
+      ],
+      "entrypoint": "android_control_module.server",
+      "healthcheck": "android_control_module.healthcheck",
+      "timeout": 600,
+      "allowed_environment": [
+        "ADB_PATH",
+        "SCRCPY_PATH",
+        "KDECONNECT_CLI_PATH"
+      ],
+      "needed_when": "the user wants the assistant to do something on their Android phone or tablet from the computer",
+      "needed_examples": [
+        "take a screenshot of my phone",
+        "open spotify on my phone",
+        "install this apk on my phone",
+        "send this file to my phone"
+      ],
+      "setup": [
+        "Install Android platform-tools (adb) on the computer, or set ADB_PATH to it.",
+        "Turn on USB or Wireless debugging on the phone and accept the computer's key; android_connect pairs over Wi-Fi."
+      ],
+      "accounts": [],
+      "cost": "No charge",
+      "dependencies": [],
+      "limitations": "Needs the phone connected with debugging allowed; shell access is the phone's 'shell' user, not root",
+      "sha256": "5ae0bc962ea67d0054a90300b75d24c29d6de18ef9dc8fb1f913fc9ba81f1eaa",
+      "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/module-android-control-v0.1.0/android-control-0.1.0.zip"
+    },
+    {
+      "id": "documents",
+      "name": "Documents, media and research",
+      "version": "0.1.0",
+      "description": "Make and convert documents (Word, slides, PDF, Markdown), charts and notebooks, edit audio/video, and capture web pages and files as clean, sourced Markdown",
+      "runtime": "python",
+      "entrypoint": "documents_module.server",
+      "healthcheck": "documents_module.healthcheck",
+      "timeout": 1800,
+      "needed_when": "the user wants a document, slide deck, chart, notebook or media file made, converted or edited, or a web page or file captured as text",
+      "needed_examples": [
+        "turn this into a word document",
+        "make slides from these notes",
+        "convert this pdf to markdown",
+        "save this article for me",
+        "cut the first minute of this video"
+      ],
+      "setup": [
+        "Document conversion uses pandoc and audio/video uses ffmpeg when the device has them; install them with native tools if the user needs those steps.",
+        "For scripted web pages, install the headless browser once: run the module's python -m playwright install chromium."
+      ],
+      "accounts": [],
+      "cost": "No charge",
+      "dependencies": [],
+      "limitations": "Works on files the device can reach; new files go to the module data folder unless a full path is given; downloading online video must follow the site's terms",
+      "sha256": "e6f2ec3d743d059269ee6cb5754e3e1d329db7de80f52985c99de7104c196130",
+      "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/module-documents-v0.1.0/documents-0.1.0.zip"
+    },
+    {
+      "id": "finance",
+      "name": "Finance",
+      "version": "0.1.0",
+      "description": "Local income, expenses, bills, and cash-flow forecasts from supplied data",
+      "entrypoint": "finance_module.server",
+      "healthcheck": "finance_module.healthcheck",
+      "setup": [],
+      "accounts": [],
+      "cost": "No charge",
+      "dependencies": [],
+      "limitations": "Local records only; no account sync, notifications, or external transactions",
+      "needed_when": "the user talks about bills, rent, income, expenses, a budget or whether money will last",
+      "needed_examples": [
+        "rent is due on the first",
+        "can I afford this before payday"
+      ],
+      "runtime": "python",
+      "sha256": "97ca52cf79e77c1f0821af77bb8765e6563fa53608a0867895fcab6d74e6bfe3",
+      "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/module-finance-v0.1.0/finance-0.1.0.zip"
+    },
+    {
+      "id": "google-calendar",
+      "name": "Google Calendar",
+      "description": "Google Calendar events, availability and conflicts through the upstream native MCP server",
+      "entrypoint": "node_modules/@cocal/google-calendar-mcp/build/index.js",
+      "interface": "mcp",
+      "minimum_node_major": 20,
+      "required_environment": [
+        "GOOGLE_OAUTH_CREDENTIALS"
+      ],
+      "allowed_environment": [
+        "GOOGLE_OAUTH_CREDENTIALS",
+        "GOOGLE_CALENDAR_MCP_TOKEN_PATH"
+      ],
+      "required_tools": [
+        "list-calendars",
+        "list-events",
+        "get-freebusy"
+      ],
+      "verification_tool": {
+        "name": "list-calendars",
+        "arguments": {}
+      },
+      "setup": [
+        "Only connect Google Calendar when requested. Use the user's Desktop OAuth credentials file and guide browser consent; never reuse developer credentials.",
+        "Use the installed native upstream auth command if sign-in is needed; save its token state in the module data directory. Verify a live calendar list before enabling."
+      ],
+      "accounts": [
+        "Google account and Desktop OAuth client"
+      ],
+      "cost": "Upstream MCP has no charge; account/provider terms apply",
+      "limitations": "OAuth configuration and sign-in required; no verified account is bundled",
+      "version": "0.1.0",
+      "runtime": "node",
+      "needed_when": "the user refers to their Google Calendar or calendar events they keep there",
+      "needed_examples": [
+        "what's on my google calendar",
+        "add this to my calendar"
+      ],
+      "sha256": "0b35eb14f39d594b99e2b3a1955430c1479e6f3871bd69fec73fcd9c900f2b11",
+      "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/module-google-calendar-v0.1.0/google-calendar-0.1.0.zip"
+    },
+    {
+      "id": "management",
+      "name": "Management",
+      "version": "0.1.0",
+      "description": "Private employee skills, availability, manager observations, pairing rules and draft schedule checks",
+      "entrypoint": "management_module.server",
+      "healthcheck": "management_module.healthcheck",
+      "setup": [
+        "Ask what manager work they want help with first. Ask one simple question at a time using manager_setup_questions.",
+        "Learn workplace coverage and scheduling rules, then employees, trained roles and skills, availability, concrete work observations, and avoid/prefer pairings.",
+        "Store manager observations as attributed information. Keep missing availability and unverified claims explicit. Check draft schedules and ask the manager to review before publication."
+      ],
+      "accounts": [],
+      "cost": "No charge",
+      "dependencies": [],
+      "limitations": "Local records only; no account sync, notifications, or external transactions",
+      "needed_when": "the user manages employees and talks about staff availability, skills or making a work schedule for others",
+      "needed_examples": [
+        "I need to schedule my team for next week",
+        "who can cover saturday"
+      ],
+      "runtime": "python",
+      "sha256": "9309a82b7eb905917405458d91920abcca7411acc8aafb7bc1ec9b690bfefaeb",
+      "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/module-management-v0.1.0/management-0.1.0.zip"
+    },
+    {
+      "id": "obsidian",
+      "name": "Obsidian",
+      "version": "0.1.0",
+      "description": "The assistant as a chat pane inside the user's Obsidian vault",
+      "entrypoint": "obsidian_module.server",
+      "healthcheck": "obsidian_module.healthcheck",
+      "setup": [
+        "Ask which Obsidian vault(s) the user wants you in; the vault folder is the one that contains .obsidian.",
+        "Call connect_obsidian_vault with that folder and your assistant memory name (shown in your memory header). It installs the chat plugin and makes you its default agent; any older copy of the plugin is backed up first.",
+        "Tell the user to reload Obsidian and open the Agent Client chat, then confirm with obsidian_status."
+      ],
+      "accounts": [],
+      "cost": "No charge",
+      "dependencies": [],
+      "limitations": "Installs the open-source Agent Client plugin (downloaded from its GitHub release and checksum-verified); desktop Obsidian only; the user reloads Obsidian after setup",
+      "needed_when": "the user uses Obsidian notes or a vault and wants the assistant inside it",
+      "needed_examples": [
+        "I keep my notes in obsidian",
+        "add this to my vault"
+      ],
+      "runtime": "python",
+      "sha256": "4d4d79555b965327d7a02745c65e37904df90b8145328d16d335282ff94f2c12",
+      "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/module-obsidian-v0.1.0/obsidian-0.1.0.zip"
+    },
+    {
+      "id": "rea",
+      "name": "REA reverse engineering",
+      "version": "0.1.0",
+      "description": "Reverse-engineering agents (REA, MIT): open binaries, apps and traffic, decompile, debug and instrument, behind a small guide/tools/describe/run interface",
+      "runtime": "node",
+      "runs_on": "device",
+      "platforms": [
+        "win32",
+        "linux",
+        "darwin"
+      ],
+      "minimum_node_major": 22,
+      "entrypoint": "node_modules/rea-agents/scripts/rea.mjs",
+      "arguments": [
+        "mcp"
+      ],
+      "interface": "mcp",
+      "required_tools": [
+        "open_binary",
+        "list_documents"
+      ],
+      "environment": {
+        "REA_MCP_OUTPUT_SCHEMA_PROFILE": "off"
+      },
+      "progressive_catalog": "rea.json",
+      "needed_when": "the user wants to reverse engineer, decompile, disassemble, debug or inspect a program, binary, app, game file or network traffic",
+      "needed_examples": [
+        "decompile this exe",
+        "what does this dll do",
+        "inspect this apk",
+        "look inside this game's save file format"
+      ],
+      "setup": [
+        "Installed on the device that holds the binaries; start with rea_guide, then rea_tools, rea_describe and rea_run.",
+        "Individual analysis backends depend on what is installed on the device; describe a tool to see its prerequisites."
+      ],
+      "accounts": [],
+      "cost": "No charge (REA is MIT licensed)",
+      "dependencies": [],
+      "limitations": "Works on files on the device it is installed on; some backends need extra native tools on that device",
+      "sha256": "fd80377bdbf0271079680c929564786cb4339ff4ee4a98a894c0fb3451ebb359",
+      "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/module-rea-v0.1.0/rea-0.1.0.zip"
+    },
+    {
+      "id": "school",
+      "name": "School and learning",
+      "version": "0.1.0",
+      "description": "Study sessions, flashcards with spaced repetition (FSRS), understanding checks, and read-only Canvas or Moodle course sites (courses, due work, announcements, files)",
+      "runtime": "python",
+      "runs_on": "main",
+      "entrypoint": "school_module.server",
+      "healthcheck": "school_module.healthcheck",
+      "timeout": 120,
+      "allowed_environment": [
+        "COURSE_SITE_KIND",
+        "COURSE_SITE_URL"
+      ],
+      "secret_environment": [
+        "COURSE_SITE_TOKEN"
+      ],
+      "needed_when": "the user is studying, taking a class, preparing for a test, or mentions school, courses, homework or their course site",
+      "needed_examples": [
+        "quiz me on chapter 4",
+        "make flashcards from these notes",
+        "what's due for my classes this week",
+        "I have a biology exam friday",
+        "help me study"
+      ],
+      "setup": [
+        "Nothing for studying: sessions, flashcards and understanding checks work right away.",
+        "Optional course site: ask whether the school uses Canvas or Moodle and its address; have the user create an access token (Canvas: Account > Settings > New access token; Moodle: Preferences > Security keys) and save COURSE_SITE_KIND, COURSE_SITE_URL and COURSE_SITE_TOKEN (as a secret) in the module settings."
+      ],
+      "accounts": [
+        "Optional: the user's Canvas or Moodle account at their school"
+      ],
+      "cost": "No charge",
+      "dependencies": [],
+      "limitations": "Read-only on the course site: never submits, posts or answers anything; some schools turn off personal tokens",
+      "sha256": "96de36a2ce0a09f71e6e5c7507dda41a17d7573ec73a1eabe861daf3e82e6a20",
+      "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/module-school-v0.1.0/school-0.1.0.zip"
+    },
+    {
+      "id": "screen-vision",
+      "name": "Screen vision",
+      "version": "0.1.0",
+      "description": "See the user's screens: capture every monitor, read the text on them (OCR), and describe what is shown with a vision model when one is available",
+      "runtime": "python",
+      "runs_on": "device",
+      "platforms": [
+        "win32",
+        "linux",
+        "darwin"
+      ],
+      "entrypoint": "screen_vision.server",
+      "healthcheck": "screen_vision.healthcheck",
+      "needed_when": "the user wants the assistant to look at, read or react to what is on their screen",
+      "needed_examples": [
+        "look at my screen and tell me what this error says",
+        "can you see what I have open",
+        "read what's on my monitor"
+      ],
+      "setup": [
+        "Installed on the device whose screen it reads; captures stay in the module's data folder on that device.",
+        "A vision model (local Ollama or the Router) is optional: OCR works without one."
+      ],
+      "accounts": [],
+      "cost": "No charge",
+      "dependencies": [],
+      "limitations": "Reads only the screens of the device it is installed on; nothing is captured until a tool is called",
+      "sha256": "0283649391ddac9182918d32b0e6ba4d9f500d10990cbdcbfa4934c57d0c8e91",
+      "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/module-screen-vision-v0.1.0/screen-vision-0.1.0.zip"
+    },
+    {
+      "id": "windows-control",
+      "name": "Windows control",
+      "version": "0.1.0",
+      "description": "Change a Windows PC's settings: master and per-app sound, monitor brightness, PowerToys Workspaces and window layouts, lock, sleep and restart, with snapshots to put settings back",
+      "runtime": "python",
+      "runs_on": "device",
+      "platforms": [
+        "win32"
+      ],
+      "entrypoint": "windows_control_module.server",
+      "healthcheck": "windows_control_module.healthcheck",
+      "needed_when": "the user wants their Windows PC's sound, brightness, window layout or power changed",
+      "needed_examples": [
+        "turn the volume down",
+        "mute discord",
+        "dim my screen",
+        "put my windows side by side",
+        "lock my pc"
+      ],
+      "setup": [
+        "Installed on each Windows PC it controls.",
+        "PowerToys Workspaces is optional (for saved workspace layouts)."
+      ],
+      "accounts": [],
+      "cost": "No charge",
+      "dependencies": [],
+      "limitations": "Windows only; brightness on external monitors needs DDC/CI; power actions need the user's clear request",
+      "sha256": "e3ee3500b9c1d26f257f8c49c8bbc9674a46022b88ef4c2eed9c279ba337b55c",
+      "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/module-windows-control-v0.1.0/windows-control-0.1.0.zip"
+    },
+    {
+      "id": "windows-ui",
+      "name": "Windows UI control",
+      "version": "0.1.0",
+      "description": "List the windows on a Windows PC and what is actually visible, and click, type and control apps the user lets it control",
+      "runtime": "python",
+      "runs_on": "device",
+      "platforms": [
+        "win32"
+      ],
+      "entrypoint": "windows_ui.server",
+      "healthcheck": "windows_ui.healthcheck",
+      "needed_when": "the user wants the assistant to operate apps on their Windows PC: open, click, type, switch or arrange windows",
+      "needed_examples": [
+        "click the submit button in that window",
+        "type this into notepad for me",
+        "close all my chrome windows"
+      ],
+      "setup": [
+        "Installed on each Windows PC it controls.",
+        "Input control acts only where the user allowed it; say what you are about to do before acting on the desktop."
+      ],
+      "accounts": [],
+      "cost": "No charge",
+      "dependencies": [],
+      "limitations": "Windows only; acts on the desktop session of the signed-in user",
+      "sha256": "a82713d31b1fc2b72f331e40fc2e56de3e608d743ad85e63b4926078c3279860",
+      "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/module-windows-ui-v0.1.0/windows-ui-0.1.0.zip"
+    },
+    {
+      "id": "work",
+      "name": "Work",
+      "version": "0.1.0",
+      "description": "Local shifts, worked hours, and straight-time gross earnings estimates",
+      "entrypoint": "work_module.server",
+      "healthcheck": "work_module.healthcheck",
+      "setup": [],
+      "accounts": [],
+      "cost": "No charge",
+      "dependencies": [],
+      "limitations": "Local records only; no account sync, notifications, or external transactions",
+      "needed_when": "the user talks about their job shifts, hours worked or how much they will earn from a job",
+      "needed_examples": [
+        "I work 4 to 10 on friday",
+        "how much will I make this week"
+      ],
+      "runtime": "python",
+      "sha256": "1e5e6a2c74e88d576dbbe6a68a17bef9bf2f7158a0229f9dfa4d35e0d50fbd22",
+      "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/module-work-v0.1.0/work-0.1.0.zip"
     }
   ]
 }

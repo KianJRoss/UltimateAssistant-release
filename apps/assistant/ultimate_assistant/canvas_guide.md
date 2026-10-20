@@ -127,5 +127,63 @@ for the next one; `canvas_list` shows each card's state too.
 - It floats over the user's work: keep each thing small and focused, and clear it when it is done.
 - Prefer a template over custom markup; prefer updating an id over adding another element.
 - A render error shows as a small warning line on the card and arrives as an `error` event.
-- Icons and maths load from a CDN on first use; offline, icons are blank squares and maths is plain text.
-- The phone overlay shows text, images and drawings; interactive cards are PC-only for now.
+- Icons, maths and diagrams use bundled libraries on PC and phone. Web content still needs a connection.
+- Interactive cards work on PC and phone; keep phone layouts narrow.
+
+
+## Feeds
+
+Use `canvas_feed_save(spec)` to connect a real data source to a live card. The main PC refreshes
+it without an AI call on each poll. Definitions survive restarts. `canvas_feed_list()` shows status
+and errors; `canvas_feed_refresh(id)` requests a refresh now; `canvas_feed_remove(id)` stops it.
+Closing or clearing a feed card pauses its updates, so the next poll does not reopen it.
+
+A feed specification has `id`, `source`, `card`, `interval_seconds`, and optional `mapping`,
+`conditions`, `enabled`. `card` uses the same fields as `canvas_show`: a template plus data,
+custom ui plus data, including devices, position and monitor. Feed cards use kind `ui`.
+Use `ttl_seconds: 0` for a card that should stay until closed.
+
+Sources: `weather` retrieves current weather, `json` reads a JSON API, `html` extracts a web page,
+`file` reads local data, and `script` runs a local program producing JSON. Source-specific options
+identify the location or URL, selectors, file path or command. Use URLs accessible from the main PC;
+local paths refer to that PC. Scripts should be bounded data collectors, not interactive programs.
+
+Source shapes (all return JSON objects):
+- Weather: `{"type":"weather","latitude":39.77,"longitude":-86.16,"units":"fahrenheit","title":"Indianapolis"}`.
+  Returns card-ready `title`, `items`, `caption`, plus `current` and `current_units`. Without mapping,
+  bind to the stats template directly. Weather is model data from Open-Meteo; retain its attribution.
+- API: `{"type":"json","url":"https://example.com/status","select":"result"}`. Optional `params`
+  object and `headers_env:{"Authorization":"MY_API_AUTH"}` read credentials from the runtime environment.
+  Do not put secrets in URLs or saved definitions. Redirects are not followed; use the final endpoint.
+- Scraper: `{"type":"html","url":"https://example.com/","fields":{"headline":{"selector":"h1"},"link":{"selector":"a.story","attribute":"href"}}}`.
+  Static HTML only; missing matches return null. Browser-rendered pages can use a script source.
+- File: `{"type":"file","path":"C:\\data\\status.json","select":"result"}`.
+- Script: `{"type":"script","argv":["C:\\Python314\\python.exe","C:\\data\\collector.py"],"timeout":15}`.
+  Optional absolute `cwd`. No shell; stdout must be one JSON object. Collectors run automatically and
+  should only collect data. HTTP/file/script output is bounded; script timeouts are at most 30 seconds.
+
+Example: `canvas_feed_save({"id":"weather","source":{"type":"weather","latitude":39.77,
+"longitude":-86.16},"card":{"kind":"ui","template":"stats","devices":["phone"],"ttl_seconds":0},
+"interval_seconds":600})`. Coordinates here are an example, not the user's live location.
+
+`mapping` maps a target path in the card's data to a dotted path in the source result; numeric
+segments address list items. For example, `{"items.0.value": "current.temperature_2m"}` puts a
+weather temperature in the first stats item. Keep labels, units and layout in the card data.
+Refresh intervals must be at least 10 seconds, 600 seconds for weather, and 60 seconds for HTML.
+
+Conditions are `[{"id": "hot", "path": "current.temperature_2m", "op": "gt", "value": 30}]`.
+Paths refer to source data. Conditions emit on a transition into a matching state; set
+`fire_initial: true` on a condition when an initially matching observation should also fire.
+The event is `app.assistant.feed.condition`; its payload identifies `feed_id` and `condition_id`.
+To have the assistant react, use Herald's existing `schedule_agent` event schedule with that event
+and a payload filter for those identifiers. Updating a card alone does not wake an assistant.
+
+Do not invent fetched values. Inspect the first refresh result and its source fields before
+mapping them into a card, and surface stale data or collection errors honestly.
+
+
+## Moving and clearing phone items
+
+Set `draggable=true` for a floating note, reference, or interactive card the user may need to move out of the way. Its drag handle moves the item without consuming card controls. Leave it false for screen-aligned arrows and annotations. The user placement survives content updates; changing the item position or disabling dragging restores assistant placement. Removal clears the local placement.
+
+Use finite `ttl_seconds` for demonstrations, and clear showcase elements when finished. `ttl_seconds=0` deliberately persists until cleared. A canvas tool response confirms publication, not verified rendering on the device.

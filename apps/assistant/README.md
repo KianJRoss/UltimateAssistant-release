@@ -42,9 +42,9 @@ use more memory than text-only chat.
 
 `configure.ps1` verifies the Router URL and API key against `/v1/models` before
 writing either value; a failed connection leaves the previous configuration
-unchanged. The extracted install bundle includes the adjacent
-`components\herald` source needed by setup; copying only `apps\assistant` is
-not supported. The local Herald Router is bundled; the friend supplies their own
+unchanged. Herald, the Router, is its own product: setup installs the release
+pinned in `herald.json` and checks its SHA-256 (or, for development, the
+checkout named by `HERALD_SOURCE_ROOT`). The friend supplies their own
 provider account.
 The configurator also chooses a local work folder, defaulting to
 `Documents\UltimateAssistant`. On a same-device Router, the assistant binds the
@@ -234,8 +234,8 @@ The app does not load College Assistant OAuth/browser-state files, rebuild its
 indexes, or use its personal local index by default. Its independent index is
 under `%LOCALAPPDATA%\UltimateAssistant\data`. Setting
 `COLLEGE_ASSISTANT_ROOT` explicitly opts into that project's index. The CLI
-web-search fallback finds Herald's `websearch_tools.py` under
-`HERALD_SOURCE_ROOT`, or in this workspace at `components\herald` by default.
+web-search fallback finds Herald's `websearch_tools.py` in the installed Herald
+package, or under `HERALD_SOURCE_ROOT` for a development checkout.
 
 ## Reopening, sign-in startup, and voices
 

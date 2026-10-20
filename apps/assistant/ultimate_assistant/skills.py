@@ -23,6 +23,7 @@ import json
 import math
 import os
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -244,19 +245,25 @@ class SkillStore:
 
     def shortlist(self, request: str, limit: int = 3) -> list[dict[str, Any]]:
         """Skills that might be what the request asks for, best first, with a 0..1 score."""
-        query = embed(request)
-        cutoff = SHORTLIST_SCORE if query else LEXICAL_SHORTLIST_SCORE
-        best: dict[str, float] = {}
         with closing(self._db()) as db:
             rows = db.execute("SELECT skill, text, vector FROM examples").fetchall()
+        if not rows:
+            return []
+        has_vectors = any(vector for _, _, vector in rows)
+        query = embed(request) if has_vectors else None
+        cutoff = SHORTLIST_SCORE if query else LEXICAL_SHORTLIST_SCORE
+        best: dict[str, float] = {}
         for skill, text, vector in rows:
             score = cosine(query, json.loads(vector)) if query and vector else lexical(request, text) * 0.9
             best[skill] = max(best.get(skill, 0.0), score)
         ranked = sorted(best.items(), key=lambda kv: -kv[1])
         out = []
-        for name, score in ranked[:limit]:
+        for name, score in ranked:
+            if len(out) >= limit:
+                break
             definition = self.get(name)
-            if definition and score >= cutoff:
+            # a skill this computer can't run (a PowerShell script on the Linux main node) goes to the agents
+            if definition and score >= cutoff and interpreter(definition["runner"]):
                 out.append({**definition, "score": round(score, 3)})
         return out
 
@@ -270,8 +277,13 @@ class SkillStore:
         folder = self.path(name)
         script = folder / RUNNERS[definition["runner"]]
         env = {**os.environ, "SKILL_PARAMS": json.dumps(params), "SKILL_NAME": name}
+        program = interpreter(definition["runner"])
+        if not program:
+            return {"ok": False, "skill": name, "parameters": params, "output": "", "exit_code": -1, "seconds": 0,
+                    "error": f"this skill is a {definition['runner']} script and this computer has none; "
+                             f"run it on {definition.get('device') or 'the device it was made on'}"}
         if definition["runner"] == "powershell":
-            command = ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(script)]
+            command = [program, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(script)]
             for key, value in params.items():
                 if isinstance(value, bool):  # booleans are [switch] parameters: present when true
                     if value:
@@ -288,6 +300,8 @@ class SkillStore:
             code = proc.returncode
         except subprocess.TimeoutExpired:
             ok, out, err, code = False, "", f"timed out after {int(timeout)}s", -1
+        except OSError as exc:
+            ok, out, err, code = False, "", f"could not start the script: {exc}", -1
         seconds = round(time.monotonic() - started, 2)
         self._record(name, ok, seconds)
         return {"ok": ok, "skill": name, "parameters": params, "output": out[-4000:], "error": err[-2000:],
@@ -309,6 +323,13 @@ class SkillStore:
 
 
 # -- the fast path ------------------------------------------------------------------
+
+def interpreter(runner: str) -> str | None:
+    """The program that runs this kind of skill here, or None (PowerShell isn't on Linux unless pwsh is)."""
+    if runner == "powershell":
+        return shutil.which("powershell") or shutil.which("pwsh")
+    return sys.executable if runner == "python" else None
+
 
 def match_prompt(request: str, candidates: list[dict[str, Any]]) -> str:
     listing = json.dumps([{"name": c["name"], "description": c["description"],

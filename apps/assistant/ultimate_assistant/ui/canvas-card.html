@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Canvas card</title>
-<link rel="stylesheet" href="/api/canvas/ui/genui.css">
+<link rel="stylesheet" href="genui.css">
 <style>
   html, body { margin: 0; background: transparent; overflow: hidden; }
   body.ua-standalone { background: #0b0d12; overflow: auto; padding: 24px; }
@@ -16,8 +16,8 @@
 </head>
 <body>
 <div id="card"></div>
-<script>window.GENUI_ASSETS = '/api/canvas/ui/vendor/';</script>
-<script src="/api/canvas/ui/genui.js"></script>
+<script>window.GENUI_ASSETS = new URL('vendor/', location.href).pathname;</script>
+<script src="genui.js"></script>
 <script>
 /* One interactive canvas card. The PC overlay loads this page in its own small
  * always-on-top window and hands it the element with uaShow(); opened directly
@@ -26,7 +26,8 @@
   const hash = new URLSearchParams(location.hash.slice(1));
   const query = new URLSearchParams(location.search);
   const token = hash.get('token') || '';
-  const base = location.origin;
+  // The node's API root, also behind a proxy prefix (Herald's /nodes/main/http on other devices).
+  const base = location.origin + location.pathname.replace(/\/api\/canvas\/ui\/card.*$/, '');
   const root = document.getElementById('card');
   if (query.get('embedded')) document.body.classList.add('ua-embedded');
   let card = null;

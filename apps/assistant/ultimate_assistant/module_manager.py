@@ -1,4 +1,13 @@
-"""On-demand, isolated Python MCP modules from an owner-selected catalog."""
+"""On-demand, isolated modules, each downloaded only when it's installed.
+
+Where the list of modules comes from, in order:
+- module-catalog.json in the user's settings folder: an owner-selected catalog replaces the rest;
+- the published catalog (MODULE_CATALOG_URL, the release repo), cached for a day and reused
+  when offline;
+- the catalog built into the app, as a fallback.
+module-catalog.private.json beside it adds the owner's private modules, whose archives sit in
+module-packages-private/ (they are never published).
+"""
 from __future__ import annotations
 
 import hashlib
@@ -14,25 +23,67 @@ from pathlib import Path
 from urllib.parse import quote, urlsplit
 
 import httpx
+import time
 
-from .node_link import link
+from .node_link import device_instance, is_main, link
 from .settings import settings
+
+
+MODULE_CATALOG_URL = os.environ.get(
+    "ULTIMATE_ASSISTANT_MODULE_CATALOG_URL",
+    "https://raw.githubusercontent.com/KianJRoss/UltimateAssistant-release/main/modules/catalog.json")
+CATALOG_MAX_AGE = 24 * 3600
+
+
+def _modules(data: dict) -> list[dict]:
+    if data.get("schema_version") != 1 or not isinstance(data.get("modules"), list):
+        raise ValueError("Unsupported module catalog")
+    return data["modules"]
 
 
 class ModuleManager:
     def __init__(self):
         self.root = settings.user_data_dir / "modules"
-        self.catalog_path = settings.user_settings_file.parent / "module-catalog.json"
+        folder = settings.user_settings_file.parent
+        self.catalog_path = folder / "module-catalog.json"
+        self.cache_path = folder / "module-catalog.cache.json"
+        self.private_catalog_path = folder / "module-catalog.private.json"
+        self.private_packages = folder / "module-packages-private"
+
+    def published(self) -> list[dict] | None:
+        """The release repo's catalog, cached; None when it was never reachable."""
+        fresh = self.cache_path.exists() and time.time() - self.cache_path.stat().st_mtime < CATALOG_MAX_AGE
+        if not fresh:
+            try:
+                response = httpx.get(MODULE_CATALOG_URL, follow_redirects=True, timeout=10)
+                response.raise_for_status()
+                if response.url.scheme != "https":
+                    raise ValueError("Module catalog redirected away from HTTPS")
+                _modules(response.json())
+                self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+                pending = self.cache_path.with_suffix(".pending")
+                pending.write_text(response.text, "utf-8")
+                pending.replace(self.cache_path)
+            except (httpx.HTTPError, ValueError):
+                pass  # offline or not published yet: the last copy, else the built-in one
+        if self.cache_path.exists():
+            return _modules(json.loads(self.cache_path.read_text("utf-8")))
+        return None
 
     def catalog(self) -> list[dict]:
-        # Installing the catalog never installs the listed software.
-        source = self.catalog_path if self.catalog_path.exists() else Path(__file__).with_name("module_catalog.json")
-        if not source.exists():
-            return []
-        data = json.loads(source.read_text("utf-8"))
-        if data.get("schema_version") != 1 or not isinstance(data.get("modules"), list):
-            raise ValueError("Unsupported module catalog")
-        return data["modules"]
+        # Reading the catalog never installs the listed software.
+        if self.catalog_path.exists():
+            modules = _modules(json.loads(self.catalog_path.read_text("utf-8")))
+        else:
+            modules = self.published()
+            if modules is None:
+                built_in = Path(__file__).with_name("module_catalog.json")
+                modules = _modules(json.loads(built_in.read_text("utf-8"))) if built_in.exists() else []
+        if self.private_catalog_path.exists():
+            private = _modules(json.loads(self.private_catalog_path.read_text("utf-8")))
+            ids = {m.get("id") for m in private}
+            modules = [m for m in modules if m.get("id") not in ids] + private
+        return modules
 
     def manifest(self, name: str) -> dict:
         self.path(name)
@@ -42,8 +93,8 @@ class ModuleManager:
         m = matches[0]
         if not re.fullmatch(r"\d+\.\d+\.\d+", str(m.get("version", ""))):
             raise ValueError("Module needs a three-part numeric version")
-        if (not m.get("bundled_archive") and urlsplit(m.get("url", "")).scheme != "https") or not re.fullmatch(r"[a-f0-9]{64}", m.get("sha256", "")):
-            raise ValueError("Module needs an HTTPS archive and SHA-256 checksum")
+        if (not m.get("archive_file") and urlsplit(m.get("url", "")).scheme != "https") or not re.fullmatch(r"[a-f0-9]{64}", m.get("sha256", "")):
+            raise ValueError("Module needs an HTTPS archive (or a private archive file) and SHA-256 checksum")
         runtime = m.get("runtime", "python")
         if runtime == "python":
             for key in ("entrypoint", "healthcheck"):
@@ -116,9 +167,9 @@ class ModuleManager:
                 stage = Path(temp)
                 archive = stage / "module.zip"
                 digest = hashlib.sha256()
-                if m.get("bundled_archive"):
+                if m.get("archive_file"):
                     from .module_runtime import local_path
-                    source_archive = local_path(Path(__file__).parent / "module_packages", m["bundled_archive"])
+                    source_archive = local_path(self.private_packages, m["archive_file"])
                     shutil.copyfile(source_archive, archive)
                     digest.update(archive.read_bytes())
                 else:
@@ -132,9 +183,13 @@ class ModuleManager:
                                    capture_output=True, timeout=120, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
                     requirements = source / "requirements.txt"
                     if requirements.exists():
-                        subprocess.run([str(self.python(stage)), "-m", "pip", "install", "--require-hashes", "-r", str(requirements)],
-                                       check=True, capture_output=True, timeout=600,
-                                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                        result = subprocess.run([str(self.python(stage)), "-m", "pip", "install", "--require-hashes", "-r", str(requirements)],
+                                                capture_output=True, text=True, timeout=1200,
+                                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                        if result.returncode:
+                            # Say why: the last lines of pip's own error, not just its exit status.
+                            reason = " ".join((result.stderr or result.stdout).strip().splitlines()[-3:])
+                            raise RuntimeError(f"Installing the module's dependencies failed: {reason[:600]}")
                 else:
                     from .module_runtime import prepare
                     prepare(stage, m)
@@ -186,12 +241,20 @@ class ModuleManager:
     def bind(self, name: str, state: dict, enabled: bool) -> None:
         if state["manifest"].get("interface", "mcp") == "cli":
             return
+        # The Router may be on another machine: link.localize offers the module from this device
+        # over the node link, and Herald reaches it there. Each device's copy has its own name.
         base = settings.herald_url.rstrip("/")
-        if httpx.URL(base).host not in {"127.0.0.1", "localhost", "::1"}:
-            raise ValueError("Optional local modules require the local Router")
         headers = {"Authorization": "Bearer " + os.environ["HERALD_API_KEY"]} if os.environ.get("HERALD_API_KEY") else {}
-        tool = "assistant-module-" + name
+        tool = self.tool_name(name)
+        device = state["manifest"].get("runs_on") == "device"
         binding = f"{base}/projects/{quote(settings.herald_project, safe='')}/parts/{quote(settings.herald_part, safe='')}/tools"
+        if not enabled and device:
+            from .device_tools import set_membership
+            set_membership(tool, False)
+            response = httpx.delete(base + "/tool-instances/" + tool, headers=headers, timeout=30)
+            if response.status_code != 404:
+                response.raise_for_status()
+            return
         if not enabled:
             response = httpx.delete(binding + "/" + tool, headers=headers, timeout=30)
             if response.status_code != 404:
@@ -207,29 +270,69 @@ class ModuleManager:
         release = Path(state["release"])
         manifest = state["manifest"]
         if manifest.get("runtime", "python") == "python":
+            from .module_runtime import configuration
+            configured = configuration(self.path(name) / "data", manifest)  # the user's settings (configure)
             config = {"command": [str(self.python(release)), "-m", manifest["entrypoint"]],
-                      "env": {"ULTIMATE_ASSISTANT_MODULE_DATA": str(self.path(name) / "data"),
+                      **({"env_refs": configured["env_refs"]} if configured["env_refs"] else {}),
+                      "env": {**configured["env"],
+                              "ULTIMATE_ASSISTANT_MODULE_DATA": str(self.path(name) / "data"),
                               "PYTHONPATH": str(release / "source"),
                               # The assistant itself, for modules that launch it (Obsidian's ACP pane).
                               "ULTIMATE_ASSISTANT_PYTHON": sys.executable,
-                              "ULTIMATE_ASSISTANT_APP": str(Path(__file__).resolve().parents[1])}, "timeout": 60}
+                              "ULTIMATE_ASSISTANT_APP": str(Path(__file__).resolve().parents[1]),
+                              **{str(k): str(v) for k, v in manifest.get("environment", {}).items()}},
+                      "timeout": int(manifest.get("timeout", 60))}
         else:
             from .module_runtime import command, configuration
             config = {"command": command(release, manifest), "cwd": str(self.path(name) / "data"),
                       **configuration(self.path(name) / "data", manifest), "timeout": 60}
+        if manifest.get("progressive_catalog"):
+            # A big server behind guide/tools/describe/run (progressive_tools.py); stays on this device.
+            from .module_runtime import local_path
+            config["progressive_catalog"] = str(local_path(release / "source", manifest["progressive_catalog"]))
+        if device:
+            # A device's own tools (screen, windows, its apps) join the global `device` group, like
+            # the user's device MCP servers: every agent and Herald client reaches them there.
+            response = httpx.post(base + "/tool-instances", headers=headers, timeout=30, json=link.localize({
+                "name": tool, "transport": "stdio", "scope": "global",
+                "description": state["manifest"].get("description", name),
+                "tags": ["assistant", "optional-module", "device"],
+                "config": {**config, "timeout": max(180, int(manifest.get("timeout", 0)))}}))
+            response.raise_for_status()
+            from .device_tools import set_membership
+            set_membership(tool, True)
+            return
         response = httpx.post(base + "/tool-instances", headers=headers, timeout=30, json=link.localize({
             "name": tool, "transport": "stdio", "scope": "project", "project": settings.herald_project,
             "description": state["manifest"].get("description", name), "tags": ["assistant", "optional-module"],
             "config": config}))
         response.raise_for_status()
-        response = httpx.post(binding, headers=headers, timeout=30, json={"tool": tool, "alias": "module_" + name.replace("-", "_")})
+        response = httpx.post(binding, headers=headers, timeout=30, json={"tool": tool, "alias": tool.removeprefix("assistant-").replace("-", "_")})
         response.raise_for_status()
         # every agent can use an installed module (a calendar module serves the planner and the companion)
         from .agents import load_agents
         for agent in load_agents().values():
             agent_binding = f"{base}/projects/{quote(settings.herald_project, safe='')}/parts/{quote(agent.part, safe='')}/tools"
             httpx.post(agent_binding, headers=headers, timeout=30,
-                       json={"tool": tool, "alias": "module_" + name.replace("-", "_")})
+                       json={"tool": tool, "alias": tool.removeprefix("assistant-").replace("-", "_")})
+
+    @staticmethod
+    def tool_name(name: str) -> str:
+        base = "assistant-module-" + name
+        return base if is_main() else device_instance(base)
+
+    def summary(self) -> list[dict]:
+        """Every catalog module and its state here (for the main node deciding where to install)."""
+        out = []
+        for entry in self.catalog():
+            try:
+                state = self.state(entry["id"])
+                before = (self.path(entry["id"]) / "state.json").exists()
+            except ValueError:
+                continue
+            out.append({"id": entry["id"], "status": state["status"], "enabled": state.get("enabled", False),
+                        "installed_before": before})
+        return out
 
     def enable(self, name: str) -> dict:
         state = self.state(name)

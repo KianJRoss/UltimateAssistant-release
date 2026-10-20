@@ -1,4 +1,4 @@
--e ../../components/herald
+# Herald is installed by setup.ps1 from herald.json (a pinned release), not from here.
 g4f[api,gui]==8.5.9
 curl_cffi>=0.6.2
 pywinpty>=2.0.15; sys_platform == 'win32'

@@ -20,6 +20,12 @@ DEFAULT_GAP_MINUTES = 120
 FOLLOW_UP_SECONDS = 180
 FOLLOW_UP_WORDS = 6
 EARLIER_IN_PROMPT = 8
+_TOPIC_SHIFT_RE = re.compile(
+    r"\b(?:new topic|different question|different topic|unrelated|switching gears|"
+    r"anyway|by the way|btw|going back to|earlier conversation|previous conversation|"
+    r"what were we talking about)\b",
+    re.I,
+)
 
 
 def now_utc() -> datetime:
@@ -102,10 +108,14 @@ def earlier_context(conversations: list[dict[str, Any]], tz: tzinfo) -> str:
 
 
 def likely_follow_up(message: str, last_at: datetime | None, now: datetime) -> bool:
-    """A short reply right after an answer ("yes", "do it", "thanks") continues
-    the objective; no model call needed."""
-    return bool(last_at) and (now - last_at).total_seconds() <= FOLLOW_UP_SECONDS \
-        and len(message.split()) <= FOLLOW_UP_WORDS
+    """A short reply right after an answer ("yes", "do it", "thanks") continues the
+    objective with no model call, unless it says it is changing topic. Longer turns go to
+    the model, so "back to the essay" can return to an earlier conversation."""
+    if not last_at or (now - last_at).total_seconds() > FOLLOW_UP_SECONDS:
+        return False
+    if _TOPIC_SHIFT_RE.search(message or ""):
+        return False
+    return len(message.split()) <= FOLLOW_UP_WORDS
 
 
 def shift_prompt(message: str, recent: list[dict[str, Any]], earlier: list[dict[str, Any]],

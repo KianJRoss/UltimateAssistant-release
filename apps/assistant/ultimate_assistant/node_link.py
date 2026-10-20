@@ -349,9 +349,15 @@ def main() -> int:
     """A device node: lend this machine's screen and hands to the assistant."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     load_router_key()
-    from . import device_tools
+    from . import canvas, device_tools, signals
     link.on_connect.append(device_tools.offer_enabled)
     link.start()
+    # This device's part of being ahead of the user: its activity signals (what is in focus, idle)
+    # for the main node's clock, and its overlay showing the main node's canvas (reminders, cards).
+    if not is_main():
+        signals.start(node_name())
+        canvas.start_overlay(settings.workspace_root, settings.herald_url.rstrip("/") + "/nodes/main/http", "",
+                             router_key=os.environ.get("HERALD_API_KEY", ""))
     print(f"Assistant node {node_name()} ({node_label()}) -> {settings.herald_url}")
     try:
         while True:
