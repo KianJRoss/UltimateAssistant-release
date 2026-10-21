@@ -1,5 +1,12 @@
 {
-  "0.3.1": [
+  "0.3.2": [
+    {
+      "id": "phone",
+      "title": "Your phone, paired",
+      "summary": "Use the assistant on your Android phone: the same conversation, voice and canvas.",
+      "prompt": "Help me pair my phone. Tell me what I need first, then show the pairing code. Don't change anything else.",
+      "expected": "A QR code to scan with the phone, and where to get the app."
+    },
     {
       "id": "life",
       "title": "It keeps track of what you have to do",

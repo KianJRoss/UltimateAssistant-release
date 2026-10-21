@@ -1,0 +1,136 @@
+/* Canvas UI cards (genui.js). Dark glass that sits over whatever the user is doing. */
+:root {
+  --ua-bg: #10121a;
+  --ua-surface: rgba(22, 24, 32, 0.94);
+  --ua-card-fill: #16181f;
+  --ua-surface-2: rgba(255, 255, 255, 0.06);
+  --ua-surface-3: rgba(255, 255, 255, 0.11);
+  --ua-line: rgba(255, 255, 255, 0.12);
+  --ua-ink: #e6e8ef;
+  --ua-ink-2: #a9afc2;
+  --ua-ink-3: #727a90;
+  --ua-accent: #7aa2f7;
+  --ua-success: #41b88f;
+  --ua-danger: #f7768e;
+  --ua-warning: #e0af68;
+  --ua-discovery: #bb9af7;
+  --ua-font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+.ua-card-root {
+  position: relative;
+  box-sizing: border-box;
+  color: var(--ua-ink);
+  font: 14px/1.45 var(--ua-font);
+  background: var(--ua-surface);
+  border: 1px solid var(--ua-line);
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+.ua-card-root.ua-bare { background: transparent; border: 0; box-shadow: none; padding: 0; }
+.ua-card-root *, .ua-card-root *::before, .ua-card-root *::after { box-sizing: border-box; }
+.ua-card-root > div { display: flex; flex-direction: column; gap: 10px; }
+
+.ua-card-root h1, .ua-card-root h2, .ua-card-root h3, .ua-card-root h4 { margin: 4px 0 0; line-height: 1.25; font-weight: 600; }
+.ua-card-root h1 { font-size: 22px; }
+.ua-card-root h2 { font-size: 18px; }
+.ua-card-root h3 { font-size: 15px; }
+.ua-card-root h4 { font-size: 14px; color: var(--ua-ink-2); }
+.ua-card-root p { margin: 0; }
+.ua-card-root ul, .ua-card-root ol { margin: 0; padding-left: 20px; }
+.ua-card-root a { color: var(--ua-accent); text-decoration: none; }
+.ua-card-root a:hover { text-decoration: underline; }
+.ua-card-root code { font: 12.5px/1.4 "Cascadia Code", Consolas, monospace; background: var(--ua-surface-3); padding: 1px 5px; border-radius: 5px; }
+.ua-card-root hr, .ua-divider { border: 0; border-top: 1px solid var(--ua-line); margin: 2px 0; width: 100%; }
+.ua-card-root blockquote, .ua-quote { margin: 0; padding: 4px 12px; border-left: 3px solid var(--ua-accent); color: var(--ua-ink-2); }
+
+.ua-box, .ua-row, .ua-card, .ua-grid-item, .ua-pressable, .ua-carousel-item, .ua-form { min-width: 0; }
+.ua-card { background: var(--ua-surface-2); border: 1px solid var(--ua-line); }
+.ua-title { font-weight: 600; line-height: 1.25; }
+.ua-text { line-height: 1.45; }
+.ua-caption { font-size: 12px; color: var(--ua-ink-3); }
+.ua-label { font-size: 12.5px; font-weight: 500; color: var(--ua-ink-2); }
+.ua-truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ua-clamp { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.ua-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; width: fit-content; }
+.ua-kbd { font: 11px Consolas, monospace; border: 1px solid var(--ua-line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; }
+.ua-icon { flex: none; vertical-align: middle; }
+.ua-icon-inline { vertical-align: -0.15em; width: 1em; height: 1em; }
+.ua-clickable, .ua-pressable { cursor: pointer; }
+.ua-pressable { transition: filter 0.12s, transform 0.12s; }
+.ua-pressable:hover { filter: brightness(1.15); }
+.ua-pressable:active { transform: scale(0.97); }
+
+.ua-button {
+  --ua-btn: var(--ua-accent);
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font: 500 13.5px var(--ua-font); border-radius: 10px; border: 1px solid transparent;
+  padding: 7px 14px; cursor: pointer; color: #0d0f15; background: var(--ua-btn);
+  transition: filter 0.12s, transform 0.12s; white-space: nowrap;
+}
+.ua-button:hover { filter: brightness(1.1); }
+.ua-button:active { transform: scale(0.98); }
+.ua-button:disabled { opacity: 0.45; cursor: default; filter: none; transform: none; }
+.ua-button.ua-outline { background: transparent; color: var(--ua-ink); border-color: var(--ua-line); }
+.ua-button.ua-ghost { background: transparent; color: var(--ua-ink-2); }
+.ua-button.ua-soft { background: color-mix(in srgb, var(--ua-btn) 18%, transparent); color: var(--ua-btn); }
+.ua-button.ua-outline:hover, .ua-button.ua-ghost:hover { background: var(--ua-surface-3); }
+.ua-button.ua-sm { font-size: 12.5px; padding: 4px 10px; border-radius: 8px; }
+.ua-button.ua-lg { font-size: 15px; padding: 10px 18px; }
+
+.ua-input {
+  font: 13.5px var(--ua-font); color: var(--ua-ink); background: var(--ua-surface-2);
+  border: 1px solid var(--ua-line); border-radius: 9px; padding: 7px 10px; outline: none; min-width: 0;
+}
+.ua-input:focus { border-color: var(--ua-accent); }
+textarea.ua-input { resize: vertical; width: 100%; }
+select.ua-input option { background: #1b1e28; }
+input[type="date"].ua-input, input[type="time"].ua-input { color-scheme: dark; }
+.ua-slider { width: 100%; accent-color: var(--ua-accent); }
+.ua-check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.ua-check input { accent-color: var(--ua-accent); width: 16px; height: 16px; margin: 0; }
+.ua-check.ua-done span { text-decoration: line-through; color: var(--ua-ink-3); }
+.ua-segmented { display: inline-flex; gap: 2px; padding: 3px; background: var(--ua-surface-2); border: 1px solid var(--ua-line); border-radius: 11px; max-width: 100%; overflow-x: auto; }
+.ua-segment { font: 500 13px var(--ua-font); color: var(--ua-ink-2); background: transparent; border: 0; border-radius: 8px; padding: 5px 12px; cursor: pointer; white-space: nowrap; }
+.ua-segment.ua-on { background: var(--ua-surface-3); color: var(--ua-ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }
+.ua-progress { height: 8px; border-radius: 999px; background: var(--ua-surface-3); overflow: hidden; }
+.ua-progress > div { height: 100%; border-radius: 999px; transition: width 0.2s; }
+
+.ua-popover { position: relative; display: inline-block; }
+.ua-popover-content { position: absolute; z-index: 5; top: calc(100% + 6px); left: 0; min-width: 220px; background: #1b1e28; border: 1px solid var(--ua-line); border-radius: 12px; padding: 10px 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); }
+.ua-details summary { cursor: pointer; color: var(--ua-ink-2); }
+.ua-carousel { display: flex; flex-direction: column; gap: 8px; }
+.ua-carousel-track { display: flex; }
+.ua-carousel-nav { display: flex; align-items: center; justify-content: center; gap: 10px; }
+
+.ua-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ua-table td, .ua-md-table td, .ua-md-table th { padding: 6px 8px; border-bottom: 1px solid var(--ua-line); vertical-align: middle; }
+.ua-table tr:last-child td { border-bottom: 0; }
+.ua-md-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ua-md-table th { color: var(--ua-ink-2); font-weight: 600; }
+
+.ua-code { position: relative; margin: 0; padding: 10px 12px; background: rgba(0, 0, 0, 0.35); border: 1px solid var(--ua-line); border-radius: 10px; overflow: auto; }
+.ua-code code { background: none; padding: 0; white-space: pre; display: block; outline: none; }
+.ua-copy { position: absolute; top: 6px; right: 6px; font: 11px var(--ua-font); color: var(--ua-ink-2); background: var(--ua-surface-3); border: 0; border-radius: 6px; padding: 2px 8px; cursor: pointer; opacity: 0; }
+.ua-code:hover .ua-copy { opacity: 1; }
+.ua-math-display { text-align: center; overflow-x: auto; }
+.ua-image { display: block; width: 100%; object-fit: cover; }
+.ua-video { display: block; width: 100%; border: 0; background: #000; }
+.ua-image-empty { display: flex; align-items: center; justify-content: center; background: var(--ua-surface-2); color: var(--ua-ink-3); font-size: 12px; padding: 8px; text-align: center; }
+.ua-chart svg { display: block; overflow: visible; }
+.ua-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--ua-ink-2); }
+.ua-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.ua-legend i { width: 9px; height: 9px; border-radius: 3px; }
+.ua-mermaid { white-space: pre-wrap; font: 12px/1.4 "Cascadia Code", Consolas, monospace; color: var(--ua-ink-3); }
+.ua-mermaid svg { max-width: 100%; height: auto; }
+
+.ua-problem { font-size: 11.5px; color: var(--ua-warning); background: rgba(224, 175, 104, 0.1); border-radius: 8px; padding: 4px 8px; }
+.ua-toast { position: absolute; right: 12px; bottom: 10px; font-size: 12px; background: #2a2f3d; color: var(--ua-ink); padding: 4px 10px; border-radius: 8px; }
+
+/* The close button the overlay's card page adds. */
+.ua-frame-close { position: absolute; top: 6px; right: 8px; width: 22px; height: 22px; border-radius: 7px; border: 0; background: transparent; color: var(--ua-ink-3); font-size: 15px; line-height: 1; cursor: pointer; z-index: 6; opacity: 0; transition: opacity 0.15s; }
+.ua-card-root:hover .ua-frame-close { opacity: 1; }
+.ua-frame-close:hover { background: var(--ua-surface-3); color: var(--ua-ink); }

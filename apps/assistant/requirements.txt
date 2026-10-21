@@ -17,3 +17,5 @@ agent-client-protocol>=0.12,<0.13
 websockets>=13
 # Optional: the assistant as an A2A agent (protocols.py serves it when installed)
 # a2a-sdk[http-server]==1.2.2
+# QR codes for pairing the phone app
+segno==1.6.6

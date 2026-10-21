@@ -1,0 +1,71 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' file:; style-src 'unsafe-inline' file:; font-src file:; connect-src 'none'; img-src 'none'"><title>Ultimate Assistant Conversation</title><link rel="stylesheet" href="vendor/katex/dist/katex.min.css"><script src="vendor/marked/lib/marked.umd.js"></script><script src="vendor/dompurify/dist/purify.min.js"></script><script src="vendor/katex/dist/katex.min.js"></script><style>
+:root { color-scheme: dark; font-family: Inter, "Segoe UI", sans-serif; background: #101319; color: #eef1f7; }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at top, #20283a 0, #101319 58%); }
+header { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 4px 2px; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.mark { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 14px; background: linear-gradient(145deg, #7b8cff, #a57aff); font-size: 22px; box-shadow: 0 8px 28px #7886ff30; }
+h1 { font-size: 17px; margin: 0 0 3px; letter-spacing: .2px; }
+.sub { color: #929db1; font-size: 12px; }
+.message { display: flex; margin: 17px 0; }
+.message.user { justify-content: flex-end; }
+.bubble { max-width: min(680px, 90%); padding: 12px 15px; border-radius: 17px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.assistant .bubble { background: #202633; border: 1px solid #30394a; border-bottom-left-radius: 5px; }
+.user .bubble { background: #596be0; color: white; border-bottom-right-radius: 5px; }
+.message.error .bubble { border-color: #a54b58; color: #ffc3ca; }
+.assistant .message-content{white-space:normal;line-height:1.65}.message-content>:first-child{margin-top:0}.message-content>:last-child{margin-bottom:0}.message-content p{margin:0 0 12px}.message-content h1,.message-content h2,.message-content h3,.message-content h4,.message-content h5,.message-content h6{line-height:1.35;margin:20px 0 10px;letter-spacing:0}.message-content h1{font-size:22px}.message-content h2{font-size:20px}.message-content h3{font-size:18px}.message-content h4,.message-content h5,.message-content h6{font-size:16px}.message-content ul,.message-content ol{padding-left:24px;margin:10px 0 14px}.message-content li{padding-left:3px;margin:7px 0}.message-content li p{margin-bottom:5px}.message-content blockquote{border-left:3px solid #8995f5;margin:14px 0;padding:3px 0 3px 12px;color:#c0c9db}.message-content code{font-family:ui-monospace,monospace;font-size:.88em;background:#151a24;border-radius:5px;padding:2px 5px}.message-content pre{background:#121722;border:1px solid #343e52;border-radius:12px;padding:12px;overflow-x:auto;white-space:pre;max-width:100%;font-size:13px}.message-content pre code{padding:0;background:none;overflow-wrap:normal}.table-scroll{overflow-x:auto;margin:14px 0;max-width:100%;border:1px solid #3b465c;border-radius:10px}.message-content table{border-collapse:collapse;min-width:100%;font-size:14px}.message-content th,.message-content td{padding:10px 12px;border-bottom:1px solid #364054;text-align:left;min-width:100px}.message-content th{background:#2b3447;color:#e1e7ff}.message-content tr:last-child td{border-bottom:0}.message-content hr{border:0;border-top:1px solid #3b465c;margin:18px 0}.message-content a{color:#b6c1ff;text-decoration:underline}.message-content input[type=checkbox]{accent-color:#8995f5;margin-right:7px}.message-content .katex-display{overflow-x:auto;overflow-y:hidden;padding:8px 0;max-width:100%;margin:10px 0}.message-content .katex{font-size:1.08em}.message-content .math-source{overflow-wrap:normal}.assistant .bubble{min-width:0;max-width:96%}.message.error .message-content{white-space:pre-wrap}
+.icon-button { width: 40px; height: 40px; border-radius: 13px; background: #282f3e; font-size: 17px; }
+.icon-button:hover { background: #353e51; }
+.typing { color: #9da8bb; font-size: 12px; padding: 5px 13px; }
+html,body{height:100%;overflow:hidden}.shell{height:100%;display:flex;flex-direction:column;padding:12px;gap:10px}header{flex:none}.mark{width:34px;height:34px;font-size:18px}.chat{flex:1;overflow:auto;padding:8px 0;scroll-behavior:smooth}.bubble{max-width:92%;font-size:15px}.status{font-size:12px;color:#aab5c8;overflow-wrap:anywhere}.activity{font-size:12px;color:#b7c1ef;background:#191e28;border-radius:10px;padding:8px;white-space:pre-wrap;overflow-wrap:anywhere}.activity[hidden],.presentation[hidden]{display:none}.presentation{background:#202633;border:1px solid #596be0;border-radius:14px;padding:13px;max-height:42vh;overflow:auto}.presentation h2{font-size:16px;margin:0 0 8px}.presentation-kind{color:#aab5c8;font-size:11px;text-transform:uppercase;letter-spacing:.08em}.speak{display:block;margin-top:8px;border:0;border-radius:8px;background:#30394a;color:#e8ebf2;padding:6px 10px}.welcome{color:#9ca7ba;text-align:center;padding:30px 12px}button{font:inherit}.icon-button{border:0;color:white;flex:none}
+.activity.busy::before{content:"";display:inline-block;width:10px;height:10px;border:2px solid #596be0;border-top-color:#d0d6ff;border-radius:50%;margin-right:8px;vertical-align:middle;animation:spin .9s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}</style></head><body><main class="shell"><header><div class="brand"><div class="mark" aria-hidden="true">?</div><div><h1>Ultimate Assistant</h1><div class="sub">Your assistant, across devices</div></div></div><button id="settings" class="icon-button" aria-label="Phone settings">?</button></header><div id="status" class="status" role="status">Connecting...</div><div id="activity" class="activity" role="status" hidden></div><section id="presentation" class="presentation" aria-label="Context" hidden><div id="presentation-kind" class="presentation-kind"></div><h2 id="presentation-title"></h2><div id="presentation-content" class="message-content"></div></section><section id="chat" class="chat" aria-label="Conversation"><div class="welcome">Message your assistant below.</div></section></main><script>
+'use strict';
+// Established parsers are packaged with the app; nothing is fetched while chatting.
+const escapeHtml=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function mathExtension(name,level,pattern,display){return {name,level,start(src){const index=src.search(/\\[\[(]|\$/);return index<0?undefined:index;},tokenizer(src){const match=pattern.exec(src);if(match)return {type:name,raw:match[0],math:match[1],display};},renderer(token){return '<span class="math-source" data-display="'+token.display+'" data-math="'+escapeHtml(token.math)+'">'+escapeHtml(token.raw)+'</span>';}};}
+if(window.marked)marked.use({extensions:[
+ mathExtension('displayMath','block',/^\$\$\s*([\s\S]+?)\s*\$\$(?:\n|$)/,true),
+ mathExtension('bracketMath','inline',/^\\\[([\s\S]+?)\\\]/,true),
+ mathExtension('inlineMath','inline',/^\\\(([\s\S]+?)\\\)/,false),
+ mathExtension('dollarMath','inline',/^\$(?![\d\s$])([^\n$]+?\S|[^\d\s$])\$(?!\d)/,false)
+]});
+function renderContent(content,target){
+ if(!window.marked||!window.DOMPurify){target.textContent=content;return;}
+ try{
+  target.innerHTML=DOMPurify.sanitize(marked.parse(content,{gfm:true,breaks:true}),{
+   ALLOWED_TAGS:['p','br','strong','em','del','h1','h2','h3','h4','h5','h6','ul','ol','li','blockquote','pre','code','table','thead','tbody','tr','th','td','hr','span','a','input'],
+   ALLOWED_ATTR:['class','data-math','data-display','start','type','checked','disabled','title'],
+   ALLOW_DATA_ATTR:false
+  });
+  // Links remain readable but cannot navigate away or open untrusted content.
+  target.querySelectorAll('a').forEach(link=>link.removeAttribute('href'));
+  target.querySelectorAll('input').forEach(input=>{input.disabled=true;input.type='checkbox';});
+  target.querySelectorAll('table').forEach(table=>{const scroll=document.createElement('div');scroll.className='table-scroll';table.replaceWith(scroll);scroll.appendChild(table);});
+  if(window.katex)target.querySelectorAll('.math-source').forEach(node=>{
+   try{katex.render(node.dataset.math,node,{displayMode:node.dataset.display==='true',throwOnError:false,trust:false,strict:'ignore',maxExpand:500,maxSize:20});}catch(_){/* Preserve readable source on unsupported notation. */}
+  });
+ }catch(_){target.textContent=content;}
+}
+const chat=document.getElementById('chat');
+const records=[];
+document.getElementById('settings').innerHTML='&#9881;';
+document.querySelector('.mark').innerHTML='&#10022;';
+document.getElementById('settings').onclick=()=>ConversationNative.settings();
+function drawMessage(message){
+ const row=document.createElement('div');row.className='message '+(message.role==='user'?'user':'assistant')+(message.error?' error':'');
+ const bubble=document.createElement('div');bubble.className='bubble';
+ const content=document.createElement('div');content.className='message-content';
+ if(message.role==='user'||message.error)content.textContent=String(message.content||'');else renderContent(String(message.content||''),content);
+ bubble.appendChild(content);
+ if(message.role!=='user'&&message.content){const speak=document.createElement('button');speak.className='speak';speak.textContent='Speak';speak.onclick=()=>ConversationNative.speak(String(message.content));bubble.appendChild(speak);}
+ row.appendChild(bubble);chat.appendChild(row);
+}
+function redraw(){chat.replaceChildren();records.forEach(drawMessage);if(!records.length){const empty=document.createElement('div');empty.className='welcome';empty.textContent='Message your assistant below.';chat.appendChild(empty);}chat.scrollTop=chat.scrollHeight;}
+window.PhoneConversation={
+ append(message){const id=message.message_id;if(id){const i=records.findIndex(m=>m.message_id===id);if(i>=0){records[i]=message;redraw();return;}}if(message.role==='user'&&!message.pending){const i=records.findIndex(m=>m.pending&&m.role==='user'&&m.content===message.content);if(i>=0)records.splice(i,1);}records.push(message);redraw();},
+ history(messages){records.splice(0,records.length,...messages);redraw();},
+ status(text){document.getElementById('status').textContent=text;},
+ activity(event){const el=document.getElementById('activity');const state=event.state||event.phase||'';const busy=!['completed','failed','cancelled',''].includes(state);const fallback={accepted:'Preparing your response...',queued:'Waiting to respond...',preparing:'Preparing your response...',responding:'Assistant is responding...',retrying:'Reconnecting to continue...',tool_started:'Using '+(event.tool_name||'a tool'),tool_finished:'Continuing the response...'};el.textContent=String(event.label||event.message||fallback[state]||state);el.hidden=!busy;el.classList.toggle('busy',busy);},
+ presentation(value){const box=document.getElementById('presentation');box.hidden=!value;if(!value)return;document.getElementById('presentation-kind').textContent=String(value.kind||'context');document.getElementById('presentation-title').textContent=String(value.title||'');renderContent(String(value.markdown||''),document.getElementById('presentation-content'));}
+};
+</script></body></html>

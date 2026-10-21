@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="genui.css">
+<style>html, body { margin: 0; background: transparent; overflow: hidden; }</style>
+</head>
+<body>
+<div id="card"></div>
+<script>window.GENUI_ASSETS = 'vendor/';</script>
+<script src="genui.js"></script>
+<script>
+/* One interactive canvas card on the phone. Everything here ships in the app; the assistant only
+ * sends the card (uaShow). Taps, state and closing go to Kotlin (UAHost), which closes the card on
+ * the phone at once and tells the assistant in the background. */
+(function () {
+  var root = document.getElementById('card'), card = null;
+  function report() { UAHost.height(Math.ceil(root.getBoundingClientRect().height)); }
+  new ResizeObserver(report).observe(root);
+  function addClose() {
+    if (root.querySelector('.ua-frame-close')) return;
+    var close = document.createElement('button');
+    close.className = 'ua-frame-close'; close.textContent = '×'; close.setAttribute('aria-label', 'Close');
+    close.style.opacity = '1';
+    close.addEventListener('click', function () { if (card) card.send({ type: 'close' }); });
+    root.appendChild(close);
+  }
+  window.uaShow = function (json) {
+    var element = JSON.parse(json);
+    if (card) card.update(element);
+    else card = GenUICard.mount(root, element, {
+      onEvent: function (e) { UAHost.event(JSON.stringify(e)); },
+      onState: function (s) { UAHost.state(JSON.stringify(s)); },
+      onRender: function () { addClose(); report(); }
+    });
+    root.classList.toggle('ua-bare', !!element.bare);
+  };
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ultimate Assistant</string>
+    <string name="accessibility_service_description">Allow your assistant to inspect and interact with apps on this device.</string>
+    <string name="bridge_base_url"></string>
+    <string name="conversation_connecting">Connecting…</string>
+    <string name="conversation_connected">Connected</string>
+    <string name="conversation_sending">Sending…</string>
+    <string name="message_hint">Message your assistant</string>
+    <string name="send">Send</string>
+    <string name="retry">Retry</string>
+    <string name="user_message_format">You: %1$s</string>
+    <string name="assistant_message_format">Assistant: %1$s</string>
+    <string name="attachment_requires_ingestion">Shared file received; it must be ingested as a versioned source or artifact before sending.</string>
+    <string name="canvas_asset">Assistant visual</string>
+    <string name="canvas_card">Interactive card</string>
+</resources>

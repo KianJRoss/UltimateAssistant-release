@@ -143,6 +143,9 @@ class Assistant:
         "assistant_layers": ("ultimate-assistant-layers", "layer_tools", 120,
                              "Keep changes where updates won't lose them: is the core as released, record what "
                              "was done to make this device work, and write up changes for the developer."),
+        "assistant_phone": ("ultimate-assistant-phone", "phone_tools", 180,
+                            "The user's phone, through the assistant's phone app: pair it, see what it can do, send it "
+                            "commands (open apps, tap, type, read the screen, files) and read what it uploaded."),
         "assistant_skills": ("ultimate-assistant-skills", "skill_tools", 600,
                              "Learned skills: save a finished task as a script with changeable parameters, and "
                              "list, show, run or delete skills."),
@@ -167,6 +170,7 @@ class Assistant:
         from .agents import load_agents
         from .skills import root as skills_root
         from .life.paths import life_root
+        from .phone import DEFAULT_DEVICE as phone_device, phone_root
         base, headers = settings.herald_url.rstrip("/"), self._router_headers()
         project_path = quote(settings.herald_project, safe="")
         main_part = quote(settings.herald_part, safe="")
@@ -183,6 +187,9 @@ class Assistant:
                                    "ULTIMATE_ASSISTANT_TASKS_DB": str(settings.tasks_db),
                                    # The layer tools keep device fixes and contributions with this app's data.
                                    "ULTIMATE_ASSISTANT_USER_ROOT": str(settings.user_settings_file.parent),
+                                   # The phone tools use the same pairing and command records as this app.
+                                   "ULTIMATE_ASSISTANT_PHONE_HOME": str(phone_root()),
+                                   "ULTIMATE_ASSISTANT_PHONE_DEVICE": phone_device,
                                    **({"ULTIMATE_ASSISTANT_TIMEZONE": os.environ["ULTIMATE_ASSISTANT_TIMEZONE"]}
                                       if os.environ.get("ULTIMATE_ASSISTANT_TIMEZONE") else {})},
                            "timeout": timeout},

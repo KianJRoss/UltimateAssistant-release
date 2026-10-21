@@ -1267,6 +1267,12 @@ async def chat(request: ChatRequest):
         "Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
 
+# Asked once when a turn ends without a written answer (usually after tool work).
+SUM_UP = ("Your last turn ended without a written answer. Using only the work and results you already have, "
+          "answer the user's request now. Do not call tools and do not repeat work; say plainly what is done, "
+          "what was found and anything still open.")
+
+
 async def _chat_turn(request: ChatRequest):
     import time
     request_started = time.monotonic()
@@ -1554,8 +1560,8 @@ async def _chat_turn(request: ChatRequest):
                 if candidate_idx > 0:
                     progress(f"Primary model unavailable; switching to {model_id}")
                 try:
-                    for attempt in range(2):
-                        response = httpx.post(
+                    def ask():
+                        return httpx.post(
                             f"{router_url}/v1/chat/completions", headers={**headers, "Content-Type": "application/json"},
                             json={"model": model_id, "messages": attempt_messages, "agentic": use_agentic,
                                   "force_harness": use_agentic and selected.get("backend_type") != "cli",
@@ -1564,6 +1570,9 @@ async def _chat_turn(request: ChatRequest):
                                   "instance": f"{settings.herald_project}-{agent.name}", "session": request.conversation_id},
                             timeout=httpx.Timeout(connect=10, read=1800, write=30, pool=10),
                         )
+                    summed_up = False
+                    for attempt in range(2):
+                        response = ask()
                         if not response.is_success:
                             from herald.router.sanitization import sanitize_error
                             try:
@@ -1575,8 +1584,16 @@ async def _chat_turn(request: ChatRequest):
                                 + sanitize_error(detail or "The Router could not complete the request.")
                             )
                         reply = response.json()["choices"][0]["message"]["content"]
+                        if (not isinstance(reply, str) or not reply.strip()) and not summed_up:
+                            # A turn can end after its tool work without a written answer: ask once, in the
+                            # same session, for the answer from the work already done (no new tools).
+                            summed_up = True
+                            progress("Writing up the answer")
+                            attempt_messages.append({"role": "system", "content": SUM_UP})
+                            response = ask()
+                            reply = response.json()["choices"][0]["message"]["content"] if response.is_success else ""
                         if not isinstance(reply, str) or not reply.strip():
-                            raise RuntimeError("The assistant returned no reply; setup has not completed.")
+                            raise RuntimeError("The assistant finished without writing an answer, even when asked to sum up.")
                         marker = onboarding.NATIVE_SETUP_RELOAD_MARKER
                         if selected.get("backend_type") != "cli" or not reply.rstrip().endswith(marker):
                             break
@@ -2298,6 +2315,35 @@ def start_canvas_overlay(base_url: str) -> bool:
         return False
 
 
+# The phone app (phone/): its device-credential routes, and pairing from this computer.
+from .phone import services as _phone
+
+_phone.register_routes(app, canvas_event=canvas_card_event)
+
+
+@app.post("/api/phone/invitation", dependencies=[Depends(_require_app_token)])
+def phone_invitation() -> dict[str, object]:
+    """A one-time invitation (QR code and link) for the phone app, or what's needed first."""
+    from .phone.pairing_invite import invitation
+    return invitation()
+
+
+@app.get("/api/phone/status", dependencies=[Depends(_require_app_token)])
+def phone_status() -> dict[str, object]:
+    return _phone.status()
+
+
+def start_phone_canvas(base_url: str) -> None:
+    """Forward the canvas to the phone app (the main node is the one the phone talks to)."""
+    from .node_link import is_main
+    if not is_main():
+        return
+    try:
+        _phone.start_canvas_bridge(base_url, _APP_TOKEN)
+    except Exception:  # noqa: BLE001 - the desktop works without the phone
+        _LOGGER.exception("Could not start the phone canvas bridge")
+
+
 def _check_layers() -> None:
     """Warn when the released core was changed, and after an update ask for this device's setup
     fixes to be re-checked (layers.py)."""
@@ -2329,6 +2375,7 @@ def main() -> bool:
     start_signals()
     from .life_clock import start_on_main_node
     start_on_main_node()  # reminders and escalation, on the main node only
+    start_phone_canvas(url)
     _check_layers()
     link.start()
     from .diagnostics import start_reporter

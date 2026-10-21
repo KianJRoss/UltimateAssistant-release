@@ -10,4 +10,4 @@ and internet access for Python packages. Node.js/npm is recommended for the
 official filesystem MCP. Optional modules download when needed. Provider accounts and credentials are never bundled.
 Public HTTPS updates need no GitHub account or Git.
 
-Build version: 0.3.1
+Build version: 0.3.2

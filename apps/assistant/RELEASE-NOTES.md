@@ -1,3 +1,8 @@
+# 0.3.2 — The phone app
+
+- Pair an Android phone (8.0 or newer): ask the assistant to pair your phone, scan the code it shows, and the phone gets the same conversation, voice and the assistant's canvas. The assistant can act on the phone when you allow it (open apps, read and use the screen, files). The phone reaches the computer through Tailscale, so it works away from home too. Get the app from the releases page; the assistant gives you the link when pairing.
+- When the assistant finishes some work but forgets to write the answer, it's asked once to sum up instead of the turn failing.
+
 # 0.3.1 — Your changes survive updates
 
 - The assistant keeps its released core, this device's setup, and what you built apart. Updates replace only the core; your own agents, skills, scripts and modules, and what was done to set up this device, stay.
