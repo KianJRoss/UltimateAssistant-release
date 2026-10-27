@@ -285,9 +285,6 @@
       "entrypoint": "hyprland_ui.server",
       "healthcheck": "hyprland_ui.healthcheck",
       "context_tiers": {
-        "list_windows": 2,
-        "get_window_info": 2,
-        "list_running_apps": 2,
         "ui_tree": 2,
         "ui_get": 2
       },
@@ -552,10 +549,6 @@
       "entrypoint": "windows_ui.server",
       "healthcheck": "windows_ui.healthcheck",
       "context_tiers": {
-        "list_windows": 2,
-        "get_window_info": 2,
-        "list_running_apps": 2,
-        "scan_integration_surfaces": 2,
         "ui_tree": 2,
         "ui_get": 2
       },
