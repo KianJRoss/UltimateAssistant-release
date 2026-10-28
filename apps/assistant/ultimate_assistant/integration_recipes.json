@@ -22,17 +22,32 @@
       "id": "google-workspace-cli",
       "domain": "planning",
       "name": "Google Workspace CLI",
-      "capabilities": ["calendar", "documents", "spreadsheets", "email"],
+      "capabilities": [
+        "calendar",
+        "documents",
+        "spreadsheets",
+        "email"
+      ],
       "source": "https://github.com/googleworkspace/cli",
       "license": "Apache-2.0",
       "runtime": "Native CLI",
       "package": "@googleworkspace/cli",
-      "setup": ["Resolve and pin a supported Windows binary or package version", "Set GOOGLE_WORKSPACE_CLI_CONFIG_DIR and CLOUDSDK_CONFIG to assistant-owned folders", "Inspect supported auth setup and auth login commands; automated project setup requires gcloud", "Select only the requested services during login", "Verify one harmless Calendar read before claiming readiness"],
-      "user_decisions": ["Which Google account to connect", "Which requested services to authorize"],
-      "notes": "Upstream states this is not an officially supported Google product and warns of breaking changes. Use through the full native assistant CLI; it does not require replacing the assistant provider.",
+      "setup": [
+        "Install the google-workspace optional CLI module (pinned upstream 0.22.5)",
+        "Use its isolated GOOGLE_WORKSPACE_CLI_CONFIG_DIR and CLOUDSDK_CONFIG under persistent module data",
+        "Prepare Google Cloud Desktop OAuth registration through supported auth setup or Cloud Console",
+        "Run auth login -s gmail,calendar with user account selection and consent",
+        "Enable only after both Gmail profile and Calendar list live checks succeed"
+      ],
+      "user_decisions": [
+        "Which Google account to connect",
+        "Which requested services to authorize"
+      ],
+      "notes": "Upstream is not an officially supported Google product. A local owner catalog can install the built archive before publication. The module uses the native CLI through run_optional_module; it does not replace the assistant provider. Send mail only on an explicit request to send.",
       "requires_external_account": true,
-      "installable_via_module_manager": false,
-      "status": "reviewed_candidate"
+      "installable_via_module_manager": true,
+      "status": "packaged_pending_release",
+      "module_id": "google-workspace"
     },
     {
       "id": "kimai",

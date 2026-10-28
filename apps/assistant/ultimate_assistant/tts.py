@@ -2,24 +2,93 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import tempfile
+import json
+import queue
+import threading
+import atexit
 from pathlib import Path
 
 import httpx
+
+from .settings import settings, setup_hint
 
 
 ELEVENLABS_API = "https://api.elevenlabs.io/v1"
 ELEVENLABS_VOICE_API = "https://api.elevenlabs.io/v2/voices?page_size=100"
 
 
+class _KokoroProcess:
+    """Serialize speech through one reusable worker in its installed Python environment."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.process = None
+        self.command = None
+        self.responses = None
+
+    def close(self):
+        process, self.process = self.process, None
+        if process is not None:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+            for stream in (process.stdin, process.stdout):
+                if stream:
+                    stream.close()
+
+    def request(self, command: list[str], payload: dict, *, timeout: float = 180):
+        with self.lock:
+            if self.process is None or self.process.poll() is not None or command != self.command:
+                self.close()
+                self.command = list(command)
+                self.responses = queue.Queue()
+                process = self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                                          text=True, encoding="utf-8", bufsize=1,
+                                                          creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                responses = self.responses
+
+                def read():
+                    try:
+                        for line in process.stdout:
+                            responses.put(line)
+                    except (OSError, ValueError):
+                        pass  # The owning request closed the process after failure/shutdown.
+                    finally:
+                        responses.put(None)
+
+                threading.Thread(target=read, name="kokoro-worker-output", daemon=True).start()
+            try:
+                self.process.stdin.write(json.dumps(payload) + "\n")
+                self.process.stdin.flush()
+                line = self.responses.get(timeout=timeout)
+                if line is None:
+                    raise RuntimeError("Kokoro speech worker exited before completing the request.")
+                result = json.loads(line)
+                if not result.get("ok"):
+                    raise RuntimeError("Kokoro speech failed: " + str(result.get("error") or "unknown error"))
+            except queue.Empty as exc:
+                self.close()
+                raise RuntimeError("Kokoro speech worker timed out.") from exc
+            except Exception:
+                self.close()  # A later request starts cleanly; never accept a late response.
+                raise
+
+
+_kokoro_process = _KokoroProcess()
+atexit.register(_kokoro_process.close)
+
+
 def elevenlabs_key() -> str | None:
     key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
     if key:
         return key
-    local_app_data = os.environ.get("LOCALAPPDATA")
-    if not local_app_data:
-        return None
-    key_path = Path(local_app_data) / "UltimateAssistant" / "elevenlabs-api-key.txt"
+    key_path = settings.user_settings_file.parent / "elevenlabs-api-key.txt"
     try:
         return key_path.read_text(encoding="utf-8").strip() or None
     except OSError:
@@ -70,7 +139,8 @@ def list_elevenlabs_voices() -> list[dict[str, str]]:
 def elevenlabs_speech(text: str, voice_id: str, speed: float) -> bytes:
     key = elevenlabs_key()
     if not key:
-        raise RuntimeError("Add your ElevenLabs API key in apps/assistant/configure.ps1 first.")
+        raise RuntimeError("Add your ElevenLabs API key first: " + ("apps/assistant/configure.ps1" if sys.platform == "win32"
+                           else f"ELEVENLABS_API_KEY, or the file {settings.user_settings_file.parent / 'elevenlabs-api-key.txt'}"))
     response = httpx.post(
         f"{ELEVENLABS_API}/text-to-speech/{voice_id}",
         params={"output_format": "mp3_22050_32"},
@@ -91,22 +161,25 @@ def kokoro_speech(text: str, voice: str, speed: float) -> bytes:
     model_path, voices_path = kokoro_assets()
     worker = Path(__file__).with_name("kokoro_worker.py")
     if not executable or not model_path.is_file() or not voices_path.is_file():
-        raise RuntimeError("Local Kokoro is not installed. Run setup-kokoro.ps1.")
+        raise RuntimeError(f"Local Kokoro is not installed. Run {setup_hint('setup-kokoro.ps1')}.")
     with tempfile.TemporaryDirectory(prefix="ultimate-assistant-tts-") as temp_dir:
         output_file = Path(temp_dir) / "reply.wav"
-        subprocess.run(
-            [
-                str(executable), str(worker),
-                "--model", str(model_path), "--voices", str(voices_path),
-                "--output", str(output_file), "--voice", voice, "--speed", str(speed),
-            ],
-            input=text,
-            text=True,
-            check=True,
-            capture_output=True,
-            timeout=180,
+        _kokoro_process.request(
+            [str(executable), str(worker), "--serve", "--model", str(model_path), "--voices", str(voices_path)],
+            {"text": text, "voice": voice, "speed": speed, "output": str(output_file)},
         )
         return output_file.read_bytes()
+
+
+def warm_kokoro() -> None:
+    """Load the speech runtime without synthesizing or playing an utterance."""
+    executable = kokoro_python()
+    model, voices = kokoro_assets()
+    if not executable or not model.is_file() or not voices.is_file():
+        return
+    worker = Path(__file__).with_name("kokoro_worker.py")
+    _kokoro_process.request([str(executable), str(worker), "--serve", "--model", str(model), "--voices", str(voices)],
+                            {"warm": True})
 
 
 def synthesize(

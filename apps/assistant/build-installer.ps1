@@ -1,6 +1,6 @@
 param(
     [string]$OutputDirectory = (Join-Path $PSScriptRoot "..\..\dist"),
-    [string]$Version = "0.3.2"
+    [string]$Version = "0.4.0"
 )
 
 $ErrorActionPreference = "Stop"
@@ -70,7 +70,7 @@ Ultimate Assistant for Windows
 1. Extract this entire ZIP to a writable folder.
 2. Double-click apps\assistant\Install-UltimateAssistant.cmd.
    Or run apps\assistant\Install-UltimateAssistant.ps1 from PowerShell.
-3. Setup downloads the Herald Router (the release pinned in herald.json, checksum-verified) and the app starts it on this device. Select Antigravity or Codex, install it if needed, and sign in in the app.
+3. Setup downloads the Herald Router (the release pinned in herald.json, checksum-verified) and the app starts it on this device. In the app, connect an AI subscription (install its CLI if needed and sign in) or paste an API key; keys are stored encrypted on this device.
 
 Requirements: Windows PowerShell 5.1 or newer, Python 3.13 with the py launcher,
 and internet access for Python packages. Node.js/npm is recommended for the

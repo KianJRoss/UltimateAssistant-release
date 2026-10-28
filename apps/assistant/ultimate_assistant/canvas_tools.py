@@ -15,7 +15,7 @@ from urllib.parse import quote
 from pathlib import Path
 
 import httpx
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Image
 
 mcp = FastMCP("ultimate-assistant-canvas")
 GUIDE = Path(__file__).with_name("canvas_guide.md")
@@ -35,14 +35,19 @@ def _call(method: str, path: str, **kwargs) -> httpx.Response:
 def canvas_show(kind: str, title: str = "", body: str = "", devices: list[str] | None = None,
                 position: str | dict = "top-right", monitor: str | int = "active", ttl_seconds: int = 120,
                 id: str = "", image: str = "", shapes: list[dict] | None = None, color: str = "",
-                template: str = "", data: dict | None = None, ui: str = "", bare: bool = False, draggable: bool = False) -> str:
+                template: str = "", data: dict | None = None, ui: str = "", bare: bool = False, draggable: bool = False,
+                resizable: bool = False, monitor_locked: bool = False) -> str:
     """Put something on the canvas: your whiteboard and pinboard over the user's screens. Draw on it,
     pin photos, videos, notes and cards, or show small working tools, without taking their focus.
 
     kind: text | markdown | reminder | image | drawing | ui. Reuse an id to update a thing in place.
-    draggable: allow the user to move this item on the phone using its handle. Enable for floating
+    draggable: allow the user to move this item by its top edge (phone and PC). Enable for floating
     references/notes when useful; keep false for annotations aligned to app content. Content updates
     preserve the user placement; changing position resets it. Use finite TTLs for demonstrations.
+    resizable: allow the user to resize it from its bottom-right corner (PC), e.g. videos, images and
+    long notes. A resized item keeps its size across content updates; changing position resets it.
+    monitor_locked: a draggable item stays on its monitor (by default it can be dragged to another).
+    To pin something in place, leave draggable false and use ttl_seconds=0 so it stays until cleared.
     ttl_seconds: how long it stays (0 = until cleared). position: top-left ... bottom-right, center, or
     {"x", "y", "w"} in 0-1 of the monitor; monitor: "active", "all", "assistant" or a number;
     devices: ["pc"], ["phone"], a device name or ["everywhere"]. image: https URL or a file on the main PC.
@@ -54,7 +59,8 @@ def canvas_show(kind: str, title: str = "", body: str = "", devices: list[str] |
     Read canvas_guide("templates") or canvas_guide("markup") before your first card of a kind, and
     canvas_events for what the user did. Keep things small; clear them when done."""
     element = {"kind": kind, "devices": devices or ["pc"], "position": position, "monitor": monitor,
-               "ttl_seconds": ttl_seconds, "draggable": draggable, "agent": os.environ.get("HERALD_GATEWAY_PART", "")[-40:]}
+               "ttl_seconds": ttl_seconds, "draggable": draggable,
+               "resizable": resizable, "monitor_locked": monitor_locked, "agent": os.environ.get("HERALD_GATEWAY_PART", "")[-40:]}
     for key, value in (("id", id), ("title", title), ("body", body), ("image", image), ("color", color),
                        ("template", template), ("ui", ui), ("data", data), ("bare", bare)):
         if value:
@@ -139,6 +145,63 @@ def canvas_ask(question: str, options: list[str | dict], multi: bool = False, he
     return f"No answer yet; the question is still on the canvas as '{card_id}'. canvas_events(id='{card_id}') gets it later."
 
 
+def _marks_result(record: dict) -> list:
+    """The marks in words and numbers, then each screenshot with the marks drawn in."""
+    out: list = [json.dumps({k: record[k] for k in ("id", "device", "note", "description", "marks")},
+                            ensure_ascii=False)]
+    for index, image in enumerate(record.get("images", [])):
+        response = _call("GET", f"/marks/{quote(record['id'], safe='')}/images/{index}", timeout=60)
+        if response.status_code < 400:
+            out.append(Image(data=response.content, format="png" if image["type"] == "image/png" else "jpeg"))
+    return out
+
+
+@mcp.tool(structured_output=False)
+def canvas_point(prompt: str, devices: list[str] | None = None, tools: list[str] | None = None,
+                 wait_seconds: int = 120, monitor: str | int = "active"):
+    """Ask the user to point something out on their screen, and wait: their screen enters pointing
+    mode with your prompt, they mark what they mean and press Enter. Returns the marks (positions
+    in 0-1 of their monitor, the window under each) and a screenshot with the marks drawn in.
+    tools: any of point (a click), box (a drag), draw (freehand), window (a whole window); default all.
+    Use it when "which one?" is easier shown than said. devices: as canvas_show (default the PC)."""
+    request_id = "point-" + uuid.uuid4().hex[:10]
+    element = {"kind": "point", "id": request_id, "title": prompt[:200], "devices": devices or ["pc"],
+               "monitor": monitor, "ttl_seconds": max(30, min(wait_seconds, MAX_ASK_WAIT)) + 30,
+               "agent": os.environ.get("HERALD_GATEWAY_PART", "")[-40:]}
+    if tools:
+        element["tools"] = tools
+    response = _call("POST", "", json=element)
+    if response.status_code >= 400:
+        return "Error: " + response.text[:400]
+    deadline = time.monotonic() + max(5, min(wait_seconds, MAX_ASK_WAIT))
+    while (remaining := deadline - time.monotonic()) > 0:
+        response = _call("GET", "/events", params={"id": request_id, "after": 0, "wait": min(remaining, 110)},
+                         timeout=min(remaining, 110) + 30)
+        if response.status_code >= 400:
+            return "Error: " + response.text[:400]
+        for event in response.json()["events"]:
+            if event["type"] == "pointed":
+                found = _call("GET", "/marks", params={"id": (event.get("data") or {}).get("marks_id", "")})
+                records = found.json().get("marks", []) if found.status_code < 400 else []
+                return _marks_result(records[0]) if records else "The user pointed, but the marks were not found."
+            if event["type"] == "close":
+                return "The user left pointing mode without marking anything."
+    _call("DELETE", "", params={"id": request_id})
+    return "The user did not point at anything in time; pointing mode was closed."
+
+
+@mcp.tool(structured_output=False)
+def canvas_marks(id: str = "", device: str = ""):
+    """What the user pointed at on their own (pointing mode's hotkey, or while talking): the latest
+    marks, or one set by id (a turn's context names it), with the screenshot they marked."""
+    params = {k: v for k, v in (("id", id), ("device", device)) if v}
+    response = _call("GET", "/marks", params=params)
+    if response.status_code >= 400:
+        return "Error: " + response.text[:400]
+    records = response.json().get("marks", [])
+    return _marks_result(records[0]) if records else "The user hasn't pointed at anything recently."
+
+
 @mcp.tool()
 def canvas_clear(id: str = "", device: str = "") -> str:
     """Remove one element by id, or everything on a device (device="pc"), or everything (no arguments)."""
@@ -157,7 +220,7 @@ def canvas_list(device: str = "") -> str:
         return "Error: " + response.text[:400]
     elements = response.json()["elements"]
     return json.dumps([{k: e.get(k) for k in ("id", "kind", "template", "title", "devices", "monitor",
-                                               "ttl_seconds", "draggable", "state")
+                                               "ttl_seconds", "draggable", "resizable", "monitor_locked", "state")
                         if e.get(k) is not None and (k != "state" or e.get("kind") == "ui")}
                        for e in elements], ensure_ascii=False) if elements else "The canvas is empty."
 

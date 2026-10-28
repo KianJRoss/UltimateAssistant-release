@@ -2,7 +2,10 @@
 
 This development feature adds install-on-request modules to the assistant.
 It is separate from the v0.2.2 diagnostics release. The packaged catalog includes
-planning, work, finance, manager work, Google Calendar and Actual Budget.
+planning, work, finance, manager work, Google Calendar and Actual Budget. The source
+also includes a Gmail/Calendar `google-workspace` native CLI module pending publication;
+owner builds can install its archive through a private catalog. Its readiness checks
+require both services, and its OAuth state stays in persistent module data.
 Browsing the catalog does not start services or install packages. Docker is not
 required. Python MCP modules join the existing Herald scope; Node MCP modules
 and upstream native CLIs retain their own interfaces.

@@ -43,8 +43,10 @@ def _modules(data: dict) -> list[dict]:
 
 class ModuleManager:
     def __init__(self):
-        self.root = settings.user_data_dir / "modules"
-        folder = settings.user_settings_file.parent
+        # Tool subprocesses must use the parent runtime's module/account store,
+        # including runtimes that customize Settings in-process.
+        self.root = Path(os.environ.get("ULTIMATE_ASSISTANT_MODULES_DIR") or settings.user_data_dir / "modules")
+        folder = Path(os.environ.get("ULTIMATE_ASSISTANT_USER_ROOT") or settings.user_settings_file.parent)
         self.catalog_path = folder / "module-catalog.json"
         self.cache_path = folder / "module-catalog.cache.json"
         self.private_catalog_path = folder / "module-catalog.private.json"
@@ -158,7 +160,9 @@ class ModuleManager:
     def install(self, name: str) -> dict:
         m = self.manifest(name)
         previous = self.state(name)
-        if previous.get("manifest", {}).get("sha256") == m["sha256"]:
+        # Readiness rules, account isolation and other metadata can change while
+        # the executable archive stays identical. Apply the new manifest too.
+        if previous.get("manifest") == m:
             return self.enable(name)
         release = self.path(name) / "releases" / (m["version"] + "-" + m["sha256"][:12])
         if not release.exists():
@@ -277,6 +281,8 @@ class ModuleManager:
                       "env": {**configured["env"],
                               "ULTIMATE_ASSISTANT_MODULE_DATA": str(self.path(name) / "data"),
                               "PYTHONPATH": str(release / "source"),
+                              # The device's settings, for modules that honour the user's policies (omarchy).
+                              "ULTIMATE_ASSISTANT_SETTINGS_FILE": str(settings.user_settings_file),
                               # The assistant itself, for modules that launch it (Obsidian's ACP pane).
                               "ULTIMATE_ASSISTANT_PYTHON": sys.executable,
                               "ULTIMATE_ASSISTANT_APP": str(Path(__file__).resolve().parents[1]),
@@ -286,6 +292,8 @@ class ModuleManager:
             from .module_runtime import command, configuration
             config = {"command": command(release, manifest), "cwd": str(self.path(name) / "data"),
                       **configuration(self.path(name) / "data", manifest), "timeout": 60}
+        if manifest.get("context_tiers"):
+            config["context_tiers"] = manifest["context_tiers"]  # logged by node_link (context_use.py)
         if manifest.get("progressive_catalog"):
             # A big server behind guide/tools/describe/run (progressive_tools.py); stays on this device.
             from .module_runtime import local_path
@@ -331,7 +339,9 @@ class ModuleManager:
             except ValueError:
                 continue
             out.append({"id": entry["id"], "status": state["status"], "enabled": state.get("enabled", False),
-                        "installed_before": before})
+                        "installed_before": before,
+                        "capabilities": entry.get("provides_capabilities", [])
+                            if state.get("enabled") and state.get("status") == "ready" else []})
         return out
 
     def enable(self, name: str) -> dict:

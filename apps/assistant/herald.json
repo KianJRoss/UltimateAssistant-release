@@ -4,17 +4,17 @@
   "parts": [
     {
       "name": "herald-router",
-      "version": "0.3.0",
-      "file": "herald_router-0.3.0-py3-none-any.whl",
-      "sha256": "97e3878d1a04a659df4a6b11506324ec403225737cc51773ac2d84aa6cb58c41",
-      "url": "https://github.com/KianJRoss/herald-release/releases/download/v0.3.0/herald_router-0.3.0-py3-none-any.whl"
+      "version": "0.4.0",
+      "file": "herald_router-0.4.0-py3-none-any.whl",
+      "sha256": "fd9552258e04de636bdaf7f7eaa67e50ff7695b4d46f807df115c34a07d3c2c7",
+      "url": "https://github.com/KianJRoss/herald-release/releases/download/v0.4.0/herald_router-0.4.0-py3-none-any.whl"
     },
     {
       "name": "herald-sdk",
-      "version": "0.3.0",
-      "file": "herald_sdk-0.3.0-py3-none-any.whl",
-      "sha256": "a501dc65a6cd37c2b7cc501bdff121561c9abad91f150f214b8cf99a933a8287",
-      "url": "https://github.com/KianJRoss/herald-release/releases/download/v0.3.0/herald_sdk-0.3.0-py3-none-any.whl"
+      "version": "0.4.0",
+      "file": "herald_sdk-0.4.0-py3-none-any.whl",
+      "sha256": "b932ac7dc8c13f6ca2ebb19adba0fedf9aeeccf07b17dc28838a597a23b25644",
+      "url": "https://github.com/KianJRoss/herald-release/releases/download/v0.4.0/herald_sdk-0.4.0-py3-none-any.whl"
     }
   ]
 }

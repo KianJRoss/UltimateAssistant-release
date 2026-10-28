@@ -113,14 +113,31 @@
 <body class="setup-active">
   <main class="shell">
     <header>
-      <div class="brand"><div class="mark" aria-hidden="true">âœ¦</div><div><h1>Ultimate Assistant</h1><div class="sub">A voice-first companion, powered by Herald</div></div></div>
+      <div class="brand"><div class="mark" aria-hidden="true">✦</div><div><h1>Ultimate Assistant</h1><div class="sub">A voice-first companion, powered by Herald</div></div></div>
       <div class="controls"><select id="model" aria-label="Active model"></select><button id="newChat" class="icon-button" title="Start a separate conversation; saved memories remain available">New chat</button><button id="clearHistory" class="icon-button" title="Delete this conversation only; durable memories remain">Clear chat</button><div id="status" class="status">Connecting</div></div>
     </header>
     <section id="setupWizard" aria-live="polite" aria-label="Connect your AI account"><p>Getting ready...</p></section>
     <button id="manageAccounts" class="account-manage">Connect another account</button>
+    <details id="decisionPanel" class="integrations">
+      <summary>Quick decisions (optional)</summary>
+      <div class="connector-card">
+        <label>How small decisions are made
+          <select id="decisionRoute" aria-label="Decision route">
+            <option value="llm">Your AI model only (default, no extra service)</option>
+            <option value="decision_model">Mixed: your AI model plus a decision model where it measured well</option>
+          </select></label>
+        <label>Provider (optional) <input id="decisionProvider" list="decisionProviderNames" maxlength="128" placeholder="Empty: the Router's default"></label>
+        <datalist id="decisionProviderNames"></datalist>
+        <label>Model (optional) <input id="decisionModel" maxlength="500" placeholder="Empty: the Router's default"></label>
+        <button id="saveDecisionSettings" type="button">Save</button>
+        <div id="decisionSuggestions" class="sub"></div>
+        <div id="decisionMeasured" class="sub" role="status" aria-live="polite"></div>
+        <div class="sub">A separate decision model is optional. You can change this choice later. Decision usage records contain timings, tokens and cost when known.</div>
+      </div>
+    </details>
     <details id="providerPanel" class="integrations">
       <summary>Advanced account settings</summary>
-      <div id="providerActive" role="status">Checking your local Routerâ€¦</div>
+      <div id="providerActive" role="status">Checking your local Router…</div>
       <div class="connector-card">
         <label>Subscription CLI or profile <select id="providerChoice"><option value="antigravity">Google Antigravity</option></select></label>
         <label>Account name (optional) <input id="providerName" maxlength="120" placeholder="Use the existing account, or name a new one"></label>
@@ -170,23 +187,24 @@
       </details>
     </details>
     <section id="chat" class="chat" aria-live="polite">
-      <div class="welcome" id="welcome"><div class="welcome-icon">âœ¦</div><h2>What can I help with?</h2><p>Tap the microphone to talk, or type below. Iâ€™ll show the transcript and reply here.</p></div>
+      <div class="welcome" id="welcome"><div class="welcome-icon">✦</div><h2>What can I help with?</h2><p>Tap the microphone to talk, or type below. I’ll show the transcript and reply here.</p></div>
     </section>
     <section class="composer">
       <input id="fileInput" type="file" hidden multiple accept=".txt,.md,.csv,.tsv,.json,.html,.htm,.xml,.pdf,.docx,.pptx,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.bmp">
       <div class="attachment-row"><button id="attachFile" class="icon-button" title="Attach a document or image">Attach file</button><div id="attachmentList"></div><span>Documents and images; text extraction/OCR runs locally.</span></div>
-      <textarea id="message" aria-label="Message" placeholder="Message your assistantâ€¦ (Enter to send, Shift+Enter for a new line)"></textarea>
+      <textarea id="message" aria-label="Message" placeholder="Message your assistant… (Enter to send, Shift+Enter for a new line)"></textarea>
       <div class="composer-bottom">
         <div class="options">
           <label title="Search the web before answering"><input id="web" type="checkbox"> Web search</label>
           <label title="Read the reply aloud using a voice on this device"><input id="speak" type="checkbox" checked> Speak replies</label>
+          <label title="Hands-free verbal conversation: automatically send when you pause and listen again after each spoken reply"><input id="continuousVoice" type="checkbox" checked> Back-and-forth voice</label>
         </div>
-        <div class="actions"><button id="mic" class="icon-button" title="Start voice input" aria-label="Start voice input">ðŸŽ™</button><button id="send">Send</button></div>
+        <div class="actions"><button id="mic" class="icon-button" title="Start voice input" aria-label="Start voice input">🎙</button><button id="send">Send</button></div>
       </div>
     </section>
     <section class="voice-settings" aria-label="Voice settings">
       <label>Microphone <select id="micDevice" aria-label="Microphone input device"><option value="default">System default</option></select></label>
-      <button id="refreshMics" class="icon-button" title="Refresh microphone devices and request microphone access">â†» Mic</button>
+      <button id="refreshMics" class="icon-button" title="Refresh microphone devices and request microphone access">↻ Mic</button>
       <label>Assistant name <input id="wakeName" type="text" maxlength="30" value="Herald"></label>
       <label>Speech engine <select id="ttsProvider"><option value="device">Device voice</option><option value="elevenlabs">ElevenLabs</option><option value="kokoro">Kokoro (local)</option></select></label>
       <label>Reply voice <select id="voice"><option value="">System default</option></select></label>
@@ -203,26 +221,26 @@
     </details>
     <details id="integrationsPanel" class="integrations">
       <summary>Connected Herald tools</summary>
-      <div class="sub" id="workspaceStatus">Workspace tools are loadingâ€¦</div>
+      <div class="sub" id="workspaceStatus">Workspace tools are loading…</div>
       <label><input id="desktopVision" type="checkbox"> Enable desktop vision (screen capture, OCR, and perception tools)</label>
       <div class="sub" id="visionStatus">Desktop vision is off for this assistant.</div>
       <label><input id="desktopControl" type="checkbox"> Enable desktop control (focus, type, hotkeys, launch/close apps)</label>
       <div class="sub" id="controlStatus">Desktop control is off for this assistant.</div>
-      <ul id="integrationList"><li>Loading scoped integrationsâ€¦</li></ul>
+      <ul id="integrationList"><li>Loading scoped integrations…</li></ul>
     </details>
     <details id="connectorPanel" class="integrations">
       <summary>Connect apps and MCPs</summary>
-      <div class="sub">The assistant leads setup: it checks what is already installed, does the safe machine-side work with the selected CLIâ€™s native tools, connects and verifies what it can, then guides you through only account-specific steps. The list is examples, not a whitelist. Google sign-in, MFA, API keys, and local app plugins stay under your control; never paste secrets into chat.</div>
+      <div class="sub">The assistant leads setup: it checks what is already installed, does the safe machine-side work with the connected model’s tools (a subscription CLI’s own tools, or Herald’s for an API key), connects and verifies what it can, then guides you through only account-specific steps. The list is examples, not a whitelist. Google sign-in, MFA, API keys, and local app plugins stay under your control; never paste secrets into chat.</div>
       <div class="connector-card">
         <strong>Set up a school portal</strong>
-        <div class="sub">Works with your schoolâ€™s actual site; the assistant will help identify it, open it, and learn its pages with you. You handle sign-in and MFA.</div>
+        <div class="sub">Works with your school’s actual site; the assistant will help identify it, open it, and learn its pages with you. You handle sign-in and MFA.</div>
         <button id="schoolOnboarding" type="button">Set up my school</button>
       </div>
       <form id="appOnboarding" class="task-add">
         <input id="appOnboardingName" type="text" maxlength="120" placeholder="Another app, MCP, or service" aria-label="App or service to set up" required>
         <button type="submit">Set it up with assistant</button>
       </form>
-      <div id="connectorList" class="connector-list">Loading connector optionsâ€¦</div>
+      <div id="connectorList" class="connector-list">Loading connector options…</div>
       <div class="connector-card">
         <strong>Browser access: Kapture and Playwright MCP</strong>
         <div class="sub">Use either or both. Kapture reads and controls tabs in your existing Chrome or Chromium browser. Playwright automates a separate browser profile. Vision is optional.</div>
@@ -244,8 +262,8 @@
         <button type="submit">Remember</button>
       </form>
       <div class="task-add"><input id="memoryEmbeddingModel" type="text" maxlength="120" placeholder="Optional local Ollama embedding model (e.g. nomic-embed-text)" aria-label="Ollama embedding model"><button id="saveMemoryEmbedding" type="button">Set vector model</button></div>
-      <div id="memoryVectorStatus" class="sub">Checking memory search modeâ€¦</div>
-      <div id="persistentMemoryList" class="task-list" aria-live="polite">Loading saved memoriesâ€¦</div>
+      <div id="memoryVectorStatus" class="sub">Checking memory search mode…</div>
+      <div id="persistentMemoryList" class="task-list" aria-live="polite">Loading saved memories…</div>
       <details><summary>This conversation's carry-forward summary</summary><div id="memorySummary">No summary stored yet; recent conversation remains verbatim.</div></details>
     </details>
     <details class="integrations">
@@ -269,7 +287,7 @@
         <input id="taskEstimate" type="number" min="1" max="1440" placeholder="Minutes" aria-label="Estimated minutes (optional)">
         <button type="submit">Add</button>
       </form>
-      <div id="taskList" class="task-list" aria-live="polite"><div class="task-empty">Loading your tasksâ€¦</div></div>
+      <div id="taskList" class="task-list" aria-live="polite"><div class="task-empty">Loading your tasks…</div></div>
     </section>
     <section class="portal" aria-label="Academic portal discovery">
       <div class="portal-controls"><input id="portalUrl" type="url" placeholder="https://your-school-portal.example" aria-label="School portal URL"><button id="portalOpen">Open portal in Edge</button><button id="portalDemo">Open fake school</button><button id="portalInspect">Inspect page</button><button id="portalClose">Close portal</button></div>
@@ -303,6 +321,11 @@
     let wakeMode = false;
     let wakeArmed = false;
     let voiceMode = '';
+    let conversationVoiceActive = false;
+    let activeReplyAudio = null;
+    let vadStopCleanup = null;
+    let discardNextRecording = false;
+    const farewellRegex = /^\s*(?:okay\s+|ok\s+|alright\s+|hey\s+|well\s+)?(?:thank(?:s|\s+you)(?:\s+so\s+much|\s+very\s+much)?[\s,.!]*)?(?:that(?:'s|\s+is)\s+all|that(?:'s|\s+is)\s+it|nothing\s+else|stop\s+listening|end\s+(?:the\s+)?conversation|goodbye|bye(?:\s+for\s+now)?|see\s+you(?:\s+later)?|never\s*mind|i(?:'m|\s+am)\s+done|all\s+good(?:\s+now)?)[\s.!?,]*$/i;
     let conversationId = localStorage.getItem('assistant-conversation-id') || crypto.randomUUID();
     localStorage.setItem('assistant-conversation-id', conversationId);
     const pendingAttachments = [];
@@ -311,9 +334,14 @@
     wakeNameInput.value = localStorage.getItem('assistant-wake-name') || 'Herald';
     rateInput.value = localStorage.getItem('assistant-voice-rate') || '1';
     document.getElementById('speak').checked = localStorage.getItem('assistant-speak') !== 'false';
+    document.getElementById('continuousVoice').checked = localStorage.getItem('assistant-continuous-voice') !== 'false';
     wakeNameInput.addEventListener('change', () => localStorage.setItem('assistant-wake-name', wakeNameInput.value.trim() || 'Herald'));
     rateInput.addEventListener('input', () => localStorage.setItem('assistant-voice-rate', rateInput.value));
     document.getElementById('speak').addEventListener('change', event => localStorage.setItem('assistant-speak', event.target.checked));
+    document.getElementById('continuousVoice').addEventListener('change', event => {
+      localStorage.setItem('assistant-continuous-voice', event.target.checked);
+      if (!event.target.checked) conversationVoiceActive = false;
+    });
 
     async function refreshMicrophones(requestPermission = false) {
       try {
@@ -457,7 +485,7 @@
         chip.className = 'attachment-chip';
         chip.append(document.createTextNode(`${file.filename}${file.truncated ? ' (text clipped)' : ''}`));
         const remove = document.createElement('button');
-        remove.textContent = 'Ã—';
+        remove.textContent = '×';
         remove.title = `Remove ${file.filename}`;
         remove.addEventListener('click', () => { pendingAttachments.splice(index, 1); renderAttachments(); });
         chip.appendChild(remove);
@@ -472,7 +500,7 @@
         if (pendingAttachments.length >= 5) { addMessage('assistant', 'Attach up to five files per message.', true); break; }
         if (file.size > 15 * 1024 * 1024) { addMessage('assistant', `${file.name} exceeds the 15 MB limit.`, true); continue; }
         try {
-          statusText.textContent = `Extracting ${file.name}â€¦`;
+          statusText.textContent = `Extracting ${file.name}…`;
           const response = await fetch('/api/files/extract', {
             method: 'POST',
             headers: { 'X-Ultimate-Assistant-Token': token, 'Content-Type': file.type || 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name) },
@@ -501,7 +529,7 @@
           modelSelect.appendChild(option);
         }
         modelSelect.value = result.selected;
-        statusText.textContent = result.models.length ? `Ready Â· ${result.runner_host}` : 'Choose a provider to begin';
+        statusText.textContent = result.models.length ? `Ready · ${result.runner_host}` : 'Choose a provider to begin';
       } catch (error) {
         statusText.textContent = 'Router offline';
         addMessage('assistant', error.message, true);
@@ -525,7 +553,7 @@
         loginAccount = selected?.name || '';
         const installed = state.providers.find(p => p.id === document.getElementById('providerChoice').value)?.installed;
         document.getElementById('providerActive').textContent = selected
-          ? `Active: ${selected.name} (${selected.adapter}) Â· ${selected.status} Â· local Herald Router`
+          ? `Active: ${selected.name} (${selected.adapter}) · ${selected.status} · local Herald Router`
           : 'Waiting: choose and connect your provider account';
         document.getElementById('installProvider').disabled = installed;
         document.getElementById('loginProvider').disabled = !selected?.login?.login;
@@ -548,7 +576,7 @@
     document.getElementById('installProvider').onclick = async () => {
       const button = document.getElementById('installProvider');
       button.disabled = true;
-      document.getElementById('providerLoginOutput').textContent = 'Installing from the official providerâ€¦';
+      document.getElementById('providerLoginOutput').textContent = 'Installing from the official provider…';
       try { await api('/api/onboarding/install', {provider: document.getElementById('providerChoice').value});
         document.getElementById('providerLoginOutput').textContent = 'Installed. Select Use this provider, then Sign in.';
       } catch (error) { document.getElementById('providerLoginOutput').textContent = `Blocked: ${error.message}`; }
@@ -647,7 +675,7 @@
     for (const [id, operation] of [['checkUpdate','check'], ['installUpdate','install'], ['rollbackUpdate','rollback']]) {
       document.getElementById(id).onclick = async () => {
         document.getElementById(id).disabled = true;
-        document.getElementById('updateStatus').textContent = 'Workingâ€¦';
+        document.getElementById('updateStatus').textContent = 'Working…';
         try { await api(`/api/updates/${operation}`, {}); await refreshUpdates(); }
         catch (error) { document.getElementById('updateStatus').textContent = `Blocked: ${error.message}`; }
         finally { document.getElementById(id).disabled = false; }
@@ -657,9 +685,9 @@
     for (const [id,browser,operation] of [['setupKapture','kapture','setup'], ['verifyKapture','kapture','verify'], ['setupPlaywright','playwright','setup'], ['verifyPlaywright','playwright','verify'], ['disconnectKapture','kapture','disconnect'], ['disconnectPlaywright','playwright','disconnect']]) {
       document.getElementById(id).onclick = async () => {
         document.getElementById(id).disabled = true;
-        document.getElementById('browserSetupStatus').textContent = 'Discovering browser toolsâ€¦';
+        document.getElementById('browserSetupStatus').textContent = 'Discovering browser tools…';
         try { const result = await api(`/api/browser/${operation}`, {browser});
-          document.getElementById('browserSetupStatus').textContent = `${browser}: ${result.status} â€” ${result.detail}`;
+          document.getElementById('browserSetupStatus').textContent = `${browser}: ${result.status} — ${result.detail}`;
           await refreshIntegrations();
         } catch (error) { document.getElementById('browserSetupStatus').textContent = `Blocked: ${error.message}`; }
         finally { document.getElementById(id).disabled = false; }
@@ -675,7 +703,7 @@
           instances.has('ultimate-assistant-filesystem') ? 'files' : 'filesystem MCP unavailable',
           instances.has('ultimate-assistant-shell') ? 'shell' : 'shell MCP unavailable'
         ];
-        document.getElementById('workspaceStatus').textContent = `Work folder: ${result.files_root} Â· ${workspaceParts.join(' Â· ')}`;
+        document.getElementById('workspaceStatus').textContent = `Work folder: ${result.files_root} · ${workspaceParts.join(' · ')}`;
         const visionToggle = document.getElementById('desktopVision');
         visionToggle.checked = result.desktop_vision_enabled;
         document.getElementById('visionStatus').textContent = result.desktop_vision_enabled
@@ -695,7 +723,7 @@
         }
         for (const tool of result.tools) {
           const item = document.createElement('li');
-          item.textContent = `${tool.name}${tool.instance ? ` Â· ${tool.instance}` : ''}${tool.description ? ` â€” ${tool.description}` : ''}`;
+          item.textContent = `${tool.name}${tool.instance ? ` · ${tool.instance}` : ''}${tool.description ? ` — ${tool.description}` : ''}`;
           list.appendChild(item);
         }
         if (result.discovery_errors.length) {
@@ -720,7 +748,7 @@
           const card = document.createElement('div');
           card.className = 'connector-card';
           const title = document.createElement('strong');
-          title.textContent = `${connector.name} Â· ${connector.status.replaceAll('_', ' ')}`;
+          title.textContent = `${connector.name} · ${connector.status.replaceAll('_', ' ')}`;
           const description = document.createElement('div');
           description.className = 'sub';
           description.textContent = connector.setup;
@@ -739,7 +767,7 @@
             const save = document.createElement('button'); save.type = 'submit'; save.textContent = 'Verify and connect Zotero';
             form.append(userId, apiKey, save);
             form.addEventListener('submit', async event => {
-              event.preventDefault(); save.disabled = true; save.textContent = 'Verifyingâ€¦';
+              event.preventDefault(); save.disabled = true; save.textContent = 'Verifying…';
               try {
                 await api('/api/connectors/zotero', { user_id: userId.value.trim(), api_key: apiKey.value });
                 apiKey.value = '';
@@ -755,7 +783,7 @@
           card.append(title, description, actions);
           if (connector.status === 'connected') {
             const connected = document.createElement('div'); connected.className = 'sub';
-            connected.textContent = 'Herald reports this connectorâ€™s tools are available to the assistant.';
+            connected.textContent = 'Herald reports this connector’s tools are available to the assistant.';
             card.appendChild(connected);
           } else {
             const button = document.createElement('button');
@@ -822,7 +850,7 @@
       try {
         const result = await api(`/api/conversations/${encodeURIComponent(conversationId)}`);
         if (result.messages.length) {
-          document.getElementById('welcome')?.remove();
+          chat.replaceChildren();
           for (const [messageIndex, item] of result.messages.entries()) {
             const row = addMessage(item.role, item.content, false, item.id);
             if (item.activity?.length) {
@@ -837,16 +865,63 @@
       } catch (error) { addMessage('assistant', `Could not load saved conversation: ${error.message}`, true); }
       await refreshConversationMemory();
     }
+    let lastDesktopUpdated = 0;
+    let lastDesktopState = 'idle';
+    async function syncDesktopConversation(id) {
+      try {
+        await fetch('/api/desktop/state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ conversation_id: id })
+        });
+      } catch {}
+    }
+    async function pollDesktopVoiceState() {
+      if (sendButton.disabled || listening) return;
+      try {
+        const res = await fetch('/api/desktop/state', { cache: 'no-store' });
+        if (!res.ok) return;
+        const d = await res.json();
+        const st = d.state || 'idle';
+        const cid = d.conversation_id || '';
+        const updated = Number(d.updated_at || 0);
+        const stateLabels = {
+          recording: 'Listening on desktop (Super+A)…',
+          transcribing: 'Transcribing speech…',
+          thinking: 'Assistant thinking…',
+          speaking: 'Assistant speaking…'
+        };
+        if (stateLabels[st]) {
+          statusText.textContent = stateLabels[st];
+        } else if (lastDesktopState !== 'idle' && st === 'idle') {
+          statusText.textContent = d.conversation_active ? 'Listening for follow-up…' : 'Ready';
+        }
+        const convChanged = cid && cid !== conversationId;
+        const turnUpdated = updated > lastDesktopUpdated && (st === 'thinking' || st === 'speaking' || (lastDesktopState !== 'idle' && st === 'idle'));
+        lastDesktopState = st;
+        if (updated > lastDesktopUpdated) lastDesktopUpdated = updated;
+        if (convChanged || turnUpdated) {
+          if (convChanged) {
+            conversationId = cid;
+            localStorage.setItem('assistant-conversation-id', conversationId);
+          }
+          await loadConversation();
+        }
+      } catch {}
+    }
+    setInterval(() => { if (!document.hidden) void pollDesktopVoiceState(); }, 1200);
+    void pollDesktopVoiceState();
     document.getElementById('newChat').addEventListener('click', async () => {
       if (sendButton.disabled) { statusText.textContent = 'Wait for the current reply before starting a new chat'; return; }
       conversationId = crypto.randomUUID();
       localStorage.setItem('assistant-conversation-id', conversationId);
+      void syncDesktopConversation(conversationId);
       chat.replaceChildren();
       pendingAttachments.splice(0, pendingAttachments.length);
       renderAttachments();
       const welcome = document.createElement('div');
       welcome.className = 'welcome'; welcome.id = 'welcome';
-      welcome.innerHTML = '<div class="welcome-icon">âœ¦</div><h2>New conversation</h2><p>Your saved memories are available here too.</p>';
+      welcome.innerHTML = '<div class="welcome-icon">✦</div><h2>New conversation</h2><p>Your saved memories are available here too.</p>';
       chat.appendChild(welcome);
       await refreshConversationMemory();
     });
@@ -876,7 +951,7 @@
           const row = document.createElement('div'); row.className = 'task-item';
           const info = document.createElement('div'); info.className = 'task-info';
           const title = document.createElement('div'); title.className = 'task-title';
-          title.textContent = `${memory.title} Â· ${memory.category}`;
+          title.textContent = `${memory.title} · ${memory.category}`;
           const content = document.createElement('div'); content.className = 'task-meta'; content.textContent = memory.content;
           info.append(title, content);
           const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Edit';
@@ -954,8 +1029,8 @@
             else due = `Due ${dueDate.toLocaleDateString()}`;
           }
           const kind = task.kind === 'study_recovery' ? 'Study recovery' : task.domain;
-          const estimate = task.estimated_minutes ? ` Â· ${task.estimated_minutes} min` : '';
-          meta.textContent = `${kind} Â· ${due}${estimate}${task.status === 'in_progress' ? ' Â· in progress' : ''}`;
+          const estimate = task.estimated_minutes ? ` · ${task.estimated_minutes} min` : '';
+          meta.textContent = `${kind} · ${due}${estimate}${task.status === 'in_progress' ? ' · in progress' : ''}`;
           info.append(title, meta);
           const dateInput = document.createElement('input');
           dateInput.type = 'date';
@@ -1028,7 +1103,7 @@
 
     const portalOutput = document.getElementById('portalOutput');
     async function portalAction(path, body) {
-      portalOutput.textContent = 'Workingâ€¦';
+      portalOutput.textContent = 'Working…';
       try {
         const result = await api(path, body);
         if (path.endsWith('/open')) portalOutput.textContent = `Opened ${result.title || 'portal'}. Sign in and complete MFA in Edge, then inspect the page or enter a goal for AI exploration.`;
@@ -1156,8 +1231,8 @@
       const userRow = addMessage('user', prompt);
       message.value = '';
       sendButton.disabled = true;
-      statusText.textContent = 'Thinkingâ€¦';
-      const typing = addMessage('assistant', 'Thinkingâ€¦');
+      statusText.textContent = 'Thinking…';
+      const typing = addMessage('assistant', 'Thinking…');
       typing.classList.add('typing-row');
       const activity = activityPanel(userRow);
       const timer = setInterval(() => { statusText.textContent = 'Still running - no new activity received.'; }, 15000);
@@ -1202,6 +1277,7 @@
               switched = data;
               conversationId = data.conversation_id;
               localStorage.setItem('assistant-conversation-id', conversationId);
+              void syncDesktopConversation(conversationId);
               statusText.textContent = data.kind === 'new' ? 'New conversation' : `Back to: ${data.title || 'earlier conversation'}`;
             } else if (event === 'complete') result = data;
             else if (event === 'error') throw new Error(typeof data === 'string' ? data : 'The request failed.');
@@ -1230,7 +1306,7 @@
         await refreshConversationMemory();
         await refreshMemories();
         statusText.textContent = result.model;
-        if (document.getElementById('speak').checked) void speakReply(result.reply);
+        if (document.getElementById('speak').checked) void speakReply(result.reply, { afterFinalReply: true });
       } catch (error) {
         typing.remove();
         addMessage('assistant', error.message, true);
@@ -1243,10 +1319,23 @@
       }
     }
 
-    async function speakReply(text) {
-      if (ttsProviderSelect.value === 'device') return speakWithDevice(text);
+    function maybeContinueVoiceAfterSpeech(options = {}) {
+      if (!options.afterFinalReply) return;
+      if (conversationVoiceActive && document.getElementById('continuousVoice')?.checked && document.getElementById('speak')?.checked) {
+        window.setTimeout(() => {
+          if (conversationVoiceActive && !listening) void startRecording({ followup: true });
+        }, 180);
+      }
+    }
+
+    async function speakReply(text, options = {}) {
+      if (ttsProviderSelect.value === 'device') return speakWithDevice(text, options);
       try {
-        statusText.textContent = `Generating ${ttsProviderSelect.value} speechâ€¦`;
+        if (activeReplyAudio) {
+          try { activeReplyAudio.pause(); } catch {}
+          activeReplyAudio = null;
+        }
+        statusText.textContent = `Generating ${ttsProviderSelect.value} speech…`;
         const response = await fetch('/api/tts', {
           method: 'POST',
           headers: { 'X-Ultimate-Assistant-Token': token, 'Content-Type': 'application/json' },
@@ -1263,28 +1352,37 @@
         }
         const audioUrl = URL.createObjectURL(await response.blob());
         const audio = new Audio(audioUrl);
-        audio.onended = () => URL.revokeObjectURL(audioUrl);
-        audio.onerror = () => URL.revokeObjectURL(audioUrl);
+        activeReplyAudio = audio;
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          if (activeReplyAudio === audio) activeReplyAudio = null;
+          maybeContinueVoiceAfterSpeech(options);
+        };
+        audio.onerror = () => {
+          URL.revokeObjectURL(audioUrl);
+          if (activeReplyAudio === audio) activeReplyAudio = null;
+        };
         await audio.play();
-        statusText.textContent = `Speaking Â· ${response.headers.get('X-TTS-Provider') || ttsProviderSelect.value}`;
+        statusText.textContent = `Speaking · ${response.headers.get('X-TTS-Provider') || ttsProviderSelect.value}`;
       } catch (error) {
-        statusText.textContent = 'Speech fallback Â· device voice';
-        if (!speakWithDevice(text)) addMessage('assistant', error.message, true);
+        statusText.textContent = 'Speech fallback · device voice';
+        if (!speakWithDevice(text, options)) addMessage('assistant', error.message, true);
       }
     }
 
-    function speakWithDevice(text) {
+    function speakWithDevice(text, options = {}) {
       if (!('speechSynthesis' in window)) return false;
       speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = Number(rateInput.value);
       utterance.voice = speechSynthesis.getVoices().find(voice => voice.name === voiceSelect.value) || null;
+      utterance.onend = () => maybeContinueVoiceAfterSpeech(options);
       speechSynthesis.speak(utterance);
       return true;
     }
 
     document.getElementById('previewVoice').addEventListener('click', () => {
-      void speakReply('Hi, Iâ€™m Herald. What would you like to work on?');
+      void speakReply('Hi, I’m Herald. What would you like to work on?');
     });
 
     sendButton.addEventListener('click', () => sendMessage());
@@ -1335,12 +1433,21 @@
       wakeButton.title = 'Wake listening is not supported by this browser';
     }
 
-    async function startRecording() {
+    async function startRecording(options = {}) {
       if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
         statusText.textContent = 'Audio recording is not supported by this browser';
         return;
       }
       if (wakeMode) stopWakeMode();
+      if (activeReplyAudio) {
+        try { activeReplyAudio.pause(); } catch {}
+        activeReplyAudio = null;
+      }
+      speechSynthesis?.cancel();
+      const isContinuous = Boolean(document.getElementById('continuousVoice')?.checked);
+      const isFollowup = Boolean(options.followup);
+      conversationVoiceActive = isContinuous;
+      discardNextRecording = false;
       const deviceId = micDeviceSelect.value;
       const audio = deviceId === 'default' ? true : { deviceId: { exact: deviceId } };
       try {
@@ -1352,6 +1459,7 @@
         mediaRecorder.ondataavailable = event => { if (event.data?.size) recordedChunks.push(event.data); };
         mediaRecorder.onstop = async () => {
           clearTimeout(recordingTimer);
+          if (vadStopCleanup) { vadStopCleanup(); vadStopCleanup = null; }
           const blob = new Blob(recordedChunks, { type: mediaRecorder?.mimeType || 'audio/webm' });
           recordingStream?.getTracks().forEach(track => track.stop());
           recordingStream = null;
@@ -1361,8 +1469,12 @@
           micButton.classList.remove('listening');
           micButton.title = 'Start voice input';
           wakeButton.disabled = !SpeechRecognition;
-          if (!blob.size) { statusText.textContent = 'No microphone audio was recorded'; return; }
-          statusText.textContent = 'Transcribing through Heraldâ€¦';
+          if (discardNextRecording || !blob.size) {
+            discardNextRecording = false;
+            statusText.textContent = 'Voice conversation ended';
+            return;
+          }
+          statusText.textContent = 'Transcribing through Herald…';
           try {
             const response = await fetch('/api/transcribe', {
               method: 'POST',
@@ -1370,10 +1482,19 @@
               body: blob
             });
             const data = await response.json();
-            if (!response.ok) throw new Error(data.detail || 'Transcription failed.');
+            if (!response.ok) {
+              if (response.status === 422 && (isFollowup || conversationVoiceActive)) {
+                conversationVoiceActive = false;
+                statusText.textContent = 'Voice conversation ended';
+                return;
+              }
+              throw new Error(data.detail || 'Transcription failed.');
+            }
+            if (farewellRegex.test(data.text || '')) conversationVoiceActive = false;
             message.value = data.text;
             sendMessage();
           } catch (error) {
+            conversationVoiceActive = false;
             statusText.textContent = 'Transcription failed';
             addMessage('assistant', error.message, true);
           }
@@ -1381,10 +1502,72 @@
         mediaRecorder.start();
         listening = true;
         wakeButton.disabled = true;
-        speechSynthesis?.cancel();
         micButton.classList.add('listening');
-        micButton.title = 'Recording â€” tap to finish and send';
-        statusText.textContent = `Recording Â· ${micDeviceSelect.selectedOptions[0]?.textContent || 'microphone'}`;
+        micButton.title = isContinuous ? 'Listening (back-and-forth) — pause to send, or tap while silent to stop' : 'Recording — tap to finish and send';
+        statusText.textContent = isFollowup
+          ? 'Listening for your reply… (pause to send, or stay silent to finish)'
+          : `Listening · ${micDeviceSelect.selectedOptions[0]?.textContent || 'microphone'}`;
+        if (isContinuous && (window.AudioContext || window.webkitAudioContext)) {
+          try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            const audioCtx = new AudioCtx();
+            const source = audioCtx.createMediaStreamSource(recordingStream);
+            const analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 1024;
+            source.connect(analyser);
+            const samples = new Float32Array(analyser.fftSize);
+            const startedAt = performance.now();
+            let noiseFloor = 0.008;
+            let speechHits = 0;
+            let speechDetected = false;
+            let silenceSince = null;
+            const vadInterval = window.setInterval(() => {
+              if (mediaRecorder?.state !== 'recording') return;
+              const now = performance.now();
+              if (now - startedAt < 280) return;
+              analyser.getFloatTimeDomainData(samples);
+              let mean = 0;
+              for (let i = 0; i < samples.length; i++) mean += samples[i];
+              mean /= samples.length;
+              let sq = 0;
+              for (let i = 0; i < samples.length; i++) {
+                const d = samples[i] - mean;
+                sq += d * d;
+              }
+              const rms = Math.sqrt(sq / samples.length);
+              const speechThreshold = Math.max(0.015, noiseFloor * 3.0);
+              const silenceThreshold = Math.max(0.009, noiseFloor * 1.8);
+              if (rms >= speechThreshold) {
+                speechHits += 1;
+                silenceSince = null;
+                if (speechHits >= 2) speechDetected = true;
+              } else {
+                speechHits = 0;
+                if (!speechDetected) {
+                  noiseFloor = Math.max(0.003, Math.min(0.025, noiseFloor * 0.85 + rms * 0.15));
+                  if (now - startedAt >= 10000) {
+                    conversationVoiceActive = false;
+                    discardNextRecording = true;
+                    mediaRecorder.stop();
+                  }
+                } else if (rms < silenceThreshold) {
+                  if (silenceSince === null) silenceSince = now;
+                  else if (now - silenceSince >= 1300) {
+                    mediaRecorder.stop();
+                  }
+                } else {
+                  silenceSince = null;
+                }
+              }
+            }, 100);
+            vadStopCleanup = () => {
+              window.clearInterval(vadInterval);
+              vadStopCleanup = null;
+              audioCtx.close().catch(() => {});
+            };
+            micButton.dataset.hasSpeech = () => String(speechDetected);
+          } catch {}
+        }
         recordingTimer = window.setTimeout(() => {
           if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
         }, 120000);
@@ -1397,9 +1580,20 @@
     }
 
     micButton.addEventListener('click', () => {
-      if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
-      else void startRecording();
+      if (mediaRecorder?.state === 'recording') {
+        if (conversationVoiceActive && isFollowupSilentStop()) {
+          conversationVoiceActive = false;
+          discardNextRecording = true;
+        }
+        mediaRecorder.stop();
+      } else {
+        void startRecording();
+      }
     });
+
+    function isFollowupSilentStop() {
+      return statusText.textContent.startsWith('Listening');
+    }
 
     document.addEventListener('keydown', event => {
       if (event.altKey && event.code === 'Space' && !event.repeat) {
@@ -1432,7 +1626,7 @@
       try {
         recognition.start();
         listening = true;
-        statusText.textContent = `Listening for â€œ${wakeNameInput.value.trim() || 'Herald'}â€`;
+        statusText.textContent = `Listening for “${wakeNameInput.value.trim() || 'Herald'}”`;
       } catch (error) { stopWakeMode(); statusText.textContent = `Voice unavailable: ${error.message}`; }
     }
 
@@ -1651,6 +1845,39 @@
 
     refreshIntegrations();
     refreshTasks();
+    async function refreshDecisionSettings() {
+      const status = document.getElementById('decisionMeasured');
+      try {
+        const state = await api('/api/decision-settings');
+        document.getElementById('decisionRoute').value = state.route;
+        document.getElementById('decisionProvider').value = state.provider || '';
+        document.getElementById('decisionModel').value = state.model || '';
+        const box = document.getElementById('decisionSuggestions'); box.replaceChildren();
+        for (const item of state.suggestions) {
+          const line = document.createElement('div'); line.textContent = `${item.label}: ${item.text}`; box.append(line);
+        }
+        const rows = Object.entries(state.measured || {}).map(([route, m]) =>
+          `${route}: ${m.runs} runs, median ${m.median_latency_ms ?? 'unknown'} ms, cost ${m.cost_usd === null ? 'unknown' : '$' + m.cost_usd} (${m.cost_known} of ${m.runs} reported)`);
+        status.textContent = rows.length ? `Measured here: ${rows.join('; ')}` : 'No decisions measured on this computer yet.';
+      } catch (error) { status.textContent = `Decision settings unavailable: ${error.message}`; }
+    }
+    document.getElementById('saveDecisionSettings').addEventListener('click', async () => {
+      try {
+        await api('/api/decision-settings', { route: document.getElementById('decisionRoute').value,
+          provider: document.getElementById('decisionProvider').value.trim(),
+          model: document.getElementById('decisionModel').value.trim() }, 'PUT');
+        await refreshDecisionSettings();
+      } catch (error) { statusText.textContent = error.message; }
+    });
+    refreshDecisionSettings();
+    api('/api/decision-providers').then(state => {
+      const names = document.getElementById('decisionProviderNames');
+      for (const provider of state.providers || []) {
+        if (!provider.enabled) continue;
+        const option = document.createElement('option'); option.value = provider.name;
+        option.label = `${provider.name} — ${provider.model}`; names.append(option);
+      }
+    }).catch(() => {});
     refreshMemories();
     loadTtsOptions();
   </script>
@@ -1666,15 +1893,16 @@
     }
     shell.append(options);
     const wizard=document.getElementById('setupWizard');
+    const decisionPanel=document.getElementById('decisionPanel');
     const names={antigravity:'Google AI subscription',codex:'ChatGPT subscription',claude:'Claude subscription'};
     const services={openai:'OpenAI',gemini:'Google Gemini',anthropic:'Anthropic',openrouter:'OpenRouter',deepseek:'DeepSeek',xai:'xAI',custom:'Another compatible service'};
     let state={providers:[],accounts:[]}, account='',timer=null,generation=0,handingOff=false;
     const $=id=>document.getElementById(id);
-    function screen(html){clearTimeout(timer);generation++;wizard.innerHTML=html;wizard.hidden=false;document.body.classList.add('setup-active');wizard.querySelector('h2')?.setAttribute('tabindex','-1');wizard.querySelector('h2')?.focus();}
+    function screen(html){clearTimeout(timer);generation++;decisionPanel.remove();wizard.innerHTML=html;wizard.append(decisionPanel);wizard.hidden=false;document.body.classList.add('setup-active');wizard.querySelector('h2')?.setAttribute('tabindex','-1');wizard.querySelector('h2')?.focus();}
     function error(message){const e=$('setupError');if(e){e.textContent=message;e.hidden=false;}}
     function button(label,description,action){const b=document.createElement('button');const title=document.createElement('strong');title.textContent=label;b.append(title);if(description){const d=document.createElement('small');d.textContent=description;b.append(d);}b.onclick=action;return b;}
     async function inventory(){state=await api('/api/onboarding');return state;}
-    function enterChat(){clearTimeout(timer);generation++;wizard.hidden=true;document.body.classList.remove('setup-active');$('providerPanel').open=false;window.dispatchEvent(new Event('assistant-ready'));}
+    function enterChat(){clearTimeout(timer);generation++;optionsTitle.after(decisionPanel);wizard.hidden=true;document.body.classList.remove('setup-active');$('providerPanel').open=false;window.dispatchEvent(new Event('assistant-ready'));}
     async function handoff(){
       if(handingOff)return;handingOff=true;
       try{
@@ -1684,24 +1912,24 @@
       }finally{handingOff=false;}
     }
     async function kinds(){
-      screen('<span class="eyebrow">Letâ€™s get you connected</span><h2>How would you like to connect your AI?</h2><p>Choose the kind of access you already have. Iâ€™ll guide you through the rest.</p><div class="choices" id="kindChoices"></div><div id="savedChoices"></div><p id="setupError" class="error" hidden></p>');
+      screen('<span class="eyebrow">Let’s get you connected</span><h2>How would you like to connect your AI?</h2><p>Choose the kind of access you already have. I’ll guide you through the rest.</p><div class="choices" id="kindChoices"></div><div id="savedChoices"></div><p id="setupError" class="error" hidden></p>');
       $('kindChoices').append(button('An AI subscription','I use ChatGPT, Google AI, or Claude.',subscriptions),button('An API key','I have a key from an AI service.',apiChoice));
       const run=generation;
       try{await inventory();if(run!==generation)return;
         if(state.accounts.length){const detail=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Use an account already connected on this device';detail.append(summary);const list=document.createElement('div');list.className='choices';
           for(const a of state.accounts)list.append(button(a.name,a.status==='logged_in'||a.status==='verified'?'Connected':'Needs sign-in or a connection test',()=>resume(a)));
           detail.append(list);$('savedChoices').append(detail);}
-      }catch(e){error('I couldnâ€™t reach the local assistant. Please retry in a moment.');}
+      }catch(e){error('I couldn’t reach the local assistant. Please retry in a moment.');}
     }
     async function resume(a){account=a.name;await api('/api/model',{model:a.model});if(a.kind==='cli_profile' && !['logged_in','verified'].includes(a.status)){loginScreen();await beginLogin();}else await verify();}
     function subscriptions(){
-      screen('<button class="back" id="setupBack">â† Back</button><span class="eyebrow">Your subscription</span><h2>Which AI subscription do you use?</h2><p>Iâ€™ll prepare the connection, then open the providerâ€™s sign-in page. Your plan must include access to its coding assistant.</p><div class="choices" id="subscriptionChoices"></div><p id="setupError" class="error" hidden></p>');$('setupBack').onclick=kinds;
+      screen('<button class="back" id="setupBack">← Back</button><span class="eyebrow">Your subscription</span><h2>Which AI subscription do you use?</h2><p>I’ll prepare the connection, then open the provider’s sign-in page. Your plan must include access to its coding assistant.</p><div class="choices" id="subscriptionChoices"></div><p id="setupError" class="error" hidden></p>');$('setupBack').onclick=kinds;
       const seen=new Set();const ordered=[...state.providers].sort((a,b)=>(b.id===b.adapter)-(a.id===a.adapter));
       for(const p of ordered){if(seen.has(p.adapter))continue;seen.add(p.adapter);$('subscriptionChoices').append(button(names[p.adapter]||p.label,'Continue with '+({antigravity:'Antigravity',codex:'Codex',claude:'Claude Code'}[p.adapter]||p.label),()=>subscription(p)));}
       if(!seen.size)error('Subscription options are still loading. Go back and try again.');
     }
     async function subscription(p){
-      screen('<span class="eyebrow">Connecting your subscription</span><h2>Getting things ready</h2><p id="setupStatus">Checking whatâ€™s already installed...</p><p id="setupError" class="error" hidden></p><button id="setupRetry" hidden>Try again</button><button id="setupBack" class="back" hidden>Choose another option</button>');
+      screen('<span class="eyebrow">Connecting your subscription</span><h2>Getting things ready</h2><p id="setupStatus">Checking what’s already installed...</p><p id="setupError" class="error" hidden></p><button id="setupRetry" hidden>Try again</button><button id="setupBack" class="back" hidden>Choose another option</button>');
       try{
         if(!p.installed){$('setupStatus').textContent='Installing the official '+({antigravity:'Antigravity',codex:'Codex',claude:'Claude Code'}[p.adapter]||p.label)+' app. This may take a few minutes.';await api('/api/onboarding/install',{provider:p.id});}
         $('setupStatus').textContent='Preparing your account...';
@@ -1712,7 +1940,7 @@
       }catch(e){error(e.message);$('setupRetry').hidden=false;$('setupRetry').onclick=()=>subscription(p);$('setupBack').hidden=false;$('setupBack').onclick=kinds;}
     }
     function loginScreen(){
-      screen('<span class="eyebrow">Sign in securely</span><h2>Finish signing in with your provider</h2><p id="setupStatus">Opening your sign-in page...</p><a id="setupLoginLink" target="_blank" rel="noopener noreferrer" hidden>Open sign-in page again</a><p>You can complete any account questions or MFA there. Iâ€™ll continue automatically when youâ€™re signed in.</p><form id="setupCodeForm" hidden><label>Paste the authorization code your provider gave you<input id="setupCode" type="password" autocomplete="off"></label><button class="primary">Submit code</button></form><p id="setupError" class="error" hidden></p><button id="setupRetry" hidden>Try sign-in again</button><button id="setupCancel" class="back">Cancel and choose another option</button><details><summary>Sign-in details</summary><pre id="setupLoginOutput"></pre></details>');
+      screen('<span class="eyebrow">Sign in securely</span><h2>Finish signing in with your provider</h2><p id="setupStatus">Opening your sign-in page...</p><a id="setupLoginLink" target="_blank" rel="noopener noreferrer" hidden>Open sign-in page again</a><p>You can complete any account questions or MFA there. I’ll continue automatically when you’re signed in.</p><form id="setupCodeForm" hidden><label>Paste the authorization code your provider gave you<input id="setupCode" type="password" autocomplete="off"></label><button class="primary">Submit code</button></form><p id="setupError" class="error" hidden></p><button id="setupRetry" hidden>Try sign-in again</button><button id="setupCancel" class="back">Cancel and choose another option</button><details><summary>Sign-in details</summary><pre id="setupLoginOutput"></pre></details>');
       $('setupCancel').onclick=async()=>{clearTimeout(timer);generation++;try{await api('/api/onboarding/login/cancel',{cli:account});kinds();}catch(e){error('Could not cancel sign-in. '+e.message);}};
       $('setupRetry').onclick=beginLogin;
       $('setupCodeForm').onsubmit=async event=>{event.preventDefault();const code=$('setupCode').value;$('setupCode').value='';try{await api('/api/onboarding/login/code',{cli:account,code});await pollLogin();}catch(e){error(e.message);}};
@@ -1727,22 +1955,22 @@
         else $('setupStatus').textContent='Waiting for your provider. Complete sign-in in the browser if it has opened.';
         $('setupCodeForm').hidden=!/paste.*code|authorization code/i.test(result.output||'');
         if(result.state==='succeeded'){await verify();return;}
-        if(!result.running){error('Sign-in didnâ€™t finish. You can try again.');$('setupRetry').hidden=false;return;}
+        if(!result.running){error('Sign-in didn’t finish. You can try again.');$('setupRetry').hidden=false;return;}
         timer=setTimeout(pollLogin,2500);
       }catch(e){if(run!==generation)return;error('Could not check sign-in. '+e.message);$('setupRetry').hidden=false;}
     }
     async function verify(){
-      screen('<span class="eyebrow">Almost ready</span><h2>Checking your connection</h2><p>Iâ€™m sending a small test request to confirm your account works. This may use a little of your provider quota.</p><p id="setupError" class="error" hidden></p><button id="setupRetry" hidden>Test again</button><button id="setupBack" class="back" hidden>Choose another option</button>');
+      screen('<span class="eyebrow">Almost ready</span><h2>Checking your connection</h2><p>I’m sending a small test request to confirm your account works. This may use a little of your provider quota.</p><p id="setupError" class="error" hidden></p><button id="setupRetry" hidden>Test again</button><button id="setupBack" class="back" hidden>Choose another option</button>');
       try{const result=await api('/api/onboarding/verify',{name:account});if(result.status!=='completed')throw new Error(result.detail);await handoff();}
-      catch(e){error('The connection isnâ€™t ready yet. '+e.message);$('setupRetry').hidden=false;$('setupRetry').onclick=verify;const selected=state.accounts.find(a=>a.name===account);if(selected?.kind==='cli_profile'){const again=button('Sign in again','',()=>{loginScreen();beginLogin();});wizard.append(again);}$('setupBack').hidden=false;$('setupBack').onclick=kinds;}
+      catch(e){error('The connection isn’t ready yet. '+e.message);$('setupRetry').hidden=false;$('setupRetry').onclick=verify;const selected=state.accounts.find(a=>a.name===account);if(selected?.kind==='cli_profile'){const again=button('Sign in again','',()=>{loginScreen();beginLogin();});wizard.append(again);}$('setupBack').hidden=false;$('setupBack').onclick=kinds;}
     }
     function apiChoice(){
-      screen('<button id="setupBack" class="back">â† Back</button><span class="eyebrow">Your API key</span><h2>Which service is your key for?</h2><label>AI service<select id="setupAPIProvider"></select></label><button class="primary" id="setupAPINext">Continue</button>');$('setupBack').onclick=kinds;
+      screen('<button id="setupBack" class="back">← Back</button><span class="eyebrow">Your API key</span><h2>Which service is your key for?</h2><label>AI service<select id="setupAPIProvider"></select></label><button class="primary" id="setupAPINext">Continue</button>');$('setupBack').onclick=kinds;
       for(const [id,name] of Object.entries(services)){const option=document.createElement('option');option.value=id;option.textContent=name;$('setupAPIProvider').append(option);}
       $('setupAPINext').onclick=()=>apiForm($('setupAPIProvider').value);
     }
     function apiForm(provider){
-      screen('<button id="setupBack" class="back">â† Back</button><span class="eyebrow">Connect your API key</span><h2 id="setupAPIHeading"></h2><p>Your key is stored encrypted on this device. It wonâ€™t be put in the conversation.</p><form id="setupAPIForm" autocomplete="off"><label>API key<input id="setupAPISecret" type="password" required autocomplete="off"></label><label>Which model should I use?<input id="setupAPIModel" required placeholder="Model name from your provider"></label><p class="sub">Use a model available to your API account. You can change it later.</p><details id="setupAPIAdvanced"><summary>Connection address</summary><label>API address<input id="setupAPIURL" type="url" placeholder="https://your-service.example/v1"></label></details><button id="setupAPISave" class="primary">Connect and test</button></form><p>Connecting sends one small test request and may use provider quota.</p><p id="setupStatus" role="status"></p><p id="setupError" class="error" hidden></p>');
+      screen('<button id="setupBack" class="back">← Back</button><span class="eyebrow">Connect your API key</span><h2 id="setupAPIHeading"></h2><p>Your key is stored encrypted on this device. It won’t be put in the conversation.</p><form id="setupAPIForm" autocomplete="off"><label>API key<input id="setupAPISecret" type="password" required autocomplete="off"></label><label>Which model should I use?<input id="setupAPIModel" required placeholder="Model name from your provider"></label><p class="sub">Use a model available to your API account. You can change it later.</p><details id="setupAPIAdvanced"><summary>Connection address</summary><label>API address<input id="setupAPIURL" type="url" placeholder="https://your-service.example/v1"></label></details><button id="setupAPISave" class="primary">Connect and test</button></form><p>Connecting sends one small test request and may use provider quota.</p><p id="setupStatus" role="status"></p><p id="setupError" class="error" hidden></p>');
       $('setupAPIHeading').textContent='Connect to '+services[provider];$('setupBack').onclick=apiChoice;
       if(provider==='custom'){$('setupAPIAdvanced').open=true;$('setupAPIURL').required=true;}
       $('setupAPIForm').onsubmit=async event=>{event.preventDefault();const key=$('setupAPISecret').value;$('setupAPISecret').value='';$('setupAPISave').disabled=true;$('setupBack').disabled=true;$('setupStatus').textContent='Saving your encrypted key...';

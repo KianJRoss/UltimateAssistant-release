@@ -13,7 +13,8 @@ try {
     & $python -m pip install --upgrade pip
     if ($LASTEXITCODE -ne 0) { throw "Could not update pip in the assistant environment." }
     # Herald is its own product. A development checkout (HERALD_SOURCE_ROOT) installs
-    # editable; otherwise the release pinned in herald.json, checked against its SHA-256.
+    # editable; otherwise the release pinned in herald.json, checked against its SHA-256. HERALD_WHEEL_DIR
+    # (release testing) supplies those exact files locally; they are checked against the same SHA-256.
     if ($env:HERALD_SOURCE_ROOT -and (Test-Path (Join-Path $env:HERALD_SOURCE_ROOT "pyproject.toml"))) {
         & $python -m pip install -e $env:HERALD_SOURCE_ROOT
     } else {
@@ -21,7 +22,9 @@ try {
         if (-not $pin.parts) { throw "No Herald release is pinned in herald.json. Set HERALD_SOURCE_ROOT to a Herald checkout." }
         $wheels = foreach ($part in $pin.parts) {
             $wheel = Join-Path ([System.IO.Path]::GetTempPath()) $part.file
-            Invoke-WebRequest -Uri $part.url -OutFile $wheel -UseBasicParsing
+            $local = if ($env:HERALD_WHEEL_DIR) { Join-Path $env:HERALD_WHEEL_DIR $part.file }
+            if ($local -and (Test-Path -LiteralPath $local)) { Copy-Item -LiteralPath $local -Destination $wheel -Force }
+            else { Invoke-WebRequest -Uri $part.url -OutFile $wheel -UseBasicParsing }
             if ((Get-FileHash -Algorithm SHA256 -LiteralPath $wheel).Hash.ToLowerInvariant() -ne $part.sha256) {
                 Remove-Item -LiteralPath $wheel -Force
                 throw "The downloaded $($part.name) $($part.version) does not match its published checksum."

@@ -12,10 +12,23 @@
   /* In the overlay's own window: the card is the whole (opaque, rounded) window. */
   body.ua-embedded { background: var(--ua-card-fill); }
   body.ua-embedded #card { border: 0; border-radius: 0; box-shadow: none; background: var(--ua-card-fill); }
+  /* Move and resize affordances; the overlay does the moving (a press on the top strip or the corner). */
+  .ua-grip, .ua-resize { display: none; position: fixed; z-index: 7; }
+  body.ua-embedded.ua-draggable .ua-grip { display: block; top: 0; left: 0; right: 40px; height: 26px; cursor: grab; }
+  .ua-grip::after { content: ""; position: absolute; top: 6px; left: 50%; width: 36px; height: 4px; margin-left: -18px;
+                    border-radius: 2px; background: var(--ua-ink-3); opacity: 0.45; }
+  body.ua-embedded.ua-resizable .ua-resize { display: block; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize;
+    background: linear-gradient(135deg, transparent 50%, var(--ua-ink-3) 50%, var(--ua-ink-3) 58%, transparent 58%,
+                                transparent 70%, var(--ua-ink-3) 70%, var(--ua-ink-3) 78%, transparent 78%); opacity: 0.6; }
+  /* The user sized the window: the card fills it and scrolls instead of growing it. */
+  body.ua-sized, body.ua-sized #card { height: 100vh; box-sizing: border-box; }
+  body.ua-sized #card { overflow: auto; }
 </style>
 </head>
 <body>
 <div id="card"></div>
+<div class="ua-grip" title="Drag to move"></div>
+<div class="ua-resize" title="Drag to resize"></div>
 <script>window.GENUI_ASSETS = new URL('vendor/', location.href).pathname;</script>
 <script src="genui.js"></script>
 <script>
@@ -58,7 +71,11 @@
       onRender: () => { addFrame(); reportHeight(); },
     });
     if (element.bare) root.classList.add('ua-bare'); else root.classList.remove('ua-bare');
+    document.body.classList.toggle('ua-draggable', !!element.draggable);
+    document.body.classList.toggle('ua-resizable', !!element.resizable);
   };
+  // The overlay says when the user has sized this card's window.
+  window.uaSized = function (sized) { document.body.classList.toggle('ua-sized', !!sized); };
 
   const id = query.get('id');
   if (!id) return;  // the overlay drives this page

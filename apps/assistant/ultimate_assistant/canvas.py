@@ -1,7 +1,8 @@
 """The canvas: what the assistant is showing over the user's screens, on every device.
 
 One store on the main node holds the live elements (text and markdown cards,
-reminders, images, drawings, and interactive "ui" cards), each aimed at devices
+reminders, images, drawings, interactive "ui" cards, and "point" requests asking the user to
+mark something on their screen), each aimed at devices
 ("pc", "phone", a node name, or "everywhere") and expiring on its own. Renderers
 subscribe to a stream of changes: the PC overlay (components/canvas-overlay) on
 the main node itself, other devices through Herald (/nodes/main/http/api/canvas/...).
@@ -11,10 +12,17 @@ A "ui" card is markup the agent writes (canvas_guide.md; templates in ui/templat
 ui/genui.js): it keeps its own state while the user clicks and types, and sends
 events back (a message, a named action, close) that agents read with
 canvas_events. Its state is saved here so agents can read what the user chose.
+
+Pointing goes the other way: the user marks things on their screen (a point, a box, a freehand
+stroke, a whole window) in the overlay's pointing mode, either because an agent asked (a "point"
+element; canvas_point waits for it) or on their own (a hotkey, or while talking). The overlay sends
+the marks with a screenshot that has them drawn in; the marks store keeps the recent ones, and a
+device's unread marks ride along with that device's next turn.
 """
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import os
 import re
@@ -26,7 +34,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-KINDS = {"text", "markdown", "reminder", "image", "drawing", "ui"}
+KINDS = {"text", "markdown", "reminder", "image", "drawing", "ui", "point"}
 POSITIONS = {"top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"}
 PRIMITIVES = {"stroke", "rect", "ellipse", "line", "arrow", "label"}
 _ID = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
@@ -36,7 +44,12 @@ MAX_TTL = 24 * 3600
 MAX_UI = 100_000          # characters of card markup
 MAX_DATA = 64_000         # characters of JSON for a card's data or saved state
 MAX_EVENTS = 200
-EVENT_TYPES = {"message", "action", "close", "open_url", "error"}
+EVENT_TYPES = {"message", "action", "close", "open_url", "error", "pointed"}
+MARK_TYPES = {"point", "box", "draw", "window"}
+MAX_MARKS = 50            # marks in one submission
+MAX_MARK_RECORDS = 20     # submissions kept
+MARK_RECORD_SECONDS = 3600
+MAX_MARK_IMAGE = 8_000_000  # bytes of one screenshot
 
 
 def _number(value: Any, name: str, low: float = 0.0, high: float = 1.0) -> float:
@@ -61,6 +74,11 @@ def validate(element: dict[str, Any]) -> dict[str, Any]:
             if len(text) > limit:
                 raise ValueError(f"{key} is longer than {limit} characters")
             out[key] = text
+    if kind == "point":
+        tools = element.get("tools") or sorted(MARK_TYPES)
+        if not isinstance(tools, list) or not tools or not set(tools) <= MARK_TYPES:
+            raise ValueError(f"tools must be a list from {sorted(MARK_TYPES)}")
+        out["tools"] = [t for t in ("point", "box", "draw", "window") if t in tools]
     if kind in {"text", "markdown", "reminder"} and not (out.get("body") or out.get("title")):
         raise ValueError(f"a {kind} needs a title or body")
     if kind == "image":
@@ -113,11 +131,12 @@ def validate(element: dict[str, Any]) -> dict[str, Any]:
         if not _COLOR.match(str(color)):
             raise ValueError("color must be #rrggbb or #rrggbbaa")
         out["color"] = str(color)
-    draggable = element.get("draggable", False)
-    if type(draggable) is not bool:
-        raise ValueError("draggable must be a boolean")
-    out["draggable"] = draggable
-    ttl = element.get("ttl_seconds", 120 if kind != "reminder" else 600)
+    for flag in ("draggable", "resizable", "monitor_locked"):
+        value = element.get(flag, False)
+        if type(value) is not bool:
+            raise ValueError(f"{flag} must be a boolean")
+        out[flag] = value
+    ttl = element.get("ttl_seconds", 600 if kind in ("reminder", "point") else 120)
     out["ttl_seconds"] = int(_number(ttl, "ttl_seconds", 0, MAX_TTL))  # 0 = until cleared
     out["agent"] = str(element.get("agent") or "")[:40]
     return out
@@ -175,6 +194,55 @@ def _shape(shape: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _mark(mark: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(mark, dict) or mark.get("type") not in MARK_TYPES:
+        raise ValueError(f"each mark needs a type from {sorted(MARK_TYPES)}")
+    out: dict[str, Any] = {"type": mark["type"], "monitor": str(mark.get("monitor") or "")[:64]}
+    if mark["type"] == "draw":
+        points = mark.get("points")
+        if not isinstance(points, list) or not 2 <= len(points) <= 512:
+            raise ValueError("a draw mark needs 2-512 points")
+        out["points"] = [[round(_number(p[0], "x"), 4), round(_number(p[1], "y"), 4)] for p in points]
+    else:
+        for key in ("x", "y"):
+            out[key] = round(_number(mark.get(key), f"{mark['type']}.{key}"), 4)
+        if mark["type"] in ("box", "window"):
+            out["w"], out["h"] = round(_number(mark.get("w"), "w"), 4), round(_number(mark.get("h"), "h"), 4)
+    window = mark.get("window")
+    if isinstance(window, dict):
+        out["window"] = {k: str(window[k])[:300] for k in ("class", "title", "address") if window.get(k)}
+    return out
+
+
+def _mark_summary(index: int, mark: dict[str, Any]) -> str:
+    """One mark in words, for the turn's context: where it is and what window it is over."""
+    place = mark["monitor"] + " " if mark["monitor"] else ""
+    if mark["type"] == "point":
+        where = f"point at ({mark['x']:.2f}, {mark['y']:.2f})"
+    elif mark["type"] == "draw":
+        xs, ys = [p[0] for p in mark["points"]], [p[1] for p in mark["points"]]
+        where = f"freehand mark around ({min(xs):.2f}, {min(ys):.2f})-({max(xs):.2f}, {max(ys):.2f})"
+    else:
+        where = (f"{'box' if mark['type'] == 'box' else 'window'} "
+                 f"({mark['x']:.2f}, {mark['y']:.2f})-({mark['x'] + mark['w']:.2f}, {mark['y'] + mark['h']:.2f})")
+    window = mark.get("window") or {}
+    over = f" over {window.get('class', '')} \"{window.get('title', '')}\"" if window else ""
+    return f"{index}. {place}{where}{over}"
+
+
+def marks_context(records: list[dict[str, Any]]) -> str:
+    """A device's unread marks as guidance for its next turn: served with the request, so the
+    assistant knows what "this" means without asking for it. Screenshots accompany supported device turns automatically."""
+    if not records:
+        return ""
+    lines = []
+    for record in records[:3]:
+        lines.append(f"Marks {record['id']}:\n{record['description']}")
+    return ("The user pointed at things on this device's screen for this request (positions in 0-1 of "
+            "the monitor; the same coordinates canvas drawings use):\n" + "\n".join(lines)
+            + "\nThe attached screenshots show the marks. If no image is attached or you need it again, canvas_marks(id=...) retrieves it.")
+
+
 def matches(element: dict[str, Any], device: str, *, main_node: bool) -> bool:
     devices = element["devices"]
     return ("everywhere" in devices or device in devices
@@ -189,6 +257,7 @@ class CanvasStore:
         self._elements: dict[str, dict[str, Any]] = {}
         self._events: list[dict[str, Any]] = []
         self._event_seq = 0
+        self._marks: list[dict[str, Any]] = []
         self.removal_listeners = []
         self.revision = 0
         self._changed: asyncio.Condition | None = None
@@ -297,6 +366,66 @@ class CanvasStore:
             self.remove(element_id)
         return record
 
+    def add_marks(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Keep what the user pointed at (marks in 0..1 of their monitor, plus screenshots with the
+        marks drawn in). Answering a "point" request also tells whoever waits on it."""
+        marks = body.get("marks")
+        if not isinstance(marks, list) or not 1 <= len(marks) <= MAX_MARKS:
+            raise ValueError(f"marks: a list of 1-{MAX_MARKS} marks")
+        record: dict[str, Any] = {
+            "id": "marks-" + uuid.uuid4().hex[:10], "at": time.time(),
+            "device": str(body.get("device") or "").strip().lower()[:64],
+            "request_id": str(body.get("request_id") or "")[:64],
+            "note": str(body.get("note") or "")[:500],
+            "marks": [_mark(m) for m in marks], "images": [], "read": False}
+        if not record["device"]:
+            raise ValueError("device is required")
+        for image in (body.get("images") or [])[:4]:
+            try:
+                data = base64.b64decode(str(image.get("data") or ""), validate=True)
+            except (ValueError, AttributeError) as exc:
+                raise ValueError("images: base64 data") from exc
+            media = str(image.get("type") or "image/jpeg")
+            if media not in ("image/jpeg", "image/png") or not 0 < len(data) <= MAX_MARK_IMAGE:
+                raise ValueError(f"images: JPEG or PNG up to {MAX_MARK_IMAGE} bytes")
+            record["images"].append({"monitor": str(image.get("monitor") or "")[:64], "type": media, "data": data})
+        with self._lock:
+            cutoff = time.time() - MARK_RECORD_SECONDS
+            self._marks = [m for m in self._marks if m["at"] > cutoff][-(MAX_MARK_RECORDS - 1):] + [record]
+        request = record["request_id"]
+        if request and self.get(request):
+            record["read"] = True  # it answers an agent that is waiting for it
+            self.add_event(request, {"type": "pointed", "data": {"marks_id": record["id"]}})
+            self.remove(request)
+        return self.marks_summary(record)
+
+    @staticmethod
+    def marks_summary(record: dict[str, Any]) -> dict[str, Any]:
+        return {"id": record["id"], "device": record["device"], "request_id": record["request_id"],
+                "at": record["at"], "note": record["note"], "marks": record["marks"],
+                "images": [{"monitor": i["monitor"], "type": i["type"]} for i in record["images"]],
+                "description": "\n".join(_mark_summary(n + 1, m) for n, m in enumerate(record["marks"]))}
+
+    def marks(self, *, device: str | None = None, marks_id: str | None = None, unread: bool = False,
+              take: bool = False) -> list[dict[str, Any]]:
+        """Recent submissions, newest first; `take` marks the returned ones read."""
+        with self._lock:
+            found = [m for m in reversed(self._marks)
+                     if (not device or m["device"] == device.lower()) and (not marks_id or m["id"] == marks_id)
+                     and (not unread or not m["read"])]
+            if take:
+                for record in found:
+                    record["read"] = True
+            return [self.marks_summary(m) for m in found]
+
+    def marks_image(self, marks_id: str, index: int) -> tuple[bytes, str] | None:
+        with self._lock:
+            record = next((m for m in self._marks if m["id"] == marks_id), None)
+            if record is None or not 0 <= index < len(record["images"]):
+                return None
+            image = record["images"][index]
+            return image["data"], image["type"]
+
     def events(self, after: int = 0, element_id: str | None = None) -> list[dict[str, Any]]:
         with self._lock:
             return [dict(e) for e in self._events
@@ -332,13 +461,22 @@ _overlay: subprocess.Popen | None = None
 def overlay_command(workspace_root: Path) -> list[str] | None:
     """How to start the PC overlay on this machine, or None when it isn't installed."""
     script = workspace_root / "components" / "canvas-overlay" / "overlay.py"
-    python = workspace_root / ".venvs" / "desktop-tools" / "Scripts" / "pythonw.exe"
-    if sys.platform != "win32" or not script.is_file() or not python.is_file():
+    if sys.platform.startswith("linux"):
+        # Wayland layer surfaces need layer-shell-qt built for the same Qt as PySide6: the system's
+        python = Path("/usr/bin/python3")
+        if not (os.environ.get("WAYLAND_DISPLAY") and Path("/usr/lib/libLayerShellQtInterface.so.6").exists()):
+            return None
+    else:
+        python = workspace_root / ".venvs" / "desktop-tools" / "Scripts" / "pythonw.exe"
+        if sys.platform != "win32":
+            return None
+    if not script.is_file() or not python.is_file():
         return None
     return [str(python), str(script)]
 
 
-def start_overlay(workspace_root: Path, base_url: str, token: str, device: str = "pc", router_key: str = "") -> bool:
+def start_overlay(workspace_root: Path, base_url: str, token: str, device: str = "pc", router_key: str = "",
+                  main_node: bool = True) -> bool:
     """Start the canvas overlay for this device (once); it follows /api/canvas/stream. A device that
     isn't the main node follows the main node's canvas through Herald (router_key authenticates)."""
     global _overlay
@@ -349,6 +487,7 @@ def start_overlay(workspace_root: Path, base_url: str, token: str, device: str =
         return False
     env = {**os.environ, "ULTIMATE_ASSISTANT_URL": base_url.rstrip("/"),
            "ULTIMATE_ASSISTANT_APP_TOKEN": token, "ULTIMATE_ASSISTANT_CANVAS_DEVICE": device,
+           "ULTIMATE_ASSISTANT_CANVAS_MAIN": "1" if main_node else "0",
            **({"ULTIMATE_ASSISTANT_ROUTER_KEY": router_key} if router_key else {})}
     _overlay = subprocess.Popen(command, env=env, close_fds=True,
                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))

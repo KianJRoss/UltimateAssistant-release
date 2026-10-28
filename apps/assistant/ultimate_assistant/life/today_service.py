@@ -36,7 +36,8 @@ def snapshot(*, tasks_db=None, study_db=None, preparation_db=None, learning_db=N
     if isinstance(limit, bool) or not isinstance(limit, int) or not 0 <= limit <= 100:
         raise ValueError('limit must be an integer from 0 to 100')
     home = life_root()
-    tasks, task_state = _read(tasks_db or os.environ.get('ULTIMATE_ASSISTANT_TASKS_DB', home / 'data/tasks.sqlite3'),
+    from .record import tasks_db as _tasks_db
+    tasks, task_state = _read(tasks_db or _tasks_db(),
                               'assistant_tasks', "WHERE status NOT IN ('done','completed','cancelled','canceled')")
     from .task_units import apply_definitions, read_definitions
     definitions, unit_state = read_definitions(unit_home)
@@ -93,14 +94,13 @@ def snapshot(*, tasks_db=None, study_db=None, preparation_db=None, learning_db=N
         domain=domain if isinstance(domain,str) and domain.strip() else 'unspecified'
         groups.setdefault(domain,[]).append(card)
     value['domain_groups']=[{'domain':key,'items':groups[key]} for key in sorted(groups)]
-    observations, learning_state=_read(learning_db or home/'learning/learning.sqlite','observations',order='sequence')
-    measured={}
-    for record in observations:
-        activity=measured.setdefault(record['activity_id'],{})
-        previous=activity.get(record['dimension'])
-        if previous is None or (record['checked_epoch'],record['sequence'])>(previous['checked_epoch'],previous['sequence']):
-            activity[record['dimension']]=record
-    value['learning']['activities']=measured
+    # Study progress comes from the school module's own records when it's installed (life/study.py).
+    from .study import snapshot as study_snapshot
+    study = study_snapshot(value.get('as_of'), path=learning_db)
+    learning_state = {'state': 'not_connected' if study['state'] == 'not_installed' else study['state'],
+                      'records': len(study['understanding']), 'truncated': False}
+    value['learning']['activities'] = study['understanding']
+    value['learning']['flashcards'] = study['flashcards']
     from .routine_store import RoutineStore
     routines = RoutineStore(routine_home).snapshot(now=value['as_of'], limit=limit)
     routine_state = {

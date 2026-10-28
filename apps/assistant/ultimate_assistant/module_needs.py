@@ -53,6 +53,7 @@ class Target:
     main: bool
     installed_before: set[str]
     install: Callable[[str], dict] = field(repr=False)
+    capabilities: set[str] = field(default_factory=set)
 
 
 def local_target(manager: ModuleManager) -> Target:
@@ -62,8 +63,10 @@ def local_target(manager: ModuleManager) -> Target:
     def install(module_id: str) -> dict:
         with _locked(manager):
             return manager.install(module_id)
-    before = {item["id"] for item in manager.summary() if item["installed_before"]}
-    return Target(node_name(), sys.platform, is_main(), before, install)
+    inventory = manager.summary()
+    before = {item["id"] for item in inventory if item["installed_before"]}
+    capabilities = {c for item in inventory for c in item.get("capabilities", [])}
+    return Target(node_name(), sys.platform, is_main(), before, install, capabilities)
 
 
 def remote_targets(router: str, headers: dict[str, str], skip: str) -> list[Target]:
@@ -89,7 +92,8 @@ def remote_targets(router: str, headers: dict[str, str], skip: str) -> list[Targ
                 raise RuntimeError(response.json().get("detail") or response.text)
             return response.json()
         before = {item["id"] for item in here.get("modules", []) if item.get("installed_before")}
-        out.append(Target(name, str(here.get("platform", "")), bool(node.get("main")), before, install))
+        capabilities = {c for item in here.get("modules", []) for c in item.get("capabilities", [])}
+        out.append(Target(name, str(here.get("platform", "")), bool(node.get("main")), before, install, capabilities))
     return out
 
 
@@ -100,7 +104,9 @@ def eligible(entry: dict[str, Any], targets: list[Target]) -> list[Target]:
         chosen = [t for t in targets if not platforms or t.platform in platforms]
     else:
         chosen = [t for t in targets if t.main][:1]
-    return [t for t in chosen if entry["id"] not in t.installed_before]
+    provided = set(entry.get("provides_capabilities") or [])
+    return [t for t in chosen if entry["id"] not in t.installed_before
+            and not (provided and provided.issubset(t.capabilities))]
 
 
 def candidates(manager: ModuleManager, targets: list[Target]) -> list[dict[str, Any]]:
@@ -154,8 +160,7 @@ def says_yes(answer: str) -> bool:
 def needed(message: str, manager: ModuleManager, ask: Callable[[str], str],
            targets: list[Target], judge: Callable[[str, str], float | None] | None = None) -> list[dict[str, Any]]:
     """The not-yet-installed modules this message shows the user needs."""
-    if judge is None:
-        from .decisions import is_true as judge
+    from . import decision_interface as di
     pool = candidates(manager, targets)
     if not pool:
         return []
@@ -165,18 +170,13 @@ def needed(message: str, manager: ModuleManager, ask: Callable[[str], str],
     for entry in sorted(pool, key=lambda e: score(message, e, query), reverse=True):
         if score(message, entry, query) < cutoff:
             break
-        # The decision model first (cheap, typed); the small model when the Router has none.
-        probability = judge(message, f"The user needs this now, not just a passing word: {entry['needed_when']}.")
-        if probability is not None:
-            if probability >= 0.7:
-                out.append(entry)
-            continue
-        try:
-            answer = ask(confirm_prompt(message, entry))
-        except Exception:  # noqa: BLE001 - no model to confirm with: leave it for an explicit request
+        # One typed yes/no: the decision model on its route when confident, else the small model confirms.
+        outcome = di.yes_no(
+            "module_need", f"The user needs this now, not just a passing word: {entry['needed_when']}.", message,
+            llm=lambda entry=entry: says_yes(ask(confirm_prompt(message, entry))), backend=di.judge_backend(judge))
+        if not outcome.ok:  # no model to confirm with: leave it for an explicit request
             LOG.info("Could not confirm whether module %s is needed", entry["id"])
-            continue
-        if says_yes(answer):
+        elif outcome.value:
             out.append(entry)
     return out
 

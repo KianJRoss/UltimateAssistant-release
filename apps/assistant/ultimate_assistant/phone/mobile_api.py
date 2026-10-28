@@ -80,6 +80,13 @@ def register(app, *, pairing_store, conversation, commands, device_id=DEFAULT_DE
         except Exception as exc:
             raise HTTPException(502, "Custom speech synthesis is unavailable") from exc
 
+    @app.get("/api/mobile/v1/fallbacks")
+    def emergency_fallbacks(authorization: str | None = Header(default=None)):
+        """Desktops the phone can ask while the main node is unreachable (phone/fallbacks.py)."""
+        authenticate(authorization)
+        from .fallbacks import listing
+        return {"fallbacks": [{"node": f["node"], "label": f["label"], "url": f["url"]} for f in listing()]}
+
     @app.post("/api/mobile/v1/pairing/auto")
     async def automatic_pairing(request: Request):
         raw = await request.body()

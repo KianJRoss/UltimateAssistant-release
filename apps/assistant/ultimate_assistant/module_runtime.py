@@ -90,17 +90,37 @@ def readiness(release: Path, manifest: dict, data: Path) -> dict:
                 raise RuntimeError("Upstream MCP live read failed; complete account setup before enabling")
         return {"status": "ready"}
     from herald.router.account_registry import resolve_secret_ref
-    env = {**os.environ, **config["env"]}
+    env = {**{key: value for key, value in os.environ.items()
+              if key not in manifest.get("excluded_environment", [])}, **config["env"]}
     for key, reference in config["env_refs"].items():
         env[key] = resolve_secret_ref(reference)
-    result = subprocess.run([*launch, *manifest.get("verification_arguments", ["--help"])],
-                            cwd=data, env=env, capture_output=True, text=True, timeout=60, creationflags=FLAGS)
-    if result.returncode or not result.stdout.strip():
-        raise RuntimeError("Upstream CLI verification failed or returned no output")
-    if manifest.get("verification_json"):
+    setup = manifest.get("setup_check")
+    if setup:
+        result = subprocess.run([*launch, *setup["arguments"]], cwd=data, env=env,
+                                capture_output=True, text=True, timeout=60, creationflags=FLAGS)
+        if result.returncode:
+            return {"status": "needs_setup", "missing": ["upstream authentication"]}
         payload = json.loads(result.stdout)
-        if isinstance(payload, dict) and (payload.get("error") or payload.get("ok") is False):
-            raise RuntimeError("Upstream CLI reported unsuccessful verification")
+        missing = [key for key, expected in setup.get("required_values", {}).items()
+                   if payload.get(key) != expected]
+        missing += [key for key, rejected in setup.get("rejected_values", {}).items()
+                    if payload.get(key) is None or payload.get(key) in rejected]
+        if missing:
+            return {"status": "needs_setup", "missing": missing}
+    checks = manifest.get("verification_checks", [manifest.get("verification_arguments", ["--help"])])
+    if not isinstance(checks, list) or not checks or any(
+        not isinstance(args, list) or not args or not all(isinstance(a, str) for a in args) for args in checks
+    ):
+        raise ValueError("CLI verification checks must be nonempty argument lists")
+    for arguments in checks:
+        result = subprocess.run([*launch, *arguments], cwd=data, env=env,
+                                capture_output=True, text=True, timeout=60, creationflags=FLAGS)
+        if result.returncode or not result.stdout.strip():
+            raise RuntimeError("Upstream CLI verification failed or returned no output")
+        if manifest.get("verification_json"):
+            payload = json.loads(result.stdout)
+            if isinstance(payload, dict) and (payload.get("error") or payload.get("ok") is False):
+                raise RuntimeError("Upstream CLI reported unsuccessful verification")
     return {"status": "ready"}
 
 
@@ -130,7 +150,8 @@ def save_configuration(data: Path, manifest: dict, values: dict, references: dic
 def run_cli(release: Path, manifest: dict, data: Path, arguments: list[str]) -> dict:
     from herald.router.account_registry import resolve_secret_ref
     config = configuration(data, manifest)
-    env = {**os.environ, **config["env"]}
+    env = {**{key: value for key, value in os.environ.items()
+              if key not in manifest.get("excluded_environment", [])}, **config["env"]}
     secrets = []
     for key, reference in config["env_refs"].items():
         value = resolve_secret_ref(reference)

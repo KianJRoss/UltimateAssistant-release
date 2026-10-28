@@ -1,13 +1,22 @@
-﻿Ultimate Assistant for Windows
+Ultimate Assistant 0.4.0
 
+Windows (UltimateAssistant-0.4.0-windows-x64.zip)
 1. Extract this entire ZIP to a writable folder.
 2. Double-click apps\assistant\Install-UltimateAssistant.cmd.
    Or run apps\assistant\Install-UltimateAssistant.ps1 from PowerShell.
-3. Setup downloads the Herald Router (the release pinned in herald.json, checksum-verified) and the app starts it on this device. Select Antigravity or Codex, install it if needed, and sign in in the app.
+3. Setup downloads the Herald Router (the release pinned in herald.json, checksum-verified) and the app starts
+   it on this device. In the app, connect an AI subscription (install its CLI if needed and sign in) or paste an
+   API key; keys are stored encrypted on this device.
+Requirements: Windows PowerShell 5.1 or newer, internet access, and Python 3.13 with the py launcher (the
+installer gets it with Windows Package Manager when missing).
 
-Requirements: Windows PowerShell 5.1 or newer, Python 3.13 with the py launcher,
-and internet access for Python packages. Node.js/npm is recommended for the
-official filesystem MCP. Optional modules download when needed. Provider accounts and credentials are never bundled.
-Public HTTPS updates need no GitHub account or Git.
+Linux (UltimateAssistant-0.4.0-linux.tar.gz)
+1. Extract the archive to a folder you keep (the assistant runs from it).
+2. Run ./install.sh from that folder.
+3. The assistant runs as a user service at login at http://127.0.0.1:8765. Connect an AI subscription or an API
+   key in the app.
+Requirements: Python 3.13 (python3.13, or mise to install it), curl and internet access. Desktop features on
+Hyprland use grim, wtype, swayidle, pipewire and Qt layer-shell (installed with pacman on Arch).
 
-Build version: 0.3.2
+Node.js/npm adds the browser tools. Optional modules download when needed. Provider accounts and credentials are
+never bundled. Public HTTPS updates need no GitHub account or Git.

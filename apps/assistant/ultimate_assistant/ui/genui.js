@@ -680,6 +680,8 @@
     },
     title: (p, kids) => { const el = textStyle(h('div', 'ua-title'), Object.assign({ size: 'lg' }, p)); el.append(...kids(true)); return el; },
     text: (p, kids) => { const el = textStyle(h('div', 'ua-text'), p); el.append(...kids(true)); return el; },
+    // Markdown from data (a note's body), rendered like the card's own Markdown and escaped the same way.
+    markdown: (p) => { const el = h('div', 'ua-text ua-markdown'); el.innerHTML = blockMarkdown(dedent(String(p.source ?? p.text ?? ''))); return el; },
     caption: (p, kids) => { const el = textStyle(h('div', 'ua-caption'), p); el.append(...kids(true)); return el; },
     label: (p, kids) => { const el = textStyle(h('label', 'ua-label'), p); el.append(...kids(true)); return el; },
     span: (p, kids) => { const el = textStyle(h('span'), p); el.append(...kids(true)); return el; },
@@ -904,6 +906,9 @@
         el.src = `https://www.youtube-nocookie.com/embed/${youtube[1]}?rel=0${p.autoplay ? '&autoplay=1&mute=1' : ''}${start ? '&start=' + start[1] : ''}`;
         el.allow = 'autoplay; encrypted-media; picture-in-picture';
         el.allowFullscreen = true;
+        // YouTube refuses to play an embed that sends no referrer (error 153), and Herald's relay
+        // sends the card page with Referrer-Policy: no-referrer; the frame's own policy wins.
+        el.referrerPolicy = 'strict-origin-when-cross-origin';
       } else {
         el = h('video', 'ua-video');
         if (/^(https?:|blob:|data:video\/)/.test(src) || src.startsWith('/')) el.src = src;

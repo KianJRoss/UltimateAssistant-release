@@ -64,6 +64,8 @@ def to_presentation(elements: list[dict], *, conversation_id: str, revision: int
         common["bounds"] = ({"x": position["x"], "y": position["y"], **({"width": position["w"]} if "w" in position else {})}
                             if isinstance(position, dict) else {"anchor": _ANCHORS.get(position, "top_right")})
         kind = element["kind"]
+        if kind == "point":
+            continue  # pointing mode is the PC overlay's; the phone has no way to answer it yet
         if kind == "ui":
             if not isinstance(position, dict) or "w" not in position:
                 common["bounds"] = {**common["bounds"], "width": 0.94}  # cards want most of a phone's width

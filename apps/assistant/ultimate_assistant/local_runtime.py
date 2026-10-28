@@ -42,7 +42,10 @@ def main() -> None:
 
 
 def _run_once() -> bool:
-    data = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "UltimateAssistant"
+    # Beside settings.json (%LOCALAPPDATA%/UltimateAssistant, or ~/.ultimate-assistant/UltimateAssistant). Not read
+    # from .settings: importing it now would fix HERALD_URL and the rest before this runtime sets them below.
+    base = os.environ.get("LOCALAPPDATA")
+    data = (Path(base) if base else Path.home() / ".ultimate-assistant") / "UltimateAssistant"
     data.mkdir(parents=True, exist_ok=True)
     # Existing installations gain the same sign-in launcher as new installs.
     # Respect explicit opt-out and isolated preview launchers.
@@ -72,7 +75,8 @@ def _run_once() -> bool:
         selected = json.loads(selected_file.read_text("utf-8"))
         target = Path(selected["path"])
         if target.resolve() != Path(__file__).resolve().parents[3]:
-            code = subprocess.call([str(target / ".venvs/assistant/Scripts/python.exe"), "-m", "ultimate_assistant.local_runtime"],
+            from .updater import venv_python
+            code = subprocess.call([str(venv_python(target)), "-m", "ultimate_assistant.local_runtime"],
                                    cwd=target / "apps/assistant", env={**os.environ, "ULTIMATE_ASSISTANT_UPDATE_CHILD": "1"})
             if code:
                 from .updater import rollback

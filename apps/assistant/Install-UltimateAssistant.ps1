@@ -21,7 +21,7 @@ if (Get-Command py -ErrorAction SilentlyContinue) {
 }
 if (-not $pythonReady) {
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { throw 'Install Python 3.13 with its py launcher from python.org, then run this installer again.' }
-    & winget install --id Python.Python.3.13 --exact --scope user --accept-package-agreements --accept-source-agreements
+    & winget install --id Python.Python.3.13 --exact --source winget --scope user --accept-package-agreements --accept-source-agreements
     if ($LASTEXITCODE -ne 0) { throw 'Python dependency installation failed. Install Python 3.13 with its launcher and retry.' }
     $env:PATH = (Join-Path $env:LOCALAPPDATA 'Programs\Python\Launcher') + ';' + [Environment]::GetEnvironmentVariable('PATH','Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH','User')
     py -3.13 --version *> $null
@@ -54,7 +54,7 @@ if (-not $env:ULTIMATE_ASSISTANT_NO_SHORTCUT) {
     $shortcut.WorkingDirectory = Join-Path $installRoot 'apps\assistant'
     $shortcut.Save()
 }
-Write-Host 'Your local Herald Router starts with the assistant. Connect Antigravity or Codex in the app.'
+Write-Host 'Your local Herald Router starts with the assistant. In the app, connect an AI subscription (ChatGPT, Google AI or Claude) or an API key.'
 if (-not $env:ULTIMATE_ASSISTANT_NO_SHORTCUT -and -not $env:ULTIMATE_ASSISTANT_NO_STARTUP) {
     $startupDisabled = Test-Path (Join-Path $env:LOCALAPPDATA 'UltimateAssistant\startup-disabled')
     & (Join-Path $installRoot 'apps\assistant\configure-startup.ps1') -Disable:($SkipStartup -or $startupDisabled)

@@ -5,13 +5,25 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
+import tarfile
 import tempfile
 import zipfile
 from pathlib import Path
 from urllib.parse import urlsplit
 
 import httpx
+
+
+# Which release download this installation uses: release.json's url/sha256 is the Windows ZIP; its "linux"
+# entry {url, sha256} is the Linux tar.gz. A system with no entry is told an update exists, not updated.
+PLATFORM = "windows" if os.name == "nt" else "linux"
+
+
+def venv_python(root: Path) -> Path:
+    """The assistant's Python inside an installation, in this system's layout."""
+    return root / ".venvs" / "assistant" / ("Scripts/python.exe" if PLATFORM == "windows" else "bin/python")
 
 
 def manifest_source(data: Path) -> str:
@@ -56,10 +68,14 @@ def check_update(data: Path, install: bool = False) -> dict:
             return {"status": "completed", "detail": "Already on the latest release.", "version": installed_version}
         if not install:
             return {"status": "available", "version": version}
-        url = manifest["url"]
-        if urlsplit(url).scheme != "https" or not re.fullmatch(r"[0-9a-f]{64}", manifest["sha256"]):
+        artifact = manifest if PLATFORM == "windows" else manifest.get(PLATFORM)
+        if not isinstance(artifact, dict) or "url" not in artifact:
+            return {"status": "available", "version": version,
+                    "detail": "This release has no automatic update for this system; install it from the releases page."}
+        url, sha256 = artifact["url"], artifact.get("sha256", "")
+        if urlsplit(url).scheme != "https" or not re.fullmatch(r"[0-9a-f]{64}", sha256):
             raise ValueError("Release requires HTTPS download and SHA-256 checksum")
-        archive = stage / "release.zip"
+        archive = stage / ("release.zip" if PLATFORM == "windows" else "release.tar.gz")
         digest = hashlib.sha256()
         with httpx.stream("GET", url, follow_redirects=True, timeout=120) as response:
             response.raise_for_status()
@@ -67,23 +83,38 @@ def check_update(data: Path, install: bool = False) -> dict:
                 for chunk in response.iter_bytes():
                     output.write(chunk)
                     digest.update(chunk)
-        if digest.hexdigest() != manifest["sha256"]:
+        if digest.hexdigest() != sha256:
             raise ValueError("Update checksum mismatch; current installation retained")
         extracted = stage / "extracted"
-        with zipfile.ZipFile(archive) as bundle:
-            for name in bundle.namelist():
-                if not (extracted / name).resolve().is_relative_to(extracted.resolve()):
-                    raise ValueError("Unsafe archive path")
-            bundle.extractall(extracted)
-        installers = list(extracted.rglob("Install-UltimateAssistant.ps1"))
+        if PLATFORM == "windows":
+            with zipfile.ZipFile(archive) as bundle:
+                names = bundle.namelist()
+                _check_paths(extracted, names)
+                bundle.extractall(extracted)
+        else:
+            with tarfile.open(archive, "r:gz") as bundle:
+                _check_paths(extracted, bundle.getnames())
+                bundle.extractall(extracted, filter="data")
+        installer_name = "Install-UltimateAssistant.ps1" if PLATFORM == "windows" else "setup-linux.sh"
+        installers = list(extracted.rglob(installer_name))
         if len(installers) != 1:
             raise ValueError("Invalid installer bundle")
-        target = data / "releases" / (version + "-" + manifest["sha256"][:12])
+        target = data / "releases" / (version + "-" + sha256[:12])
         if not (target / ".install-complete").exists():
-            subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(installers[0]),
-                            "-SkipConfiguration", "-SkipLaunch"], check=True, capture_output=True, timeout=1800,
-                           env={**os.environ, "ULTIMATE_ASSISTANT_INSTALL_DIR": str(target), "ULTIMATE_ASSISTANT_NO_SHORTCUT": "1"})
-        python = target / ".venvs" / "assistant" / "Scripts" / "python.exe"
+            if PLATFORM == "windows":
+                subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(installers[0]),
+                                "-SkipConfiguration", "-SkipLaunch"], check=True, capture_output=True, timeout=1800,
+                               env={**os.environ, "ULTIMATE_ASSISTANT_INSTALL_DIR": str(target), "ULTIMATE_ASSISTANT_NO_SHORTCUT": "1"})
+            else:  # the bundle is the installation: move it into place and build its own environment there
+                bundle_root = installers[0].resolve().parents[2]
+                if target.exists():
+                    shutil.rmtree(target)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(bundle_root), str(target))
+                subprocess.run(["bash", str(target / "apps" / "assistant" / "setup-linux.sh"), "--env-only"], check=True,
+                               capture_output=True, timeout=1800,
+                               env={**os.environ, "ULTIMATE_ASSISTANT_SKIP_PACKAGES": "1"})
+        python = venv_python(target)
         subprocess.run([str(python), "-c", "import herald.router.server; import ultimate_assistant.web_ui"],
                        cwd=target / "apps" / "assistant", check=True, capture_output=True, timeout=120,
                        env={**os.environ, "HERALD_DATA_DIR": str(stage / "smoke-router"),
@@ -95,6 +126,12 @@ def check_update(data: Path, install: bool = False) -> dict:
         pending.write_text(json.dumps(state), "utf-8")
         pending.replace(current_file)
         return {"status": "completed", "version": version, "detail": "Update verified; starts on next launch."}
+
+
+def _check_paths(extracted: Path, names: list[str]) -> None:
+    for name in names:
+        if not (extracted / name).resolve().is_relative_to(extracted.resolve()):
+            raise ValueError("Unsafe archive path")
 
 
 def rollback(data: Path) -> dict:

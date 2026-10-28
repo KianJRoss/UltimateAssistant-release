@@ -13,10 +13,18 @@ Times come in as ISO 8601 with an offset (or "Z"); they're stored in UTC.
 from __future__ import annotations
 
 import hashlib
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 KINDS = ("task", "appointment", "outing", "chore", "hobby")
+DEPENDENCIES = re.compile(r"\[Dependencies: prep=([0-9.]+)m, travel=([0-9.]+)m\]")
+
+
+def dependency_minutes(notes: str | None) -> tuple[float, float]:
+    """(prep, travel) minutes from the tag commitment_orchestration puts on an appointment's notes."""
+    match = DEPENDENCIES.search(notes or "")
+    return (float(match.group(1)), float(match.group(2))) if match else (0.0, 0.0)
 
 
 def _utc(value: str | None, field: str) -> str | None:
@@ -33,14 +41,18 @@ def request_id(*parts: Any) -> str:
     return hashlib.sha256("|".join(str(p) for p in parts).encode()).hexdigest()[:32]
 
 
-def _stores():
+def tasks_db():
+    """The one tasks database: the task tools, this recorder, the planner and the today view all use it."""
     import os
     from pathlib import Path
     from ..settings import settings
+    return Path(os.environ.get("ULTIMATE_ASSISTANT_TASKS_DB", str(settings.tasks_db)))
+
+
+def _stores():
     from ..task_store import TaskStore
     from .life_inbox import LifeInbox
-    # The same tasks database as the task tools (they read this variable first, too).
-    return TaskStore(Path(os.environ.get("ULTIMATE_ASSISTANT_TASKS_DB", str(settings.tasks_db)))), LifeInbox()
+    return TaskStore(tasks_db()), LifeInbox()
 
 
 def record(item: dict[str, Any], *, source: str = "conversation", evidence: str = "") -> dict[str, Any]:
@@ -85,7 +97,8 @@ def record(item: dict[str, Any], *, source: str = "conversation", evidence: str 
 
 def upcoming(*, days: float = 7, now: datetime | None = None, include_overdue: bool = True) -> list[dict[str, Any]]:
     """Everything open that is due or happens before now + days (and what is overdue), soonest first.
-    Each: {"kind", "id", "title", "at", "status", "revision"?, "location"?}."""
+    Each: {"kind", "id", "title", "at", "status", "revision"?, "location"?, "lead_minutes"?} where
+    lead_minutes is an appointment's prep plus travel time."""
     now = now or datetime.now(timezone.utc)
     horizon = now + timedelta(days=days)
     tasks, inbox = _stores()
@@ -112,14 +125,33 @@ def upcoming(*, days: float = 7, now: datetime | None = None, include_overdue: b
         if kind == "outing" and item.get("return_status") == "returned":
             continue
         if keep(at):
-            out.append({"kind": kind, "id": item["id"], "title": item["title"], "at": at, "status": item["status"],
-                        "revision": item.get("revision"), "location": item.get("location") or ""})
+            entry = {"kind": kind, "id": item["id"], "title": item["title"], "at": at, "status": item["status"],
+                     "revision": item.get("revision"), "location": item.get("location") or ""}
+            if kind == "appointment" and sum(dependency_minutes(item.get("notes"))):
+                entry["lead_minutes"] = sum(dependency_minutes(item.get("notes")))
+            out.append(entry)
     from .routine_store import RoutineStore
     for chore in RoutineStore().snapshot(now=now, limit=500).get("items", []):
         if chore.get("active") and keep(chore.get("next_due_at")):
             out.append({"kind": "chore", "id": chore["id"], "title": chore["title"], "at": chore["next_due_at"],
                         "status": "due", "revision": chore.get("revision")})
     return sorted(out, key=lambda entry: entry["at"])
+
+
+def outings(*, include_returned: bool = False) -> list[dict[str, Any]]:
+    """The user's outings (the life inbox's away windows): where, when they left, when they expected to
+    be back and when they actually came back. Not yet returned only, unless include_returned."""
+    _, inbox = _stores()
+    out = []
+    for item in inbox.snapshot_items(kind="away_window", limit=1000).get("items", []):
+        returned = (item.get("details") or {}).get("actual_return")
+        if item.get("return_status") == "returned" and not include_returned:
+            continue
+        out.append({"id": item["id"], "title": item["title"], "destination": item.get("location") or "",
+                    "starts_at": item.get("scheduled_start"), "expected_return": item.get("scheduled_end"),
+                    "returned_at": returned, "return_status": item.get("return_status"),
+                    "notes": (item.get("details") or {}).get("notes", "")})
+    return out
 
 
 def busy(start: datetime, end: datetime, *, default_minutes: int = 60) -> list[dict[str, Any]]:

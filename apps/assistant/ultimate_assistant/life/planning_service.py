@@ -5,6 +5,14 @@ import json
 import threading
 
 from .today_service import snapshot
+from .record import outings
+
+
+def _appointments(now, days=7):
+    from datetime import timedelta
+    from .record import busy
+    return [{'starts_at': b['start'].isoformat(), 'returned_at': b['end'].isoformat()}
+            for b in busy(now, now + timedelta(days=days)) if b['kind'] == 'appointment']
 from .paths import life_root
 
 
@@ -21,13 +29,8 @@ class Planner:
         self.progress = progress if progress is not None else ProgressStore(self.store.home.parent/'progress')
         from .task_units import TaskUnitStore
         self.units = units if units is not None else TaskUnitStore(self.store.home.parent/'task-units')
-        if learning is None:
-            # Learning evidence comes from the school module when it is installed; plans work without it.
-            try:
-                from personal_assistant.learning_state import LearningStore
-            except ImportError:
-                LearningStore = None
-            learning = LearningStore(self.store.home.parent/'learning') if LearningStore else None
+        # Study progress (shown with the plan, never changes it) comes from the school module when
+        # it's installed (life/study.py); a test may pass its own reader with get_planning_evidence().
         self.learning = learning
         self._lock = threading.Lock()
         self._stop = threading.Event()
@@ -36,14 +39,14 @@ class Planner:
 
     @staticmethod
     def _inputs(now):
-        from .availability import AvailabilityStore
         value = snapshot(now=now.isoformat(), limit=100)
         # Read all commitments, not just the UI's bounded visible selection.
         import os
         from pathlib import Path
         from .today_service import _read
         home=life_root()
-        tasks, state = _read(os.environ.get('ULTIMATE_ASSISTANT_TASKS_DB',home/'data/tasks.sqlite3'),
+        from .record import tasks_db
+        tasks, state = _read(tasks_db(),
                              'assistant_tasks', "WHERE status NOT IN ('done','completed','cancelled','canceled')")
         if state['state']=='unavailable' or state['truncated']:
             raise ValueError('Commitment source unavailable or exceeds the planning record limit')
@@ -71,7 +74,9 @@ class Planner:
             })
             known.add(commitment_id)
         return {'commitments':commitments,
-                'outings':AvailabilityStore().list_outings(),
+                # Time already taken: outings (an unknown return keeps the rest of the day taken) and
+                # appointments, so planned work never lands on top of them.
+                'outings':outings(include_returned=True) + _appointments(now),
                 'learning':value['learning']['activities'], 'source_state':state['state']}
 
     @staticmethod
@@ -208,11 +213,14 @@ class Planner:
                 return {'state':'needs_availability','message':'Work windows have not been recorded.', 'plan':None}
             now=self.clock().replace(second=0,microsecond=0)
             inputs=dict(self.inputs(now))
-            learning_evidence = (self.learning.get_planning_evidence()
-                                 if self.learning is not None else {
-                                     'evidence_distinct_from_completion': True,
-                                     'completion_inferred': False,
-                                     'activities': {}, 'planning_summary': {}, 'history': []})
+            if self.learning is not None:
+                learning_evidence = self.learning.get_planning_evidence()
+            else:
+                from .study import snapshot as study_snapshot
+                study = study_snapshot(now.isoformat())
+                learning_evidence = {'evidence_distinct_from_completion': True, 'completion_inferred': False,
+                                     'activities': study['understanding'], 'flashcards': study['flashcards'],
+                                     'source': study['state']}
             from .task_units import apply_definitions
             from .progress_state import apply_progress
             records = self.progress.list_records()

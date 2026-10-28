@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assistant (emergency mode)</title>
+<style>
+  :root { --bg: #0b0d12; --card: #16181f; --ink: #e6e8ef; --muted: #8b93a7; --accent: #e0af68; --user: #2a3350; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, sans-serif;
+         display: flex; flex-direction: column; height: 100vh; }
+  header { padding: 14px 18px; background: var(--card); border-bottom: 2px solid var(--accent); }
+  header b { color: var(--accent); }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+  header a { color: var(--ink); }
+  #log { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 760px; padding: 10px 14px; border-radius: 12px; background: var(--card); white-space: pre-wrap; }
+  .msg.user { align-self: flex-end; background: var(--user); }
+  .msg.note { align-self: center; background: none; color: var(--muted); font-size: 13px; }
+  form { display: flex; gap: 8px; padding: 14px 18px; background: var(--card); }
+  textarea { flex: 1; resize: none; height: 52px; padding: 10px; border-radius: 10px; border: 1px solid #2c3140;
+             background: var(--bg); color: var(--ink); font: inherit; }
+  button { padding: 0 18px; border: 0; border-radius: 10px; background: var(--accent); color: #1a1b26; font-weight: 600; }
+  button:disabled { opacity: .5; }
+</style>
+</head>
+<body>
+<header>
+  <b>Emergency mode.</b> The main assistant is unreachable, so this device answers on its own.
+  <p>No memory, schedules or other devices until it is back; what you say here is handed to it then.
+     <a href="/">Try the full assistant again</a></p>
+</header>
+<div id="log"></div>
+<form id="form">
+  <textarea id="text" placeholder="Ask this device..." autofocus></textarea>
+  <button id="send">Send</button>
+</form>
+<script>
+  const TOKEN = "__EMERGENCY_TOKEN__";
+  const log = document.getElementById("log"), text = document.getElementById("text"), send = document.getElementById("send");
+  function add(kind, body) {
+    const div = document.createElement("div");
+    div.className = "msg " + kind;
+    div.textContent = body;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }
+  async function ask() {
+    const message = text.value.trim();
+    if (!message) return;
+    add("user", message);
+    text.value = "";
+    send.disabled = true;
+    add("note", "Answering on this device...");
+    try {
+      const response = await fetch("/api/emergency/chat", {
+        method: "POST", headers: { "Content-Type": "application/json", "x-ua-emergency-token": TOKEN },
+        body: JSON.stringify({ message }) });
+      const data = await response.json();
+      log.lastChild.remove();
+      add(response.ok ? "assistant" : "note", response.ok ? data.reply : (data.detail || "Something went wrong."));
+    } catch (error) {
+      log.lastChild.remove();
+      add("note", "This device could not answer: " + error);
+    }
+    send.disabled = false;
+    text.focus();
+  }
+  document.getElementById("form").addEventListener("submit", (e) => { e.preventDefault(); ask(); });
+  text.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(); } });
+</script>
+</body>
+</html>

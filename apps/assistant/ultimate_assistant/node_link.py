@@ -36,6 +36,7 @@ from typing import Any, Callable
 
 import httpx
 
+from .context_use import annotate, observe, parse_tiers
 from .settings import settings
 
 LOG = logging.getLogger(__name__)
@@ -87,8 +88,10 @@ class _Server:
     """One MCP server on this machine, started on first use and kept running."""
 
     def __init__(self, command: list[str], env: dict[str, str], cwd: str | None,
-                 progressive_catalog: str | None = None, native_allowed_tools: list[str] | None = None) -> None:
+                 progressive_catalog: str | None = None, native_allowed_tools: list[str] | None = None,
+                 context_tiers: dict[str, int] | None = None) -> None:
         self.command, self.env, self.cwd = command, env, cwd
+        self.context_tiers = parse_tiers(context_tiers)  # {tool: 2 or 3}; see context_use.py
         self.progressive = None
         if progressive_catalog is not None:
             from .progressive_tools import ProgressiveTools
@@ -165,11 +168,13 @@ class NodeLink:
 
     def offer(self, name: str, command: list[str] | str, env: dict[str, str] | None = None,
               cwd: str | None = None, *, progressive_catalog: str | None = None,
-              native_allowed_tools: list[str] | None = None) -> None:
+              native_allowed_tools: list[str] | None = None,
+              context_tiers: dict[str, int] | None = None) -> None:
         if isinstance(command, str):
             command = shlex.split(command, posix=os.name != "nt")
         server = _Server(list(command), {str(k): str(v) for k, v in (env or {}).items()}, cwd,
-                         progressive_catalog=progressive_catalog, native_allowed_tools=native_allowed_tools)
+                         progressive_catalog=progressive_catalog, native_allowed_tools=native_allowed_tools,
+                         context_tiers=context_tiers)
         old = self.servers.get(name)
         self.servers[name] = server
         if old is not None and self.loop is not None:
@@ -192,7 +197,8 @@ class NodeLink:
         name = str(payload["name"])
         self.offer(name, config.get("command") or [], config.get("env"), config.get("cwd"),
                    progressive_catalog=config.get("progressive_catalog"),
-                   native_allowed_tools=config.get("native_allowed_tools"))
+                   native_allowed_tools=config.get("native_allowed_tools"),
+                   context_tiers=config.get("context_tiers"))
         node_config: dict[str, Any] = {"node": node_name(), "server": name, "timeout": config.get("timeout", 60)}
         if config.get("env_refs"):
             node_config["env_refs"] = config["env_refs"]
@@ -243,9 +249,14 @@ class NodeLink:
                 LOG.warning("Assistant node link to %s lost: %s", settings.herald_url, exc)
             finally:
                 self.connected.clear()
-                for task in self._tasks.values():
-                    task.cancel()
+                abandoned = list(self._tasks.values())
                 self._tasks.clear()
+                for task in abandoned:
+                    task.cancel()
+                if abandoned:
+                    # Give cancellation a bounded opportunity to release streams.
+                    # A tool that ignores cancellation must not block reconnect forever.
+                    await asyncio.wait(abandoned, timeout=2)
             await asyncio.sleep(RETRY_SECONDS[min(attempt, len(RETRY_SECONDS) - 1)])
             attempt += 1
 
@@ -261,7 +272,14 @@ class NodeLink:
             return
         task = asyncio.create_task(handler(frame, send))
         self._tasks[fid] = task
-        task.add_done_callback(lambda _t: self._tasks.pop(fid, None))
+        def finished(done):
+            # Request ids may be reused after a router restart. An old task's
+            # completion must never remove a new connection's task with that id.
+            if self._tasks.get(fid) is done:
+                self._tasks.pop(fid, None)
+            if not done.cancelled():
+                done.exception()  # retrieve a send failure on an already-closed link
+        task.add_done_callback(finished)
 
     async def _session(self, frame: dict[str, Any]):
         server = self.servers.get(str(frame.get("server")))
@@ -286,12 +304,20 @@ class NodeLink:
     async def _call(self, frame: dict[str, Any], send) -> None:
         server = None
         try:
+            look = None
+            known = self.servers.get(str(frame.get("server")))
+            if known is not None and known.context_tiers:
+                # Active context (an app's contents, the screen) is logged and mentioned, never refused.
+                look = observe(known.context_tiers, str(frame.get("tool")), frame.get("arguments") or {},
+                               known.progressive is not None)
             server, session = await self._session(frame)
             if server.progressive is not None:
                 payload = await server.progressive.call(str(frame.get("tool")), frame.get("arguments") or {}, session)
             else:
                 result = await session.call_tool(str(frame.get("tool")), arguments=frame.get("arguments") or {})
                 payload = result.model_dump(mode="json", exclude_none=True)
+            if look is not None:
+                payload = annotate(payload, look)
             await send({"type": "result", "id": frame["id"], "result": payload})
         except asyncio.CancelledError:
             raise
@@ -355,9 +381,22 @@ def main() -> int:
     # This device's part of being ahead of the user: its activity signals (what is in focus, idle)
     # for the main node's clock, and its overlay showing the main node's canvas (reminders, cards).
     if not is_main():
-        signals.start(node_name())
-        canvas.start_overlay(settings.workspace_root, settings.herald_url.rstrip("/") + "/nodes/main/http", "",
-                             router_key=os.environ.get("HERALD_API_KEY", ""))
+        values = _saved_settings()
+        if values.get("signals", True):
+            signals.start(node_name())
+        if os.environ.get("ULTIMATE_ASSISTANT_UI_PROXY", "1") != "0":
+            from . import ui_proxy
+            ui_proxy.start()
+        from . import emergency, phone_fallback
+        emergency.start_flusher()  # what this device answered while the main node was away goes back to it
+        if values.get("phone_fallback", True):
+            phone_fallback.start()  # the phone's way in while the main node is away
+        if values.get("canvas_overlay", True):
+            canvas.start_overlay(settings.workspace_root, settings.herald_url.rstrip("/") + "/nodes/main/http", "",
+                                 device=node_name(), router_key=os.environ.get("HERALD_API_KEY", ""), main_node=False)
+        if sys.platform.startswith("linux") and values.get("desktop_voice", True):
+            from . import desktop
+            desktop.start()
     print(f"Assistant node {node_name()} ({node_label()}) -> {settings.herald_url}")
     try:
         while True:
@@ -367,4 +406,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # `python -m` runs this file as __main__, a second copy of the module whose `link` is not
+    # the one device_tools offers servers on. Run the imported module's main so both share it.
+    from ultimate_assistant.node_link import main as module_main
+    sys.exit(module_main())

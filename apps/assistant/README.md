@@ -1,5 +1,85 @@
 # Ultimate Assistant — Friend Build
 
+## Linux / Omarchy device
+
+The same assistant can use a Linux desktop while its main node and Herald run on
+another machine. Run `apps/assistant/setup-linux.sh --node <router-url>` with the
+existing Router connection configured. This starts the device node at login and
+provides the local text interface at `http://127.0.0.1:8841`.
+
+`ultimate-assistant` starts microphone capture; invoke it again to send. A two-minute
+limit stops forgotten recordings. The request uses the existing server-side
+transcription, conversation, memory and agent pipeline, then plays speech through
+PipeWire. Kokoro is synthesized locally when installed, using the same shared voice
+and speed settings; other providers and a missing/failed local model use the server.
+The local speech model is loaded in the background when the node starts, without
+recording or playing audio, and the worker is reused between replies. Set `desktop_speech` to `server`
+to keep generation on the main node. `ultimate-assistant status` includes stage
+timings for transcription, acknowledgement, reply, speech generation and time to first audio.
+Native reply speech uses short chunks, preferring sentence boundaries, and prepares one
+chunk ahead while the current audio plays. `speech_first_chunk_seconds` reports preparation
+of the initial clip; `speech_generation_seconds` sums synthesis for the spoken reply.
+The initial main-node probe uses a two-second connection limit and ten-second read limit
+before selecting the existing device fallback. A timeout after chat submission reports an
+error rather than replaying work that might already have run.
+When the shared assistant sends an early conversational reply (`ack`), the device speaks
+it while the agent continues working, then speaks the final result. Speech playback does
+not block receiving work events; quick turns without an acknowledgement speak only once.
+`ultimate-assistant cancel` discards a recording or stops
+playback; it does not undo a request already submitted to an agent.
+`ultimate-assistant status` reports the local interaction state, and
+`ultimate-assistant text` opens the optional text interface. No Pi interface is used.
+
+When the main node (or Herald) is unreachable, the device keeps answering in emergency mode:
+`ultimate-assistant send` and the text page (`ultimate-assistant text`) hand the turn to a coding CLI
+signed in on this device (Claude Code, else Codex) with a prompt explaining that it stands in for the
+whole assistant here, without memory or other devices. Replies are spoken with local speech. Voice
+requests need the main node to transcribe, so they say so. Each emergency exchange is queued and added
+to the conversation once the main node answers again.
+
+`ultimate-assistant point` toggles pointing mode on the canvas overlay: mark a point (click),
+a box (drag), a freehand stroke or a whole window (tools 1-4), then Enter (or the same key) to
+keep the marks or Esc to drop them. Pointing mode also opens while a voice recording runs, so
+you can point while talking. Marks go to the main node with a screenshot that has them drawn in,
+and the device's next turn carries them: their description is in the turn's context, and the
+assistant sees the screenshot with `canvas_marks`. An agent can also ask with `canvas_point`
+("show me which one") and gets the marks back directly.
+
+`ultimate-assistant teach` starts teach mode: show the assistant a task once, then run it again
+(or press Stop on the overlay's "Recording" badge) to send it; `ultimate-assistant teach discard`
+drops it, and `ultimate-assistant teach start "what it is for"` adds a note. It records the windows
+used, the controls used by name (AT-SPI: focus, presses, toggles, text typed into a field; password
+fields only as hidden) and a screenshot after each step, never raw keystrokes or coordinates, for at
+most 15 minutes. The device's next turn mentions the recording, and an agent learns it with
+`learn_from_recording`: it generalizes the steps into a skill with parameters for whatever could
+differ next time, tests it, and confirms with you. Apps publish their controls to AT-SPI once
+accessibility is on (teach mode turns it on); an app started before that may need a restart.
+
+On Omarchy, bind the invocation in `~/.config/hypr/bindings.lua`, for example:
+
+```lua
+o.bind("SUPER + A", "Talk to Ultimate Assistant", "~/.local/bin/ultimate-assistant")
+o.bind("SUPER + ALT + P", "Point things out to Ultimate Assistant", "~/.local/bin/ultimate-assistant point")
+o.bind("SUPER + ALT + T", "Teach Ultimate Assistant a task", "~/.local/bin/ultimate-assistant teach")
+```
+
+Unbind an existing shortcut before replacing it. Desktop vision, Hyprland control
+and environment file/shell tools remain device-local modules enabled by
+`desktop_vision`, `desktop_control`, and `environment_access` in
+`~/.ultimate-assistant/UltimateAssistant/settings.json`. Signals, canvas and native
+voice can each be disabled with `signals`, `canvas_overlay`, or `desktop_voice`.
+The microphone is opened only on explicit invocation. Global microphone/speaker
+selection follows PipeWire defaults; Voxtype dictation remains separate.
+
+Set `playwright_enabled` to `true` on a device to offer the setup-installed
+Playwright browser over its node link. Node and Chromium are resolved for the
+current platform on each registration, so dependency updates do not leave a saved
+Chromium revision path behind. An explicit `device_mcp_servers.playwright` entry
+takes precedence, including a disabled entry. This separate browser has its own
+profile; Kapture still requires an explicitly connected user browser tab.
+
+## Windows setup
+
 Voice-first assistant UI using Herald's Router and Package. The friend interacts
 through the assistant UI rather than Herald's developer-oriented Pi CLI. The
 Router selects model backends. CLI providers run through their full native
@@ -62,6 +142,14 @@ Router URL, API key, and model preference are per-user under
 friend's integrations there. `ULTIMATE_ASSISTANT_PROJECT` and
 `ULTIMATE_ASSISTANT_PART` can override the scope; `HERALD_MODEL` overrides the
 saved model selection.
+
+Any account works the same way: a subscription CLI, an API key, or a local model.
+The assistant picks a model for each kind of work by what Herald says it can do
+(`fast` for conversation and quick tasks, `code`/`reasoning` for heavy work), then
+the selected model, then every other connected account by priority. With a single
+API key, that key does everything. To set your own order, add
+`"model_preferences": {"conversation": [...], "light_work": [...], "heavy_work": [...]}`
+(model ids) to `settings.json`.
 
 Conversation history, durable cross-conversation memories, and a small
 tasks/commitments ledger are stored in local SQLite databases under
@@ -292,3 +380,7 @@ only after a quota error. It keeps the same native harness and account, tries up
 to two models with remaining allowance, and reports switches in activity. Native
 tool activity prevents automatic replay of a request. Unknown limits are not
 presented as remaining allowance.
+
+## Decisions
+
+Small choices (routing, needs-tools, topic shift, skills, commitments, lane, acknowledgement, goodbye) use one typed interface with an `llm` route (default) and an opt-in `decision_model` route. See [DECISIONS.md](DECISIONS.md).

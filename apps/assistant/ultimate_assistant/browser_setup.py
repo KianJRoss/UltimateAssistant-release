@@ -8,12 +8,13 @@ import socket
 import time
 import asyncio
 import threading
+import sys
 from pathlib import Path
 from urllib.parse import quote
 
 from .onboarding import router_request
 from .node_link import link
-from .settings import settings
+from .settings import settings, setup_hint
 
 EXTENSION_URL = "https://chromewebstore.google.com/detail/kapture-mcp-browser-autom/ejfnegenodbdcodemkibocefmajjjjbn"
 _playwright_process = None
@@ -22,6 +23,44 @@ _playwright_stop = threading.Event()
 _playwright_ready = threading.Event()
 _playwright_thread = None
 _playwright_error = None
+
+
+def node_executable(root: Path) -> str:
+    """Resolve this platform's installed Node, including the setup-managed path."""
+    name = "node.exe" if sys.platform == "win32" else "node"
+    configured = root / ".runtime/node-path.txt"
+    if configured.is_file():
+        candidate = Path(configured.read_text(encoding="utf-8").strip()) / name
+        if candidate.is_file():
+            return str(candidate)
+    executable = shutil.which(name)
+    if not executable:
+        raise ValueError("Node.js is unavailable. Run " + setup_hint("setup-browser-tools.ps1") + ".")
+    return executable
+
+
+def chromium_executable(root: Path) -> Path:
+    folders = ("chrome-win64/chrome.exe", "chrome-win/chrome.exe") if sys.platform == "win32" else (
+        "chrome-linux64/chrome", "chrome-linux/chrome")
+    candidates = [p for folder in folders for p in (root / ".runtime/browsers").glob("chromium-*/" + folder) if p.is_file()]
+    if not candidates:
+        raise ValueError("Playwright Chromium is missing. Run " + setup_hint("setup-browser-tools.ps1") + ".")
+    # Revision directories change on dependency updates; avoid persisting one in settings.
+    return max(candidates, key=lambda p: int(p.parents[1].name.removeprefix("chromium-")))
+
+
+def playwright_device_spec() -> dict:
+    """A persistent stdio server owned by this node, with its own browser profile."""
+    root = settings.workspace_root
+    script = root / ".runtime/browser-mcp/node_modules/@playwright/mcp/cli.js"
+    if not script.is_file():
+        raise ValueError("Playwright MCP is missing. Run " + setup_hint("setup-browser-tools.ps1") + ".")
+    return {"command": [node_executable(root), str(script), "--browser", "chrome", "--executable-path",
+                        str(chromium_executable(root)), "--headless", "--user-data-dir",
+                        str(settings.user_data_dir / "playwright-profile")],
+            "cwd": str(Path.home()), "timeout": 120,
+            "description": "A separate browser on this device for DOM and accessibility automation; "
+                           "does not access the user's signed-in browser tabs."}
 
 
 def _keep_playwright_session() -> None:
@@ -53,21 +92,17 @@ def start_playwright() -> None:
     if _playwright_process is not None and _playwright_process.poll() is None:
         return
     root = settings.workspace_root
-    node_path = root / ".runtime/node-path.txt"
-    node = str(Path(node_path.read_text().strip()) / "node.exe") if node_path.exists() else shutil.which("node.exe")
-    browsers = sorted((root / ".runtime/browsers").glob("chromium-*/chrome-win64/chrome.exe"))
-    if not browsers:
-        browsers = sorted((root / ".runtime/browsers").glob("chromium-*/chrome-win/chrome.exe"))
-    if not node or not browsers:
-        raise ValueError("Playwright browser dependencies are missing.")
+    node = node_executable(root)
+    browser = chromium_executable(root)
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 18793))
     settings.user_data_dir.mkdir(parents=True,exist_ok=True)
     _playwright_log = (settings.user_data_dir / "playwright-server.log").open("a",encoding="utf-8")
     command = [node, str(root / ".runtime/browser-mcp/node_modules/@playwright/mcp/cli.js"),
-               "--host", "127.0.0.1", "--allowed-hosts", "127.0.0.1:18793,localhost:18793", "--port", "18793", "--browser", "chrome", "--executable-path", str(browsers[-1]),
+               "--host", "127.0.0.1", "--allowed-hosts", "127.0.0.1:18793,localhost:18793", "--port", "18793", "--browser", "chrome", "--executable-path", str(browser),
                "--user-data-dir", str(settings.user_data_dir / "playwright-profile"), "--shared-browser-context"]
-    if os.environ.get("ULTIMATE_ASSISTANT_SYNTHETIC_TEST") == "1":
+    if (os.environ.get("ULTIMATE_ASSISTANT_SYNTHETIC_TEST") == "1"
+            or (sys.platform.startswith("linux") and not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"))):
         command.append("--headless")
     _playwright_process = subprocess.Popen(command, stdout=_playwright_log,stderr=_playwright_log,
                                           creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
@@ -113,7 +148,7 @@ def configure(browser: str, assistant) -> dict:
     package = "kapture-mcp" if browser == "kapture" else "@playwright/mcp"
     directory = packages / package
     if not (directory / "package.json").exists():
-        raise ValueError("Browser dependencies are not installed. Run setup-browser-tools.ps1.")
+        raise ValueError(f"Browser dependencies are not installed. Run {setup_hint('setup-browser-tools.ps1')}.")
     metadata = json.loads((directory / "package.json").read_text("utf-8"))
     binary = metadata["bin"]
     if isinstance(binary, dict): binary = next(iter(binary.values()))
@@ -134,9 +169,7 @@ def configure(browser: str, assistant) -> dict:
         adapter = script.with_name("ultimate-assistant-bridge.js")
         adapter.write_text(source.replace(marker, "const PORT = Number(process.env.KAPTURE_PORT || 61822);"), "utf-8")
         script = adapter
-    node_path = root / ".runtime/node-path.txt"
-    node = str(Path(node_path.read_text().strip()) / "node.exe") if node_path.exists() else shutil.which("node.exe")
-    if not node: raise ValueError("Node.js is unavailable.")
+    node = node_executable(root)
     name = "ultimate-assistant-" + browser
     port = int(os.environ.get("ULTIMATE_ASSISTANT_KAPTURE_PORT", "61822"))
     config = {"command":[node,str(script)],"env":{"KAPTURE_PORT":str(port)},"timeout":120}

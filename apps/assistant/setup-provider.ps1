@@ -17,7 +17,7 @@ if ($Provider -eq 'antigravity') {
 } else {
     $npm = Get-Command npm.cmd -ErrorAction SilentlyContinue
     if (-not $npm) {
-        & winget install --id OpenJS.NodeJS.LTS --exact --scope user --accept-package-agreements --accept-source-agreements
+        & winget install --id OpenJS.NodeJS.LTS --exact --source winget --scope user --accept-package-agreements --accept-source-agreements
         if ($LASTEXITCODE -ne 0) { throw 'Node.js installation failed. Install Node.js LTS, then retry.' }
         $env:PATH = [Environment]::GetEnvironmentVariable('PATH','Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH','User')
         $npm = Get-Command npm.cmd -ErrorAction Stop

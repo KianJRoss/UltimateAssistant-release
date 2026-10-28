@@ -45,7 +45,7 @@ if ($Uninstall) {
     & $nefcon --remove-device-node --hardware-id "Root\MttVDD" --class-guid $displayClass
     Get-Pinned $Driver "driver.zip"
     & $nefcon --uninstall-driver --inf-path (Join-Path $work "VirtualDisplayDriver\MttVDD.inf")
-    foreach ($folder in "UltimateAssistantPersonal", "UltimateAssistant") {
+    foreach ($folder in (Get-ChildItem -LiteralPath $env:LOCALAPPDATA -Directory -Filter "UltimateAssistant*" -ErrorAction SilentlyContinue | Sort-Object { $_.Name -eq "UltimateAssistant" }, Name).Name) {
         $settings = Join-Path $env:LOCALAPPDATA "$folder\settings.json"
         if (Test-Path $settings) {
             $values = Get-Content $settings -Raw | ConvertFrom-Json
@@ -84,7 +84,7 @@ if ($LASTEXITCODE -ne 0) { throw "Could not install the virtual display driver (
 Start-Sleep -Seconds 8
 
 # Tell the assistant which monitor is its own.
-foreach ($folder in "UltimateAssistantPersonal", "UltimateAssistant") {
+foreach ($folder in (Get-ChildItem -LiteralPath $env:LOCALAPPDATA -Directory -Filter "UltimateAssistant*" -ErrorAction SilentlyContinue | Sort-Object { $_.Name -eq "UltimateAssistant" }, Name).Name) {
     $settings = Join-Path $env:LOCALAPPDATA "$folder\settings.json"
     if (Test-Path $settings) {
         $values = Get-Content $settings -Raw | ConvertFrom-Json

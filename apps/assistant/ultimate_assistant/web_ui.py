@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import mimetypes
 import json
 import logging
 import os
@@ -13,7 +14,7 @@ import uuid
 import webbrowser
 from queue import Empty, Queue
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
@@ -28,7 +29,7 @@ from pydantic import BaseModel, Field, field_validator, SecretStr
 
 from .assistant import Assistant
 from .portal import PortalSession
-from .settings import settings
+from .settings import settings, setup_hint
 from . import tts
 
 _UI_SERVER = None
@@ -69,29 +70,32 @@ async def _portal_call(method: str, *args):
 
 def _ask_fast(prompt: str, router_url: str, headers: dict[str, str]) -> str:
     """One short call to a fast model (conversation checks, agent dispatch).
-    ULTIMATE_ASSISTANT_CONVERSATION_MODELS: comma list tried in order, default G4F + fast."""
-    default_fast = "g4f-gemini,g4f-free,g4f-gemini-thinking,g4f-burner1,g4f-burner2,gemini-flash,antigravity-gemini,fast"
-    models = [m.strip() for m in os.environ.get("ULTIMATE_ASSISTANT_CONVERSATION_MODELS", default_fast).split(",") if m.strip()]
-    for model in models:
+    ULTIMATE_ASSISTANT_CONVERSATION_MODELS: comma list tried in order, then Herald's fast preset."""
+    raw_models = [m.strip() for m in os.environ.get("ULTIMATE_ASSISTANT_CONVERSATION_MODELS", "").split(",") if m.strip()]
+    configured = os.environ.get("ULTIMATE_ASSISTANT_DECISION_LLM_MODEL")
+    if configured and configured not in raw_models:
+        raw_models.insert(0, configured)
+    if "fast" not in raw_models:
+        raw_models.append("fast")
+    for model in raw_models:
         try:
-            response = httpx.post(f"{router_url}/v1/chat/completions", headers=headers, timeout=8,
-                                  json={"model": model, "messages": [{"role": "user", "content": prompt}]})
-            response.raise_for_status()
-            return str(response.json()["choices"][0]["message"]["content"])
+            from .decision_interface import ask_llm
+            return ask_llm(prompt, model=model, base_url=router_url)
         except Exception:  # noqa: BLE001 - try the next fast model
             continue
     raise RuntimeError("no fast model answered")
 
 
 def _dispatch_agent(conversation_id: str, message: str, interface: str, router_url: str,
-                    headers: dict[str, str]) -> tuple[agent_defs.Agent, str]:
-    """The agent that takes this turn, and the dispatcher's one-line brief for it."""
+                    headers: dict[str, str]) -> tuple[agent_defs.Agent, str, bool]:
+    """The agent that takes this turn, the dispatcher's one-line brief for it, and whether the turn needs
+    tools (the decision model answers first; see agents/dispatch.route)."""
     agents = agent_defs.load_agents()
     recent = [{"role": m["role"], "content": m["content"]} for m in _conversations.history(conversation_id)[-6:]]
-    name, brief = agent_dispatch.choose(
+    chosen = agent_dispatch.route(
         message, recent, agents, lambda prompt: _ask_fast(prompt, router_url, headers),
         current_agent=_conversations.last_agent(conversation_id), interface=interface)
-    return agents.get(name) or agents[agent_defs.DEFAULT_AGENT], brief
+    return agents.get(chosen.agent) or agents[agent_defs.DEFAULT_AGENT], chosen.brief, chosen.needs
 
 
 SKILL_CHECK_SECONDS = 5.0
@@ -165,7 +169,7 @@ def step_label(payload: dict) -> str | None:
     return ("Failed: " if failed else "Tool: ") + label
 
 
-_ROSTERS: dict[str, tuple[float, str]] = {}
+_ROSTERS: dict[tuple[str, str, str], tuple[float, list[dict]]] = {}
 ROSTER_SECONDS = 300.0
 
 
@@ -179,23 +183,29 @@ def tool_roster(tools: list[dict]) -> str:
     return "\n".join(f"- {server}: {', '.join(names)}" for server, names in groups.items())
 
 
-def _tool_roster(part: str, router_url: str, headers: dict[str, str]) -> str:
+def _tool_roster(part: str, router_url: str, headers: dict[str, str], message: str = "") -> str:
     """The Herald tools this agent's part can call, by name (cached a few minutes).
 
     Some CLIs (Codex code mode) load MCP tools only when the model searches for them, so a model
     can answer "I can't" without ever looking. Naming them in the prompt closes that gap."""
     import time
-    cached = _ROSTERS.get(part)
-    if cached and time.monotonic() - cached[0] < ROSTER_SECONDS:
-        return cached[1]
-    try:
-        response = httpx.get(f"{router_url}/tools", headers=headers, timeout=6,
-                             params={"project": settings.herald_project, "part": part})
-        response.raise_for_status()
-        roster = tool_roster(response.json().get("tools") or [])
-    except Exception:  # noqa: BLE001 - keep the last known list; the turn goes on without one
-        return cached[1] if cached else ""
-    _ROSTERS[part] = (time.monotonic(), roster)
+    key = (router_url, settings.herald_project, part)
+    cached = _ROSTERS.get(key)
+    tools = cached[1] if cached else []
+    if not cached or time.monotonic() - cached[0] >= ROSTER_SECONDS:
+        try:
+            from herald.client import RouterClient
+            tools = RouterClient(router_url, timeout=6.0).list_tools(project=settings.herald_project, part=part)
+            _ROSTERS[key] = (time.monotonic(), tools)
+        except Exception:  # noqa: BLE001 - retain the last inventory
+            pass
+    if not message or not tools:
+        return tool_roster(tools)
+    from .option_decisions import recommend_toolsets
+    shortlist = recommend_toolsets(message, tools, ask=lambda p: _ask_small(p, router_url, headers))
+    roster = tool_roster(shortlist)
+    if len(shortlist) < len(tools):
+        roster += "\nOther tools in your scope remain available through tool discovery when needed."
     return roster
 
 
@@ -267,12 +277,8 @@ def _keep_memory_later(conversation_id: str) -> None:
 
 
 def _ask_small(prompt: str, router_url: str, headers: dict[str, str]) -> str:
-    """A short yes/no-sized answer: the local model, else the fast cloud models."""
-    from . import skills
-    try:
-        return skills.local_model_ask(prompt)
-    except Exception:  # noqa: BLE001 - no local model: use the fast cloud models
-        return _ask_fast(prompt, router_url, headers)
+    """A small ordinary LLM call through Herald's configured fast lane."""
+    return _ask_fast(prompt, router_url, headers)
 
 
 def _find_skill(message: str, router_url: str, headers: dict[str, str]):
@@ -288,7 +294,7 @@ def _tell_live(conversation_id: str, agent: str, title: str, card_id: str, text:
     _conversations.append(conversation_id, "assistant", text, agent=agent)
     try:
         canvas.store.show({"kind": "reminder", "id": card_id, "title": title, "body": text,
-                           "devices": ["everywhere"], "ttl_seconds": 300})
+                           "devices": ["everywhere"], "ttl_seconds": 300, "draggable": True})
     except Exception:  # noqa: BLE001 - the conversation still has it
         _LOGGER.info("Could not show %s on the canvas", card_id)
 
@@ -360,51 +366,52 @@ def _route_conversation(conversation_id: str, message: str, router_url: str,
     return conversation_id, None
 
 
-CONVERSATION_FAST_MODELS: tuple[str, ...] = (
-    "g4f-free",
-    "g4f-gemini",
-    "g4f-burner1",
-    "g4f-burner2",
-    "g4f-gemini-thinking",
-    "gemini-flash",
-    "antigravity-2",
-    "antigravity-gemini",
-    "g4f-auto",
-)
+LIGHT_AGENTS = {"companion", "planner", "tutor"}
 
-LIGHT_WORK_MODELS: tuple[str, ...] = (
-    "gemini-flash",
-    "antigravity-gemini",
-    "antigravity-2",
-    "codex-backup",
-    "personal-codex-primary",
-    "codex-primary",
-    "antigravity",
-    "gemini-pro",
-    "claude-primary",
-    "antigravity-claude",
-    "claude-cli",
-)
 
-DEFAULT_FALLBACK_MODELS: tuple[str, ...] = (
-    "personal-codex-primary",
-    "codex-backup",
-    "codex-primary",
-    "antigravity",
-    "gemini-pro",
-    "claude-primary",
-    "antigravity-claude",
-    "claude-cli",
-    "antigravity-gemini",
-    "gemini-flash",
-    "antigravity-2",
-    "g4f-burner1",
-    "g4f-burner2",
-    "g4f-gemini-thinking",
-    "g4f-gemini",
-    "g4f-free",
-    "g4f-auto",
-)
+def lane_point():
+    """The typed model-lane question for a turn that needs work, one yes/no (value: light_work or heavy_work)."""
+    from . import decision_interface as di
+    return di.DecisionPoint("model_lane", {"heavy": di.Question(
+        "noul", "This message needs heavy work: device control, coding, files, deep research, or long "
+                "multi-step work, rather than quick tool use such as tasks, reminders, memory, planning, "
+                "tutoring or short lookups.")},
+        lambda a: ("heavy_work" if a["heavy"].value else "light_work") if a["heavy"].confident else None)
+
+
+def _select_lane(message: str, agent_name: str, fast_conversation: bool, backend=None) -> str:
+    """The model lane for this turn. A turn on the quick conversational path is always `conversation`.
+    Otherwise a typed yes/no on the `decision_model` route (when confident); the agent-name rule on the
+    default `llm` route or whenever the typed answer is uncertain or unavailable."""
+    if fast_conversation:
+        return "conversation"
+    from . import decision_interface as di
+
+    def by_agent() -> str:
+        return "light_work" if agent_name in LIGHT_AGENTS else "heavy_work"
+
+    state = f"Agent: {agent_name}\nMessage: {' '.join(message.split())[:1500]}"
+    outcome = di.run(lane_point(), state, rule=by_agent, backend=backend)
+    return outcome.value if outcome.ok and outcome.value in {"light_work", "heavy_work"} else by_agent()
+
+
+# What each lane asks Herald's capability tags for. No model is named here: the user's accounts (a
+# subscription CLI, an API key, a local model) are found by what Herald says they can do.
+LANE_CAPABILITIES: dict[str, tuple[str, ...]] = {
+    "conversation": ("fast",), "light_work": ("fast",), "heavy_work": ("code", "reasoning")}
+
+
+def _model_preferences() -> dict[str, list[str]]:
+    """The user's own model order per lane, tried before anything chosen by capability: settings.json
+    "model_preferences" {"conversation" | "light_work" | "heavy_work": [model ids]}. Empty unless set."""
+    try:
+        config = json.loads(settings.user_settings_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    prefs = config.get("model_preferences") if isinstance(config, dict) else None
+    if not isinstance(prefs, dict):
+        return {}
+    return {str(lane): [str(m) for m in ids if m] for lane, ids in prefs.items() if isinstance(ids, list)}
 
 
 def _fallback_model_candidates(
@@ -413,28 +420,35 @@ def _fallback_model_candidates(
     *,
     lane: str = "heavy_work",
 ) -> list[dict[str, object]]:
-    """Return available models in priority order for the requested lane:
-    - 'conversation': fast G4F + Gemini 3.8 Flash models first for ~3s chat replies
-    - 'light_work': Gemini 3.8 Flash CLI + Codex/Argon/Claude for fast task/memory tool calls
-    - 'heavy_work': Codex + Gemini 4 Argon + Claude CLI first for device control, coding, and deep work
-    """
+    """Available models in order for the lane ('conversation', 'light_work' or 'heavy_work'): the user's
+    own order (settings model_preferences, and the environment lists), the models Herald tags for the
+    lane's work (LANE_CAPABILITIES) and the assistant's chosen model, then every other model by Herald
+    priority. Healthy models first; ones with an open circuit or no quota only when nothing else is left."""
     by_id = {str(entry.get("id")): entry for entry in models if isinstance(entry, dict) and entry.get("id")}
-    env_fallbacks = [
-        item.strip()
-        for item in os.environ.get("HERALD_FALLBACK_MODELS", "").split(",")
-        if item.strip()
-    ]
+
+    def env(name: str) -> list[str]:
+        return [item.strip() for item in os.environ.get(name, "").split(",") if item.strip()]
+
+    def priority(entry: dict[str, object]) -> float:
+        value = entry.get("priority")
+        return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else float("inf")
+
+    # Only real accounts are ranked automatically: Herald also lists its presets and routing policies
+    # ("fast", "efficiency"...), which stay usable when named as the chosen model or a preference.
+    ranked = sorted((e for e in by_id.values() if e.get("backend_type") not in {"capability_pool", "routing_policy"}),
+                    key=lambda entry: (priority(entry), str(entry["id"])))
+    wanted = LANE_CAPABILITIES.get(lane, LANE_CAPABILITIES["heavy_work"])
+    tagged = [str(e["id"]) for e in ranked if any((e.get("capabilities") or {}).get(c) is True for c in wanted)]
+    everything = [str(e["id"]) for e in ranked]
+    own = _model_preferences().get(lane, [])
     if lane == "conversation":
-        conv_env = [
-            item.strip()
-            for item in os.environ.get("ULTIMATE_ASSISTANT_CONVERSATION_MODELS", "").split(",")
-            if item.strip()
-        ]
-        pool_order: tuple[str | None, ...] = (*conv_env, *CONVERSATION_FAST_MODELS, preferred, _assistant.model, *DEFAULT_FALLBACK_MODELS)
+        conversation = [m for m in env("ULTIMATE_ASSISTANT_CONVERSATION_MODELS")
+                        if m not in {"gemini-3.1-flash-lite", "gemini-flash-lite"}]
+        pool_order: tuple[str | None, ...] = (*conversation, *own, *tagged, preferred, _assistant.model, *everything)
     elif lane == "light_work":
-        pool_order = (*LIGHT_WORK_MODELS, preferred, _assistant.model, *env_fallbacks, *DEFAULT_FALLBACK_MODELS)
+        pool_order = (*own, *tagged, preferred, _assistant.model, *env("HERALD_FALLBACK_MODELS"), *everything)
     else:
-        pool_order = (preferred, _assistant.model, *env_fallbacks, *DEFAULT_FALLBACK_MODELS)
+        pool_order = (preferred, _assistant.model, *own, *env("HERALD_FALLBACK_MODELS"), *tagged, *everything)
 
     ordered_ids: list[str] = []
     for candidate_id in pool_order:
@@ -468,7 +482,7 @@ def _summarize_history(previous_summary: str, messages: list[dict[str, object]])
     except Exception:
         candidates = []
     if not candidates:
-        candidates = list(dict.fromkeys([_assistant.model, *DEFAULT_FALLBACK_MODELS]))
+        candidates = [_assistant.model]
     last_error: Exception | None = None
     for model_name in candidates:
         try:
@@ -500,12 +514,19 @@ class AttachmentItem(BaseModel):
     text: str = Field(min_length=1, max_length=30000)
 
 
+class VisualReference(BaseModel):
+    kind: Literal["marks", "teach"]
+    id: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
+    index: int = Field(ge=0, le=7)
+
+
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20000)
     conversation_id: str = Field(pattern=r"^[0-9a-fA-F-]{36}$")
     web_search: bool = False
     setup_intro: bool = False
     attachments: list[AttachmentItem] = Field(default_factory=list, max_length=5)
+    images: list[VisualReference] = Field(default_factory=list, max_length=8)
     # Where the user is talking from when it is not this UI (Obsidian over ACP...):
     # guidance for this turn only, never saved to the conversation.
     interface: str | None = Field(default=None, max_length=20000)
@@ -948,9 +969,13 @@ def onboarding_install(request: ProviderRequest):
     try:
         choice=next((p for p in onboarding.inventory()['providers'] if p['id']==request.provider),None)
         if not choice:raise ValueError('Choose a provider discovered by this Router.')
-        result = subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
-                                 str(Path(__file__).resolve().parents[1] / "setup-provider.ps1"),
-                                 "-Provider", choice['adapter']], capture_output=True, timeout=600)
+        scripts = Path(__file__).resolve().parents[1]
+        if sys.platform == "win32":
+            command = ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+                       str(scripts / "setup-provider.ps1"), "-Provider", choice['adapter']]
+        else:
+            command = ["bash", str(scripts / "setup-provider.sh"), choice['adapter']]
+        result = subprocess.run(command, capture_output=True, timeout=600)
         if result.returncode:
             raise ValueError("Provider installer failed. Check internet access and retry; account sign-in has not started.")
         if not next(p["installed"] for p in onboarding.inventory()["providers"] if p["id"] == request.provider):
@@ -1125,6 +1150,80 @@ def save_memory_settings(request: MemorySettingsRequest) -> dict[str, object]:
     return {"embedding_model": model, "vector_enabled": bool(model)}
 
 
+class DecisionSettingsRequest(BaseModel):
+    route: str = "llm"
+    provider: str = ""
+    model: str = ""
+
+
+class VoiceTurnEndRequest(BaseModel):
+    text: str = Field(max_length=1500)
+
+
+@app.post("/api/voice/turn-end", dependencies=[Depends(_require_app_token)])
+def voice_turn_end(request: VoiceTurnEndRequest) -> dict[str, bool]:
+    from .voice_decisions import wants_to_stop
+    return {"stop": wants_to_stop(request.text)}
+
+
+DECISION_SUGGESTIONS = [
+    {"id": "jev", "label": "Jev through Herald (hosted decision model)",
+     "text": "An optional hosted addition using your own key. In our tests it met the bar everywhere: 96% on "
+             "routing at about 165 ms, 99% on importance, about $0.00002 per decision. Your results may differ."},
+    {"id": "tev1", "label": "tev1, a local decision model through your Router",
+     "text": "An optional addition with no hosted fee. Accurate in our tests (93% routing, 94% importance), but "
+             "on a single GPU routing was slower than a fast local model, so it pays off most when your normal "
+             "model is hosted. When unsure, it hands the question to your normal model."},
+]
+
+
+def _decision_state() -> dict[str, object]:
+    from . import decision_interface as di
+    return {**di.decision_settings(), "routes": [di.ROUTE_LLM, di.ROUTE_DECISION_MODEL],
+            "suggestions": DECISION_SUGGESTIONS, "measured": di.measured_summary(),
+            "note": ("Optional. Your AI model always does the work; the mixed route adds a decision model only for "
+                     "the quick yes/no checks where it measured accurate and fast. The default never calls one.")}
+
+
+@app.get("/api/decision-settings", dependencies=[Depends(_require_app_token)])
+def get_decision_settings() -> dict[str, object]:
+    return _decision_state()
+
+
+@app.get("/api/decision-providers", dependencies=[Depends(_require_app_token)])
+def get_decision_providers() -> dict[str, object]:
+    from herald.client import RouterClient
+    client = RouterClient(settings.herald_url, timeout=3.0)
+    inventory = getattr(client, "list_decision_providers", None)
+    if inventory is None:
+        return {"providers": [], "available": False}
+    providers = inventory()
+    return {"providers": [{k: p.get(k) for k in ("name", "model", "enabled", "is_default", "provider_type")}
+                           for p in providers], "available": True}
+
+
+@app.put("/api/decision-settings", dependencies=[Depends(_require_app_token)])
+def save_decision_settings(request: DecisionSettingsRequest) -> dict[str, object]:
+    """Choose how small decisions are made. Only decision_route, decision_provider and decision_model are
+    written; other preferences (model, voice, memory...) are left exactly as they are."""
+    route, provider, model = request.route.strip().lower(), request.provider.strip(), request.model.strip()
+    if route not in {"llm", "decision_model"}:
+        raise HTTPException(status_code=400, detail="Route must be llm or decision_model.")
+    for label, value in (("provider", provider), ("model", model)):
+        if len(value) > (128 if label == "provider" else 500) or any(ord(ch) < 32 for ch in value):
+            raise HTTPException(status_code=400, detail=f"Enter a valid decision {label} name, or leave it empty.")
+    try:
+        preferences = json.loads(settings.user_settings_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        preferences = {}
+    if not isinstance(preferences, dict):
+        preferences = {}
+    preferences.update({"decision_route": route, "decision_provider": provider, "decision_model": model})
+    settings.user_settings_file.parent.mkdir(parents=True, exist_ok=True)
+    settings.user_settings_file.write_text(json.dumps(preferences, indent=2) + "\n", encoding="utf-8")
+    return _decision_state()
+
+
 @app.post("/api/memories", dependencies=[Depends(_require_app_token)])
 def create_memory(request: MemoryCreateRequest) -> dict[str, object]:
     try:
@@ -1206,47 +1305,62 @@ async def file_extract(request: Request) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=415, detail=str(exc)) from exc
     except ImportError as exc:
-        raise HTTPException(status_code=501, detail="This file format's parser is not installed. Run setup.ps1 again.") from exc
+        raise HTTPException(status_code=501, detail=f"This file format's parser is not installed. Run {setup_hint('setup.ps1')} again.") from exc
     except Exception as exc:
         raise HTTPException(status_code=422, detail="Could not read this file; it may be malformed, encrypted, or unsupported.") from exc
 
 
-ACK_PROMPT = """You are a personal assistant. The user just said the message below; the full answer will take a while.
-Write the very first thing you say back, right now: one short, natural spoken sentence (under 15 words) that shows you
-understood what they want and are starting on it, e.g. "Sure, checking which windows you have open." Never answer
-the request yourself: no yes/no, no facts, numbers or capabilities, no results; the real answer comes after you. For a
-question, say you're checking or looking into it. Do not ask questions. If the message is just a greeting or small talk that needs
-no work, return an empty ack. Reply as JSON: {{"ack": "..."}}.
+# Safe acknowledgements: each only says the work is starting; none states a fact, result or capability.
+ACK_OPTIONS = {
+    "checking": ("Sure, checking on that now.", "The user asks a question or wants something looked up or checked."),
+    "working": ("On it.", "The user asks the assistant to do something or change something."),
+    "noting": ("Got it, I'll note that down.", "The user mentions a commitment, appointment, deadline or reminder."),
+    "none": ("", "Greeting, thanks or small talk that needs no work, or a message already quick to answer."),
+}
+_ACK_SMALL_TALK = re.compile(r"^\W*(?:hi|hello|hey|thanks?|thank you|good (?:morning|evening|night)|ok(?:ay)?|cool|nice|lol)\b\W*$", re.I)
+_ACK_NOTE = re.compile(r"\b(?:remind|reminder|appointment|deadline|due|schedule|meeting|remember)\b", re.I)
+_ACK_QUESTION = re.compile(r"\?\s*$|^\s*(?:what|where|when|which|who|how|is|are|can|do|does|check|find|look|show)\b", re.I)
 
-Interface: {interface}
-Message: {message}"""
+
+def _ack_by_rule(message: str) -> str:
+    """The rule form: an option id from the message's shape. No model call."""
+    if _ACK_SMALL_TALK.match(message.strip()):
+        return "none"
+    if _ACK_NOTE.search(message):
+        return "noting"
+    return "checking" if _ACK_QUESTION.search(message) else "working"
 
 
 def _quick_ack(message: str, interface: str) -> str:
-    """The assistant's immediate first line while the real work starts, from the local model (about a second).
-    Empty when there's nothing to say or no local model; never the slow cloud models."""
-    from . import skills
+    """Pick a safe fixed acknowledgement from the message's shape (_ack_by_rule): instant, no model call.
+    Choosing among four acknowledgements isn't a yes/no, so it is never a decision-model question."""
     try:
-        raw = skills.local_model_ask(ACK_PROMPT.format(message=message[:1500], interface=interface[:200] or "chat"))
-        text = str(json.loads(raw).get("ack") or "").strip()
-    except Exception:  # noqa: BLE001 - the ack is a nicety; the answer still comes
+        return ACK_OPTIONS[_ack_by_rule(message)][0]
+    except Exception:  # noqa: BLE001 - the full answer continues without an acknowledgement
         return ""
-    return text if 0 < len(text) <= 160 else ""
 
 
 @app.post("/api/chat", dependencies=[Depends(_require_app_token)])
 async def chat(request: ChatRequest):
     """Answer at once, then do the work: the stream opens immediately with a one-line acknowledgement
     (event `ack`) while the skill check, dispatcher and agent run behind it."""
-    if not request.message.strip():
+    message = request.message.strip()
+    if not message:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
-    if request.setup_intro or not _assistant._capability_enabled("instant_ack", default=True):
+    is_conversational = agent_dispatch.is_conversational_turn(
+        message,
+        request.agent or agent_defs.DEFAULT_AGENT,
+        web_search=bool(request.web_search),
+        has_attachments=bool(request.attachments or request.images),
+        setup_intro=bool(request.setup_intro),
+    )
+    if request.setup_intro or is_conversational or not _assistant._capability_enabled("instant_ack", default=True):
         return await _chat_turn(request)
     turn = asyncio.ensure_future(_chat_turn(request))
-    ack = asyncio.ensure_future(asyncio.to_thread(_quick_ack, request.message.strip(), request.interface or ""))
+    ack = asyncio.ensure_future(asyncio.to_thread(_quick_ack, message, request.interface or ""))
 
     async def stream():
-        await asyncio.wait({turn, ack}, return_when=asyncio.FIRST_COMPLETED)
+        await asyncio.wait({turn, ack}, timeout=2.5, return_when=asyncio.FIRST_COMPLETED)
         if ack.done() and not turn.done() and ack.result():
             yield "event: ack\ndata: " + json.dumps({"text": ack.result()}, ensure_ascii=False) + "\n\n"
         try:
@@ -1277,6 +1391,11 @@ async def _chat_turn(request: ChatRequest):
     import time
     request_started = time.monotonic()
     message = request.message.strip()
+    from .visual_input import resolve
+    try:
+        image_parts = resolve(request.images)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
     if not message:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
     attachment_chars = sum(len(item.text) for item in request.attachments)
@@ -1302,11 +1421,11 @@ async def _chat_turn(request: ChatRequest):
     switch = None
     skill_note = ""
     if request.setup_intro:
-        agent, brief = agents.get("builder") or agents[agent_defs.DEFAULT_AGENT], "first-run setup"
+        agent, brief, needs = agents.get("builder") or agents[agent_defs.DEFAULT_AGENT], "first-run setup", None
     elif request.agent:
         if request.agent not in agents:
             raise HTTPException(status_code=400, detail=f"Unknown agent: {request.agent}")
-        agent, brief = agents[request.agent], ""
+        agent, brief, needs = agents[request.agent], "", None
         request.conversation_id, switch = await asyncio.to_thread(
             _route_conversation, request.conversation_id, message, router_url, headers)
     else:
@@ -1316,7 +1435,7 @@ async def _chat_turn(request: ChatRequest):
         dispatch = asyncio.ensure_future(asyncio.to_thread(
             _dispatch_agent, request.conversation_id, message, request.interface or "", router_url, headers))
         found = (None, {})
-        if not request.attachments and _assistant._capability_enabled("skills", default=True):
+        if not request.attachments and not request.images and _assistant._capability_enabled("skills", default=True):
             skill_check = asyncio.ensure_future(asyncio.to_thread(_find_skill, message, router_url, headers))
             try:  # a cold local model must never slow a turn down: past the cap, the agents take it
                 found = await asyncio.wait_for(asyncio.shield(skill_check), timeout=SKILL_CHECK_SECONDS)
@@ -1336,17 +1455,16 @@ async def _chat_turn(request: ChatRequest):
                 return fast
             request.conversation_id = original_conversation
             skill_note = fast  # it failed: the agent does the task and repairs the skill
-        (request.conversation_id, switch), (agent, brief) = await asyncio.gather(route, dispatch)
+        (request.conversation_id, switch), (agent, brief, needs) = await asyncio.gather(route, dispatch)
     fast_conversation = agent_dispatch.is_conversational_turn(
         message,
         agent.name,
         web_search=bool(request.web_search),
-        has_attachments=bool(request.attachments),
+        has_attachments=bool(request.attachments or request.images),
         setup_intro=bool(request.setup_intro),
+        needs=needs,
     )
-    lane = "conversation" if fast_conversation else (
-        "light_work" if agent.name in {"companion", "planner", "tutor"} else "heavy_work"
-    )
+    lane = await asyncio.to_thread(_select_lane, message, agent.name, fast_conversation)
     candidates = _fallback_model_candidates(agent.model or _assistant.model, models, lane=lane)
     if not candidates:
         raise HTTPException(status_code=400, detail="The selected Herald model is unavailable.")
@@ -1395,7 +1513,7 @@ async def _chat_turn(request: ChatRequest):
     # One shared core + the agent made for this situation (agents/*.md). Only the
     # context this agent needs is added below; nothing else rides along.
     system = agent_defs.system_prompt(agent, brief=brief)
-    roster = "" if fast_conversation else await asyncio.to_thread(_tool_roster, agent.part, router_url, headers)
+    roster = "" if fast_conversation else await asyncio.to_thread(_tool_roster, agent.part, router_url, headers, message)
     if roster:
         system += ("\n\nYour Herald tools (server: tool names). They are real and connected; some CLIs only load a "
                    "tool's schema when you search for it, so search for the name and call it. Never tell the user "
@@ -1463,6 +1581,12 @@ async def _chat_turn(request: ChatRequest):
                    f"\nThis message returns to an earlier conversation ({switch.get('title', '')})"
                    ) + (f": {switch['reason']}." if switch.get("reason") else ".")
     messages.append({"role": "system", "content": timing})
+    from .activity import activity as desktop_activity
+    desktop = desktop_activity.desktop_context()
+    if desktop:
+        messages.append({"role": "system", "content": (
+            "Desktop right now (each device's focused window and open windows; this is your passive context, so "
+            "you don't need a tool to know it):\n" + desktop)})
     if request.interface:
         messages.append({"role": "system", "content": "Interface the user is talking from:\n" + request.interface})
     if earlier_block:
@@ -1480,7 +1604,7 @@ async def _chat_turn(request: ChatRequest):
         {"role": item["role"], "content": item.get("model_content") or item["content"]}
         for item in prior_history if int(item["id"]) > int(memory_state["through_message_id"])
     )
-    messages.append({"role": "user", "content": model_message})
+    messages.append({"role": "user", "content": ([{"type": "text", "text": model_message}, *image_parts] if image_parts else model_message)})
     events: Queue[tuple[str, object]] = Queue()
     if switch:
         # First event of the stream: the UI moves to the conversation this message joined.
@@ -1829,6 +1953,71 @@ def canvas_show(element: dict) -> dict[str, object]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.post("/api/teach/recordings", dependencies=[Depends(_require_app_token)])
+def teach_add_recording(body: dict) -> dict[str, object]:
+    """A task the user showed the assistant on a device (teach mode, teach.py)."""
+    from . import teach_store
+    try:
+        return {"recording": teach_store.save(body)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/teach/recordings", dependencies=[Depends(_require_app_token)])
+def teach_list_recordings(device: str | None = None, unread: bool = False, take: bool = False) -> dict[str, object]:
+    """Recent recordings, newest first; `take` marks them read (a device's next turn takes its unread ones)."""
+    from . import teach_store
+    return {"recordings": teach_store.recordings(device=device, unread=unread, take=take)}
+
+
+@app.get("/api/teach/recordings/{recording_id}/images/{index}", dependencies=[Depends(_require_app_token)])
+def teach_recording_image(recording_id: str, index: int) -> Response:
+    from . import teach_store
+    found = teach_store.image(recording_id, index)
+    if found is None:
+        raise HTTPException(status_code=404)
+    return Response(found[0], media_type=found[1], headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/canvas/marks", dependencies=[Depends(_require_app_token)])
+def canvas_add_marks(body: dict) -> dict[str, object]:
+    """What the user pointed at on a device's screen (the overlay's pointing mode)."""
+    try:
+        return {"marks": canvas.store.add_marks(body)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/canvas/marks", dependencies=[Depends(_require_app_token)])
+def canvas_list_marks(device: str | None = None, id: str | None = None, unread: bool = False,
+                      take: bool = False) -> dict[str, object]:
+    """Recent marks, newest first; `take` marks them read (a device's next turn takes its unread ones)."""
+    return {"marks": canvas.store.marks(device=device, marks_id=id, unread=unread, take=take)}
+
+
+@app.get("/api/canvas/marks/{marks_id}/images/{index}", dependencies=[Depends(_require_app_token)])
+def canvas_marks_image(marks_id: str, index: int) -> Response:
+    found = canvas.store.marks_image(marks_id, index)
+    if found is None:
+        raise HTTPException(status_code=404)
+    return Response(found[0], media_type=found[1], headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/canvas/media/{element_id}", dependencies=[Depends(_require_app_token)])
+def canvas_media(element_id: str) -> Response:
+    """A live image element's file on this (main) node, for renderers on other devices, which
+    can't open the main node's paths. Only files a live element points at are served."""
+    element = canvas.store.get(element_id)
+    source = str((element or {}).get("image") or "")
+    path = Path(source)
+    if not source or source.startswith(("http://", "https://")) or not path.is_file():
+        raise HTTPException(status_code=404)
+    media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    if not media_type.startswith("image/"):
+        raise HTTPException(status_code=404)
+    return Response(path.read_bytes(), media_type=media_type, headers={"Cache-Control": "no-store"})
+
+
 @app.delete("/api/canvas", dependencies=[Depends(_require_app_token)])
 def canvas_clear(id: str | None = None, device: str | None = None) -> dict[str, object]:
     return {"removed": canvas.store.remove(id, device=device)}
@@ -1840,9 +2029,20 @@ _UI_DIR = Path(__file__).parent / "ui"
 # Under /api/ on purpose: builds that keep only API routes (the personal build) keep these too.
 @app.get("/api/canvas/ui/card", response_class=HTMLResponse)
 def canvas_card_page() -> HTMLResponse:
-    """The page an interactive (ui) card runs in. Static: the token comes in the URL fragment."""
+    """The page an interactive (ui) card runs in. Static: the token comes in the URL fragment.
+
+    Its own policy, because genui.js compiles card markup with new Function: without one,
+    Herald's relay (/nodes/main/http) adds its default policy, which forbids eval."""
     return HTMLResponse((_UI_DIR / "canvas-card.html").read_text(encoding="utf-8"),
-                        headers={"Cache-Control": "no-store"})
+                        headers={"Cache-Control": "no-store", "Content-Security-Policy": _CARD_CSP})
+
+
+_CARD_CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+             "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; "
+             "media-src 'self' blob: https:; font-src 'self' data:; connect-src 'self'; "
+             # YouTube links play in its privacy-enhanced embed (genui.js video)
+             "frame-src https://www.youtube-nocookie.com https://www.youtube.com; "
+             "object-src 'none'; base-uri 'none'; form-action 'self'")
 
 
 _VENDOR_TYPES = {".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2"}
@@ -1971,6 +2171,35 @@ def get_conversation(conversation_id: str) -> dict[str, object]:
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Conversation ID is invalid.") from exc
     return {"messages": _conversations.history(validated.conversation_id)}
+
+
+@app.post("/api/conversations/{conversation_id}/import", dependencies=[Depends(_require_app_token)])
+def import_conversation_messages(conversation_id: str, body: dict) -> dict[str, object]:
+    """Exchanges a device answered on its own while this node was unreachable (emergency.py),
+    added to the conversation as they happened, without running a turn."""
+    try:
+        validated = ConversationRequest(conversation_id=conversation_id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Conversation ID is invalid.") from exc
+    messages = body.get("messages")
+    if not isinstance(messages, list) or not 1 <= len(messages) <= 200:
+        raise HTTPException(status_code=400, detail="messages: a list of 1-200 messages.")
+    clean = []
+    for message in messages:
+        role, content = (message or {}).get("role"), str((message or {}).get("content") or "")
+        if role not in ("user", "assistant") or not content.strip() or len(content) > 20000:
+            raise HTTPException(status_code=400, detail="Each message needs role user/assistant and 1-20000 characters.")
+        device = str(message.get("device") or "a device")[:40]
+        at = message.get("at")
+        when = datetime.fromtimestamp(at, timezone.utc).isoformat(timespec="minutes") if isinstance(at, (int, float)) else ""
+        note = (f"[Answered on {device} in emergency mode ({message.get('via') or 'a local CLI'}) while the main "
+                f"node was unreachable{', ' + when if when else ''}.]\n" if role == "assistant" else
+                f"[Said on {device} while the main node was unreachable{', ' + when if when else ''}.]\n")
+        clean.append((role, content, note + content))
+    for role, content, model_content in clean:
+        _conversations.append(validated.conversation_id, role, content, model_content=model_content,
+                              agent="emergency" if role == "assistant" else None)
+    return {"imported": len(clean)}
 
 
 @app.get("/api/conversations/{conversation_id}/memory", dependencies=[Depends(_require_app_token)])
@@ -2326,6 +2555,16 @@ def phone_invitation() -> dict[str, object]:
     """A one-time invitation (QR code and link) for the phone app, or what's needed first."""
     from .phone.pairing_invite import invitation
     return invitation()
+
+
+@app.post("/api/phone/fallbacks", dependencies=[Depends(_require_app_token)])
+def phone_fallback_register(body: dict) -> dict[str, object]:
+    """A desktop's emergency endpoint, for the phone to use while this node is unreachable."""
+    from .phone import fallbacks
+    try:
+        return {"registered": fallbacks.register(body.get("node"), body.get("url"), body.get("label", ""))}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/phone/status", dependencies=[Depends(_require_app_token)])

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import sys
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,7 +11,8 @@ from pathlib import Path
 @dataclass(frozen=True)
 class Settings:
     herald_url: str = os.environ.get("HERALD_URL", "http://127.0.0.1:8790")
-    herald_model: str = os.environ.get("HERALD_MODEL", "codex-primary")
+    # Herald's code preset: whichever connected account is tagged for code, or any account when none is.
+    herald_model: str = os.environ.get("HERALD_MODEL", "code")
     herald_session: str = os.environ.get("ULTIMATE_ASSISTANT_SESSION", "ultimate-assistant")
     herald_project: str = os.environ.get("ULTIMATE_ASSISTANT_PROJECT", "friend-assistant")
     herald_part: str = os.environ.get("ULTIMATE_ASSISTANT_PART", "conversation")
@@ -81,3 +83,8 @@ class Settings:
 
 
 settings = Settings()
+
+
+def setup_hint(windows_script: str) -> str:
+    """The setup step to (re)run, for messages: the PowerShell script on Windows, setup-linux.sh elsewhere."""
+    return windows_script if sys.platform == "win32" else "apps/assistant/setup-linux.sh"

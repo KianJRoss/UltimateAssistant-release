@@ -1,7 +1,7 @@
 """Skills: tasks the assistant has learned, saved as scripts with changeable parameters.
 
 A task starts as an agent doing the work. Once it's done and likely to come
-back, the agent distills it into a skill: a script (PowerShell or Python) whose
+back, the agent distills it into a skill: a script (PowerShell, Python or bash) whose
 parameters ("changeable nodes") change the result, plus a description and the
 ways the user asked for it. Every later request is matched against the skills
 by meaning (embeddings); a confident match fills the parameters with a small
@@ -9,13 +9,14 @@ fast model and runs the script directly -- no agent loop. AI stays for what
 the assistant doesn't know yet. See ARCHITECTURE.md (Skills).
 
   <settings dir>/skills/<name>/skill.json   description, parameters, examples, stats
-  <settings dir>/skills/<name>/script.ps1|py the script
+  <settings dir>/skills/<name>/script.ps1|py|sh the script
   <settings dir>/skills/index.sqlite         example embeddings for matching
 
 Scripts get their parameters as PowerShell named arguments (-Level 40; booleans are
 [switch] parameters, passed as -Name when true) or, for
-Python, as JSON in the SKILL_PARAMS environment variable; both also get
-SKILL_PARAMS. stdout is the result shown to the user.
+Python, as JSON in the SKILL_PARAMS environment variable; for bash, as environment variables
+named after the parameters (booleans "1" or empty). All also get SKILL_PARAMS. stdout is the
+result shown to the user.
 """
 from __future__ import annotations
 
@@ -37,11 +38,12 @@ from typing import Any, Callable
 import httpx
 
 from .settings import settings
+from .model_service import preference
 
 NAME = re.compile(r"^[a-z][a-z0-9-]{1,50}$")
 PARAM = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,40}$")
 TYPES = {"string", "integer", "number", "boolean", "choice", "path"}
-RUNNERS = {"powershell": "script.ps1", "python": "script.py"}
+RUNNERS = {"powershell": "script.ps1", "python": "script.py", "bash": "script.sh"}
 SHORTLIST_SCORE = 0.6       # cosine needed to consider a skill (real requests ~0.75+, unrelated ~0.5);
                             # near misses (0.6-0.8) are rejected by the local model, not by this cutoff
 LEXICAL_SHORTLIST_SCORE = 0.3  # word-overlap fallback (no embedding model) scores lower
@@ -67,9 +69,9 @@ def embed(text: str) -> list[float] | None:
     """A vector for text, from the local Ollama embedding model (None when unavailable)."""
     from .memory_store import configured_embedding_model
     model = configured_embedding_model() or os.environ.get("ULTIMATE_ASSISTANT_SKILL_EMBEDDING_MODEL", EMBED_MODEL)
-    endpoint = os.environ.get("ULTIMATE_ASSISTANT_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
+    endpoint = preference("ULTIMATE_ASSISTANT_OLLAMA_URL", "local_model_url", "http://127.0.0.1:11434").rstrip("/")
     try:
-        response = httpx.post(f"{endpoint}/api/embed", timeout=30,
+        response = httpx.post(f"{endpoint}/api/embed", timeout=httpx.Timeout(30, connect=1),
                               json={"model": model, "input": text[:2000],
                                     "keep_alive": os.environ.get("ULTIMATE_ASSISTANT_SKILL_MODEL_KEEP_ALIVE", "30m")})
         response.raise_for_status()
@@ -274,38 +276,16 @@ class SkillStore:
         if not definition:
             raise ValueError(f"no skill named {name!r}")
         params = coerce(definition, values or {})
-        folder = self.path(name)
-        script = folder / RUNNERS[definition["runner"]]
-        env = {**os.environ, "SKILL_PARAMS": json.dumps(params), "SKILL_NAME": name}
-        program = interpreter(definition["runner"])
-        if not program:
-            return {"ok": False, "skill": name, "parameters": params, "output": "", "exit_code": -1, "seconds": 0,
-                    "error": f"this skill is a {definition['runner']} script and this computer has none; "
-                             f"run it on {definition.get('device') or 'the device it was made on'}"}
-        if definition["runner"] == "powershell":
-            command = [program, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(script)]
-            for key, value in params.items():
-                if isinstance(value, bool):  # booleans are [switch] parameters: present when true
-                    if value:
-                        command.append(f"-{key}")
-                else:
-                    command += [f"-{key}", str(value)]
+        device = definition.get("device") or ""
+        if device and device != _this_node():
+            # It works that device's apps and screen: the script runs there, through Herald's relay.
+            result = run_on_device(device, definition, (self.path(name) / RUNNERS[definition["runner"]]).read_text(
+                encoding="utf-8"), params, timeout=timeout)
         else:
-            command = [sys.executable, str(script)]
-        started = time.monotonic()
-        try:
-            proc = subprocess.run(command, cwd=str(folder), env=env, capture_output=True, text=True,
-                                  timeout=timeout, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-            ok, out, err = proc.returncode == 0, proc.stdout.strip(), proc.stderr.strip()
-            code = proc.returncode
-        except subprocess.TimeoutExpired:
-            ok, out, err, code = False, "", f"timed out after {int(timeout)}s", -1
-        except OSError as exc:
-            ok, out, err, code = False, "", f"could not start the script: {exc}", -1
-        seconds = round(time.monotonic() - started, 2)
-        self._record(name, ok, seconds)
-        return {"ok": ok, "skill": name, "parameters": params, "output": out[-4000:], "error": err[-2000:],
-                "exit_code": code, "seconds": seconds}
+            result = execute(definition["runner"], self.path(name) / RUNNERS[definition["runner"]], params,
+                             name=name, timeout=timeout, device=device)
+        self._record(name, result["ok"], result["seconds"])
+        return {"skill": name, "parameters": params, **result}
 
     def _record(self, name: str, ok: bool, seconds: float) -> None:
         with _lock:
@@ -322,12 +302,75 @@ class SkillStore:
             (self.path(name) / "skill.json").write_text(json.dumps(definition, indent=2), encoding="utf-8")
 
 
+def execute(runner: str, script: Path, params: dict[str, Any], *, name: str, timeout: float = 300,
+            device: str = "") -> dict[str, Any]:
+    """Run one skill script here: {ok, output, error, exit_code, seconds}."""
+    env = {**os.environ, "SKILL_PARAMS": json.dumps(params), "SKILL_NAME": name}
+    program = interpreter(runner)
+    if not program:
+        return {"ok": False, "output": "", "exit_code": -1, "seconds": 0,
+                "error": f"this skill is a {runner} script and this computer has none; "
+                         f"run it on {device or 'the device it was made on'}"}
+    if runner == "powershell":
+        command = [program, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(script)]
+        for key, value in params.items():
+            if isinstance(value, bool):  # booleans are [switch] parameters: present when true
+                if value:
+                    command.append(f"-{key}")
+            else:
+                command += [f"-{key}", str(value)]
+    elif runner == "bash":
+        command = [program, str(script)]
+        for key, value in params.items():  # parameter names are valid variable names (PARAM)
+            env[key] = ("1" if value else "") if isinstance(value, bool) else str(value)
+    else:
+        command = [sys.executable, str(script)]
+    started = time.monotonic()
+    try:
+        proc = subprocess.run(command, cwd=str(script.parent), env=env, capture_output=True, text=True,
+                              timeout=timeout, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        ok, out, err, code = proc.returncode == 0, proc.stdout.strip(), proc.stderr.strip(), proc.returncode
+    except subprocess.TimeoutExpired:
+        ok, out, err, code = False, "", f"timed out after {int(timeout)}s", -1
+    except OSError as exc:
+        ok, out, err, code = False, "", f"could not start the script: {exc}", -1
+    return {"ok": ok, "output": out[-4000:], "error": err[-2000:], "exit_code": code,
+            "seconds": round(time.monotonic() - started, 2)}
+
+
+def _this_node() -> str:
+    from .node_link import node_name
+    return node_name()
+
+
+def run_on_device(device: str, definition: dict[str, Any], script: str, params: dict[str, Any], *,
+                  timeout: float = 300) -> dict[str, Any]:
+    """Run a skill on the device it belongs to (its ui_proxy, api/skills/run, through Herald's relay)."""
+    from urllib.parse import quote
+    key = os.environ.get("HERALD_API_KEY")
+    url = f"{settings.herald_url.rstrip('/')}/nodes/{quote(device, safe='')}/http/api/skills/run"
+    started = time.monotonic()
+    try:
+        response = httpx.post(url, headers={"Authorization": f"Bearer {key}"} if key else {},
+                              json={"name": definition["name"], "runner": definition["runner"], "script": script,
+                                    "parameters": params, "timeout": timeout}, timeout=timeout + 60)
+        if response.status_code >= 400:
+            raise RuntimeError(f"HTTP {response.status_code}: {response.text[:300]}")
+        return response.json()
+    except (httpx.HTTPError, ValueError, RuntimeError) as exc:
+        return {"ok": False, "output": "", "exit_code": -1, "seconds": round(time.monotonic() - started, 2),
+                "error": f"{device} could not run it ({exc}); is that device on and connected?"}
+
+
 # -- the fast path ------------------------------------------------------------------
 
 def interpreter(runner: str) -> str | None:
-    """The program that runs this kind of skill here, or None (PowerShell isn't on Linux unless pwsh is)."""
+    """The program that runs this kind of skill here, or None (PowerShell isn't on Linux unless pwsh is;
+    bash isn't on Windows unless Git Bash or WSL put it on PATH)."""
     if runner == "powershell":
         return shutil.which("powershell") or shutil.which("pwsh")
+    if runner == "bash":
+        return shutil.which("bash")
     return sys.executable if runner == "python" else None
 
 
@@ -366,9 +409,9 @@ def parse_match(text: str, candidates: list[dict[str, Any]]) -> tuple[dict[str, 
 
 def local_model_ask(prompt: str) -> str:
     """The small local model (Ollama) for filling skill parameters: fast and always available."""
-    model = os.environ.get("ULTIMATE_ASSISTANT_SKILL_MODEL", "qwen3.5:9b")
-    endpoint = os.environ.get("ULTIMATE_ASSISTANT_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
-    response = httpx.post(f"{endpoint}/api/chat", timeout=40, json={
+    model = preference("ULTIMATE_ASSISTANT_SKILL_MODEL", "skill_model", "qwen3.5:9b")
+    endpoint = preference("ULTIMATE_ASSISTANT_OLLAMA_URL", "local_model_url", "http://127.0.0.1:11434").rstrip("/")
+    response = httpx.post(f"{endpoint}/api/chat", timeout=httpx.Timeout(40, connect=1), json={
         "model": model, "stream": False, "think": False, "format": "json",
         "keep_alive": os.environ.get("ULTIMATE_ASSISTANT_SKILL_MODEL_KEEP_ALIVE", "30m"),  # don't hold GPU memory all day
         "options": {"temperature": 0},
@@ -377,12 +420,41 @@ def local_model_ask(prompt: str) -> str:
     return str(response.json()["message"]["content"])
 
 
-def find(request: str, store: SkillStore, ask: Callable[[str], str]) -> tuple[dict[str, Any] | None, dict[str, Any]]:
-    """The skill (and its parameters) this request should run, or (None, {}). Never raises."""
+def skill_point(request: str, candidates: list[dict[str, Any]]):
+    """The typed question for the close skills: (state, DecisionPoint) whose value is a skill name or "none".
+    One yes/no per skill, each its own call; a skill is picked only when it alone gets a confident yes."""
+    from . import decision_interface as di
+    questions = {c["name"]: di.Question(
+        "noul", f"The user is asking to run the saved skill \"{c['name']}\" now: "
+        f"{' '.join(str(c.get('description') or c['name']).split())[:300]} A question about the skill, an "
+        "explanation, a hypothetical, a past action or an unrelated request does not count.")
+        for c in candidates}
+    point = di.DecisionPoint("skill_match", questions, lambda a: di.pick(a, questions, none="none"))
+    return f"Request: {' '.join(request.split())[:1500]}", point
+
+
+def find(request: str, store: SkillStore, ask: Callable[[str], str],
+         decide_fn: Callable[[Any, dict[str, Any]], dict[str, Any] | None] | None = None
+         ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    """The skill (and its parameters) this request should run, or (None, {}). On the `decision_model`
+    route (or with decide_fn) the typed model first says which close skill fits, or none (then nothing
+    runs and no further model call is made); the small model fills any parameters and, on the `llm` route or
+    when the typed answer is uncertain, also confirms the match. Never raises."""
     try:
         candidates = store.shortlist(request)
         if not candidates:
             return None, {}
-        return parse_match(ask(match_prompt(request, candidates)), candidates)
+        from . import decision_interface as di
+        state, point = skill_point(request, candidates)
+        match = lambda pool: parse_match(ask(match_prompt(request, pool)), pool)  # noqa: E731
+        outcome = di.run(point, state, llm=lambda: match(candidates), backend=decide_fn)
+        if outcome.route != di.ROUTE_DECISION_MODEL:
+            return outcome.value if outcome.ok else (None, {})
+        if outcome.value == "none":
+            return None, {}
+        chosen = next(c for c in candidates if c["name"] == outcome.value)
+        if not chosen["parameters"]:
+            return chosen, {}  # the confident typed match already answered everything
+        return match([chosen])  # parameters still require extraction
     except Exception:  # noqa: BLE001 - the fast path is best effort; the agents are the fallback
         return None, {}

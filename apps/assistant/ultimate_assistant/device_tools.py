@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from urllib.parse import quote
 from pathlib import Path
 
@@ -20,12 +21,13 @@ from .node_link import device_instance, link
 from .settings import settings
 
 DEVICE_GROUP = "device"
-# Screen vision and Windows control are modules: turning a capability on installs its module on
+# Screen vision and desktop control are modules: turning a capability on installs its module on
 # this device the first time, then enables it (module_manager binds it into the device group).
-MODULES = {"vision": "screen-vision", "control": "windows-ui"}
+# Control is per desktop: windows-ui on Windows, hyprland-ui on Linux (same tool names).
+MODULES = {"vision": "screen-vision", "control": "windows-ui" if sys.platform == "win32" else "hyprland-ui"}
 DESCRIPTIONS = {
     "vision": "Screen capture of every monitor, OCR, and optional vision-model description.",
-    "control": "Windows window list (z-order, what is actually visible) and user-opted input control.",
+    "control": "Window list (z-order, what is actually visible) and user-opted input control.",
 }
 CAPABILITY_SETTING = {"vision": "desktop_vision", "control": "desktop_control"}
 
@@ -119,6 +121,46 @@ def register_app_server(key: str, spec: dict) -> str:
     return name
 
 
+def environment_servers() -> dict[str, dict]:
+    """This device's environment for the agents (environment layer): its own tools, recorded and
+    undoable (environment_tools.py), and its shell (Herald's native shell, rooted at home)."""
+    from herald.native_integrations import native_integration_spec
+    app_root = str(Path(__file__).resolve().parents[1])
+    shell = native_integration_spec("shell", root=Path.home())
+    return {
+        "environment": {"command": [sys.executable, "-m", "ultimate_assistant.environment_tools"], "cwd": app_root,
+                        "env": {"PYTHONPATH": app_root}, "timeout": 600,
+                        "description": "This device's environment (OS, settings, apps, files outside the assistant): "
+                                       "its profile, recorded and undoable file changes, Omarchy's commands"},
+        "environment-shell": {"command": shell["config"]["command"], "timeout": 600,
+                              "description": "This device's shell, for changes the environment tools don't cover "
+                                             "(record them with record_environment_change)"},
+    }
+
+
+def _offer_installed_device_modules() -> list[str]:
+    """Device modules the user installed (omarchy, ...) beside the desktop capabilities: the node
+    starts with no servers and Herald reaches a device module only over this node's link, so each
+    enabled one is offered again on every connect."""
+    from .module_manager import ModuleManager
+    manager = ModuleManager()
+    offered = []
+    folders = sorted(manager.root.iterdir()) if manager.root.is_dir() else []
+    for folder in folders:
+        if folder.name in MODULES.values() or not (folder / "state.json").exists():
+            continue  # capabilities are offered (and kept current) by register()
+        try:
+            state = manager.state(folder.name)
+            if (state.get("enabled") and state.get("status") == "ready"
+                    and (state.get("manifest") or {}).get("runs_on") == "device"):
+                manager.bind(folder.name, state, True)
+                offered.append(manager.tool_name(folder.name))
+        except (OSError, ValueError, httpx.HTTPError) as exc:
+            import logging
+            logging.getLogger(__name__).warning("Could not offer device module %s: %s", folder.name, exc)
+    return offered
+
+
 def offer_enabled() -> list[str]:
     """Offer whatever desktop capabilities the user turned on for this device
     (settings.json, or ULTIMATE_ASSISTANT_DESKTOP_VISION/_CONTROL=1), plus the user's own app MCP
@@ -130,7 +172,27 @@ def offer_enabled() -> list[str]:
     offered = []
     for capability, setting in CAPABILITY_SETTING.items():
         if values.get(setting) or os.environ.get("ULTIMATE_ASSISTANT_" + setting.upper()) == "1":
-            offered.append(register(capability))
+            try:
+                offered.append(register(capability))
+            except (ValueError, httpx.HTTPError) as exc:  # e.g. its module isn't in the catalog yet
+                import logging
+                logging.getLogger(__name__).warning("Could not offer desktop %s: %s", capability, exc)
+    offered += _offer_installed_device_modules()
+    if values.get("environment_access") or os.environ.get("ULTIMATE_ASSISTANT_ENVIRONMENT_ACCESS") == "1":
+        for key, spec in environment_servers().items():
+            try:
+                offered.append(register_app_server(key, spec))
+            except (ValueError, httpx.HTTPError) as exc:
+                import logging
+                logging.getLogger(__name__).warning("Could not offer the environment (%s): %s", key, exc)
+    # Explicit per-device server settings win, including an explicit disabled entry.
+    if values.get("playwright_enabled") and "playwright" not in (values.get("device_mcp_servers") or {}):
+        from .browser_setup import playwright_device_spec
+        try:
+            offered.append(register_app_server("playwright", playwright_device_spec()))
+        except (ValueError, httpx.HTTPError) as exc:
+            import logging
+            logging.getLogger(__name__).warning("Could not offer this device's browser: %s", exc)
     for key, spec in (values.get("device_mcp_servers") or {}).items():
         if isinstance(spec, dict) and spec.get("enabled", True):
             try:

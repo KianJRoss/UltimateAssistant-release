@@ -184,6 +184,26 @@ mapping them into a card, and surface stale data or collection errors honestly.
 
 ## Moving and clearing phone items
 
-Set `draggable=true` for a floating note, reference, or interactive card the user may need to move out of the way. Its drag handle moves the item without consuming card controls. Leave it false for screen-aligned arrows and annotations. The user placement survives content updates; changing the item position or disabling dragging restores assistant placement. Removal clears the local placement.
+Set `draggable=true` for a floating note, reference, or interactive card the user may need to move out of the way. Its drag handle moves the item without consuming card controls. Leave it false for screen-aligned arrows and annotations. The user placement survives content updates; changing the item position or disabling dragging restores assistant placement. Removal clears the local placement. Dragging works on the phone and the PC (the top strip of the item).
+
+Set `resizable=true` for things worth enlarging: videos, images, long notes, charts. The user resizes from the bottom-right corner on the PC; the content then fills the new size and scrolls if needed. Like dragging, the size survives content updates and resets when you change the position.
+
+On the PC a dragged item can go to another monitor and stays there; set `monitor_locked=true` to keep
+it on its own monitor. To pin something in place, leave `draggable` false and use `ttl_seconds=0`.
+
+Video cards open 560 px wide on the PC; YouTube links play in place on every device. An `image` that is a file on the main PC also shows on other devices (they fetch it from the main node).
 
 Use finite `ttl_seconds` for demonstrations, and clear showcase elements when finished. `ttl_seconds=0` deliberately persists until cleared. A canvas tool response confirms publication, not verified rendering on the device.
+
+## Pointing
+
+The canvas also works the other way: the user can point things out to you. `canvas_point(prompt)`
+puts their screen into pointing mode with your prompt ("Click the button you mean", "Box the
+paragraph to rewrite"); they mark a point, a box, a freehand stroke or a whole window and press
+Enter. You get each mark (positions in 0-1 of the monitor, the same as drawings, and the window
+under it) and a screenshot with the numbered marks drawn in. Limit `tools` when only one kind makes
+sense. Esc means they chose not to.
+
+They can also point on their own (a hotkey, or while talking). Then the turn's context lists the
+marks and their id; call `canvas_marks(id)` to see the screenshot before answering about "this".
+

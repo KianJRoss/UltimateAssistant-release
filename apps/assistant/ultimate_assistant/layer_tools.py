@@ -14,8 +14,9 @@ mcp = FastMCP("ultimate-assistant-layers")
 @mcp.tool()
 def assistant_layers() -> str:
     """Whether the core is as released (intact / modified / development), this device's recorded
-    setup fixes, the user's own agents, skills and extensions, and contributions written up. Check
-    before changing anything about the assistant itself."""
+    setup fixes, the user's own agents, skills and extensions, the environment layer (recorded
+    changes to the OS and files outside the assistant; the environment tools on each device), and
+    contributions written up. Check before changing anything about the assistant itself."""
     return json.dumps(layers.layers_status(), ensure_ascii=False)
 
 

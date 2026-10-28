@@ -4,6 +4,10 @@ Every node's signals (signals.py) publish app.assistant.signal.focus / .idle / .
 event bus. On the main node this follows Herald's live stream and keeps, per device, the app in
 focus, since when, and whether the user is idle. The life clock reads it to hold the user to a
 close deadline (life_clock.accountability).
+
+app.assistant.signal.desktop carries each device's focused window and open windows (titles,
+workspaces); desktop_context() turns them into the "Desktop right now" block every turn starts
+with, the assistant's passive context.
 """
 from __future__ import annotations
 
@@ -45,6 +49,9 @@ class Activity:
                 state["idle"] = True
             elif kind == "active":
                 state["idle"] = False
+            elif kind == "desktop":
+                state["desktop"] = {"focused": payload.get("focused"), "windows": list(payload.get("windows") or [])}
+                state["desktop_at"] = at
             state["seen"] = at
 
     def current(self) -> dict[str, dict[str, Any]]:
@@ -53,6 +60,24 @@ class Activity:
         with self._lock:
             return {device: {"process": s["process"], "minutes": (now - s["since"]) / 60, "idle": s["idle"]}
                     for device, s in self.devices.items() if now - s.get("seen", 0) < 3600}
+
+    def desktop_context(self, max_age: float = 1800) -> str:
+        """What is on the user's devices right now, for the start of a turn ('' when nothing is known)."""
+        now = time.time()
+        lines = []
+        with self._lock:
+            devices = sorted(self.devices.items())
+        for device, state in devices:
+            desktop = state.get("desktop")
+            if not desktop or now - state.get("desktop_at", 0) > max_age:
+                continue
+            idle = " (idle)" if state.get("idle") else ""
+            focused = desktop.get("focused")
+            lines.append(f"- {device}{idle}: focused " + (_describe(focused) if focused else "nothing"))
+            others = [w for w in desktop.get("windows") or [] if w != focused]
+            if others:
+                lines.append("  open: " + "; ".join(_describe(w) for w in others))
+        return "\n".join(lines)
 
     def follow(self) -> None:
         """Follow Herald's event stream until the process exits (reconnects on its own)."""
@@ -73,6 +98,13 @@ class Activity:
         if self._thread is None or not self._thread.is_alive():
             self._thread = threading.Thread(target=run, name="activity", daemon=True)
             self._thread.start()
+
+
+def _describe(window: dict[str, Any]) -> str:
+    app, title, workspace = (str(window.get(k) or "") for k in ("app", "title", "workspace"))
+    text = f"{app}: {title}" if app and title else app or title or "a window"
+    text += f" <{window['url']}>" if window.get("url") else ""
+    return text + (f" [workspace {workspace}]" if workspace else "")
 
 
 activity = Activity()

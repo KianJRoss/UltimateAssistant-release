@@ -95,8 +95,9 @@ def configure_optional_module(module_id: str, values_json: str = "{}", secret_re
 
 
 @mcp.tool()
-def run_optional_module(module_id: str, arguments_json: str) -> str:
-    """Use the installed upstream CLI for a requested workflow with its configured environment and vault references. Supply a JSON string array of native arguments, never shell code or authentication values. Empty successful output needs further verification; nonzero exit is failure."""
+def run_optional_module(module_id: str, arguments_json: str, profile: str = "") -> str:
+    """Use the installed upstream CLI for a requested workflow with its configured environment and vault references.
+    Choose a named profile for each account; list profiles first when the intended inbox is unclear. Supply a JSON string array of native arguments, never shell code or authentication values. Empty successful output needs further verification; nonzero exit is failure."""
     arguments = json.loads(arguments_json)
     if not isinstance(arguments, list) or not all(isinstance(value, str) for value in arguments):
         raise ValueError("Arguments must be a JSON string array")
@@ -106,7 +107,42 @@ def run_optional_module(module_id: str, arguments_json: str) -> str:
         if not state.get("release") or state["manifest"].get("interface") != "cli":
             raise ValueError("Install a CLI module before running it")
         from .module_runtime import run_cli
-        return json.dumps(run_cli(Path(state["release"]), state["manifest"], manager.path(module_id) / "data", arguments))
+        from .module_profiles import account_data
+        data = account_data(manager.path(module_id) / "data", profile)
+        return json.dumps({**run_cli(Path(state["release"]), state["manifest"], data, arguments),
+                           "profile": profile or "default"})
+
+
+@mcp.tool()
+def manage_optional_module_profile(module_id: str, action: str = "list", profile: str = "", label: str = "") -> str:
+    """List/create/verify isolated account profiles for an installed CLI module.
+    Labels are user-chosen (personal, school, work), not credentials. Creation does not log in.
+    Each profile has its own OAuth/config paths; run_optional_module selects it explicitly.
+    Complete native upstream sign-in for that profile, then verify it with live read-only checks.
+    """
+    from . import module_profiles
+    manager = ModuleManager()
+    with _locked(manager):
+        state = manager.state(module_id)
+        if not state.get("release") or state["manifest"].get("interface") != "cli":
+            raise ValueError("Install a CLI module before managing account profiles")
+        if not state["manifest"].get("account_profiles"):
+            raise ValueError("This module does not declare isolated account profiles")
+        data = manager.path(module_id) / "data"
+        if action == "list":
+            return json.dumps({"profiles": module_profiles.profiles(data), "default_status": state.get("status", "needs_setup")})
+        if action == "create":
+            return json.dumps(module_profiles.create(data, profile, label))
+        if action == "verify":
+            return json.dumps(module_profiles.verify(Path(state["release"]), state["manifest"], data, profile))
+        raise ValueError("Use list, create, or verify")
+
+
+@mcp.tool()
+def recent_observations(limit: int = 20) -> str:
+    """When the assistant last looked at an app's contents or the screen (tool, tier, focused app, time; never what it saw)."""
+    from . import context_use
+    return json.dumps({"observations": context_use.recent_observations(limit)})
 
 
 if __name__ == "__main__":

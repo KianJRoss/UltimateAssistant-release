@@ -1,2 +1,3 @@
-e40cc363b9be30d738a972fc5b814d287d662b819df623ef45ad47c4d6db9762  UltimateAssistant-0.3.2-windows-x64.zip
+156f4894e8d889115ae1ef59abf8bc008c8465b003c8e11578f378aa4cb888c8  UltimateAssistant-0.4.0-windows-x64.zip
+226c202ca5d770e9cfe22b9daaa6e454029e1ae78e3bd0280e0a698341af7c1e  UltimateAssistant-0.4.0-linux.tar.gz
 70c514aed63d50e26871a773de7f7ba7b522160dacbe83c83eadb71ba6703e7a  UltimateAssistant-phone-1.1.0.apk

@@ -15,6 +15,7 @@ from typing import Any
 import httpx
 
 from .settings import settings
+from .model_service import preference
 
 MEMORY_CATEGORIES = {"rule", "preference", "context", "episode"}
 _PRIVATE_MEMORY_FIELDS = {"embedding_model", "embedding_dimension"}
@@ -35,9 +36,9 @@ def ollama_embedding(text: str) -> list[float] | None:
     model = configured_embedding_model()
     if not model:
         return None
-    endpoint = os.environ.get("ULTIMATE_ASSISTANT_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
+    endpoint = preference("ULTIMATE_ASSISTANT_OLLAMA_URL", "local_model_url", "http://127.0.0.1:11434").rstrip("/")
     response = httpx.post(
-        f"{endpoint}/api/embed", json={"model": model, "input": text[:6000]}, timeout=20,
+        f"{endpoint}/api/embed", json={"model": model, "input": text[:6000]}, timeout=httpx.Timeout(20, connect=1),
     )
     response.raise_for_status()
     payload = response.json()

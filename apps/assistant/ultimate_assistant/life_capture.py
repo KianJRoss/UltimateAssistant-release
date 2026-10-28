@@ -136,19 +136,21 @@ def describe(saved: dict[str, Any]) -> str:
 COMMITMENT = ("The user mentions something still ahead of them that they have to do, attend, pay or submit, "
               "a chore they do regularly, or a place they are going now; not something already done, a "
               "question or a wish.")
-JEV_GATE = 0.6
 
 
 def worth_extracting(message: str, judge: Callable[[str, str], float | None] | None = None) -> bool:
-    """The decision model's yes/no when the Router has one (cheap, and it ignores questions and
-    past events), else the similarity gate."""
-    if judge is None:
-        from .decisions import is_true as judge
-    probability = judge(message, COMMITMENT)
-    if probability is not None:
-        return probability >= JEV_GATE
-    cutoff = GATE_SCORE if skills.embed("probe") else LEXICAL_GATE_SCORE
-    return gate(message) >= cutoff
+    """Is a commitment mentioned? One typed yes/no (decision_interface): on the `decision_model` route the
+    model answers when confident (it ignores questions and past events); the similarity gate is the rule
+    form, used on the default `llm` route and whenever the typed answer is uncertain or unavailable."""
+    from . import decision_interface as di
+
+    def similarity() -> bool:
+        cutoff = GATE_SCORE if skills.embed("probe") else LEXICAL_GATE_SCORE
+        return gate(message) >= cutoff
+
+    outcome = di.yes_no("commitment_gate", COMMITMENT, message, rule=similarity,
+                        backend=di.judge_backend(judge))
+    return bool(outcome.value) if outcome.ok else False
 
 
 def observe(message: str, ask: Callable[[str], str], tell: Callable[[str], None],

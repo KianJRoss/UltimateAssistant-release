@@ -10,6 +10,9 @@
 - User layer: what the user built or taught it. Their agents (agents/), skills (skills/),
   extensions (extensions/: scripts, automations, their own modules) and settings. Updates never
   touch it.
+- Environment layer (user data/environment, environment.py): where the assistant lives and what
+  it controls, everything outside its own folders (the OS, settings, apps, files). Every change
+  made there through the environment tools is recorded on the device it changed, undoable.
 - Contributions (user data/contributions): a change the core needs, or something the user built
   that others could use, written up to send to the developer, only when the user says so.
 """
@@ -180,8 +183,17 @@ def layers_status() -> dict[str, Any]:
     return {"core": core_status(), "device": {"folder": str(device_root()), "fixes": device_fixes()},
             "user": {"agents": count(user_root() / "agents"), "skills": count(user_root() / "skills"),
                      "extensions": count(extensions_root()), "extensions_folder": str(extensions_root())},
+            "environment": _environment_status(),
             "contributions": [{k: c.get(k) for k in ("id", "kind", "title", "created_at", "sent_at")}
                               for c in contributions()]}
+
+
+def _environment_status() -> dict[str, Any]:
+    from . import environment
+    entries = environment.changes()
+    live = [c for c in entries if not c.get("undone_at")]
+    return {"folder": str(environment.root()), "changes": len(live), "undone": len(entries) - len(live),
+            "recent": [{k: c.get(k) for k in ("id", "at", "kind", "summary", "path", "why")} for c in live[-5:]]}
 
 
 def contributions() -> list[dict[str, Any]]:

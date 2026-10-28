@@ -1,3 +1,36 @@
+# 0.4.0 — Any AI account, reminders that know when to speak up
+
+- Use any AI account: a subscription CLI, an API key or a local model. The assistant picks a model for
+  conversation, quick tasks and heavy work from what each connected account can do, so a single API key
+  now does everything. Set your own order with `model_preferences` in settings.json.
+- Reminders weigh how much something matters, whether you already said "Got it", whether you're at a
+  screen, and travel time: things that matter are heard about earlier and count down to when to leave;
+  routine tasks and chores never take over the screen or speak; a busy moment arrives as one summary card
+  where you can tick off what's done. Pushback while gaming only happens for things that matter.
+- Optional mixed Quick decisions mode: your AI model always does the work, and a small decision model
+  (Jev, or tev1 locally) answers only quick yes/no checks that measured at least 90% correct and no slower,
+  like which specialist handles a message. Routing now asks clear questions per specialist.
+- A confidently matched saved skill with nothing to fill in runs without an extra model call.
+
+## Linux desktop interaction
+
+
+- Generate Kokoro speech locally on capable desktop nodes, reuse the loaded speech
+  worker, preserve shared voice preferences, and fall back to server speech. Add
+  stage timings to native status and logs for response-latency diagnosis.
+
+- Validate microphone WAV data after stopping capture; accept PipeWire's exit
+  code 1 only after an intentional stop, while rejecting empty or failed captures.
+- Resolve browser dependencies on Linux as well as Windows, and offer an opted-in
+  device browser without saving a fixed Chromium revision path in settings.
+
+- Native PipeWire voice invocation uses the existing assistant's transcription,
+  conversations, agents, memory and speech, with optional text access and no Pi.
+- Fix browser requests through device proxies, include device context on chat,
+  and expose device-local module management over the node link.
+- Route satellite canvas output to the named device and respect signal/canvas/
+  native voice opt-outs.
+
 # 0.3.2 — The phone app
 
 - Pair an Android phone (8.0 or newer): ask the assistant to pair your phone, scan the code it shows, and the phone gets the same conversation, voice and the assistant's canvas. The assistant can act on the phone when you allow it (open apps, read and use the screen, files). The phone reaches the computer through Tailscale, so it works away from home too. Get the app from the releases page; the assistant gives you the link when pairing.

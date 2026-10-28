@@ -156,12 +156,30 @@ def parse_shift(text: str, earlier_ids: set[str]) -> tuple[str | None, str]:
     return None, ""
 
 
+def shift_point(message: str, recent: list[dict[str, Any]], earlier: list[dict[str, Any]]):
+    """The typed form of the conversation-shift question: (state, DecisionPoint). The point's value is
+    "same", "new" or an earlier conversation id. One yes/no for continuing the current conversation and
+    one per earlier conversation, each its own call: the one confident yes wins, all confident noes is new."""
+    from . import decision_interface as di
+    questions = {"same": di.Question("noul", "The new message continues the current conversation's goal: a "
+                                             "follow-up, clarification, correction or sub-step.")}
+    for item in earlier[-EARLIER_IN_PROMPT:]:
+        questions[item["id"]] = di.Question("noul", "The new message returns to this earlier conversation: "
+                                                    f"{' '.join(str(item.get('title', '')).split())[:200]}")
+    turns = "\n".join(f"{m['role']}: {' '.join(str(m.get('content') or '').split())[:300]}" for m in recent[-6:])
+    state = f"Current conversation:\n{turns or '(none)'}\nNew message: {' '.join(message.split())[:1500]}"
+    point = di.DecisionPoint("conversation_shift", questions, lambda a: di.pick(a, questions, none="new"))
+    return state, point
+
+
 def decide(message: str, current: dict[str, Any] | None, recent: list[dict[str, Any]],
            earlier: list[dict[str, Any]], ask_model: Callable[[str], str], *,
-           now: datetime | None = None) -> tuple[str | None, str]:
+           now: datetime | None = None,
+           decide_fn: Callable[[Any, dict[str, Any]], dict[str, Any] | None] | None = None) -> tuple[str | None, str]:
     """Where this message belongs: None (current conversation), "new", or an
-    earlier conversation id -- with a short reason. Never raises: any failure
-    keeps the current conversation."""
+    earlier conversation id -- with a short reason. The decision model answers first
+    on the `decision_model` route (or through decide_fn); the fast model otherwise or when it can't say. Never raises: any
+    failure keeps the current conversation."""
     now = now or now_utc()
     last = parse((current or {}).get("last_at"))
     if not current or not last:
@@ -170,8 +188,16 @@ def decide(message: str, current: dict[str, Any] | None, recent: list[dict[str, 
         return "new", "quiet gap"
     if likely_follow_up(message, last, now):
         return None, ""
-    try:
+    from . import decision_interface as di
+    state, point = shift_point(message, recent, earlier)
+
+    def llm() -> tuple[str | None, str]:
         text = ask_model(shift_prompt(message, recent[-8:], earlier[-EARLIER_IN_PROMPT:], last, now, user_timezone()))
-    except Exception:  # noqa: BLE001 - the check is best effort
-        return None, ""
-    return parse_shift(text, {c["id"] for c in earlier})
+        return parse_shift(text, {c["id"] for c in earlier})
+
+    outcome = di.run(point, state, llm=llm, backend=decide_fn)
+    if not outcome.ok:
+        return None, ""  # the check is best effort: keep the current conversation
+    if outcome.route == di.ROUTE_DECISION_MODEL:
+        return (None, "") if outcome.value == "same" else (outcome.value, "decision model")
+    return outcome.value
