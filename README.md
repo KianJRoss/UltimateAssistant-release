@@ -46,6 +46,10 @@ In the app, connect a subscription or paste an API key. A single API key is enou
 for conversation, quick tasks and heavier work from what your accounts can do. Once an account is verified, the
 assistant offers to help set itself up; answer its questions and it handles the technical steps.
 
+Connecting through G4F (a ChatGPT browser session instead of the official CLI or an API key) is a gray area:
+it can go against the provider's terms, and a provider may limit, block or ban an account used this way. We
+aren't responsible if that happens; use it at your own risk.
+
 Setup downloads the Herald Router from [Herald's public release](https://github.com/KianJRoss/herald-release) and
 checks it against a pinned checksum. Optional features (school, phone control, desktop controls, calendar,
 budgeting and more) are separate downloads listed in [modules/catalog.json](modules/catalog.json) and install only
