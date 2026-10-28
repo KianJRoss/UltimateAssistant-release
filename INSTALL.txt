@@ -1,6 +1,6 @@
-Ultimate Assistant 0.4.0
+Ultimate Assistant 0.4.2
 
-Windows (UltimateAssistant-0.4.0-windows-x64.zip)
+Windows (UltimateAssistant-0.4.2-windows-x64.zip)
 1. Extract this entire ZIP to a writable folder.
 2. Double-click apps\assistant\Install-UltimateAssistant.cmd.
    Or run apps\assistant\Install-UltimateAssistant.ps1 from PowerShell.
@@ -10,7 +10,7 @@ Windows (UltimateAssistant-0.4.0-windows-x64.zip)
 Requirements: Windows PowerShell 5.1 or newer, internet access, and Python 3.13 with the py launcher (the
 installer gets it with Windows Package Manager when missing).
 
-Linux (UltimateAssistant-0.4.0-linux.tar.gz)
+Linux (UltimateAssistant-0.4.2-linux.tar.gz)
 1. Extract the archive to a folder you keep (the assistant runs from it).
 2. Run ./install.sh from that folder.
 3. The assistant runs as a user service at login at http://127.0.0.1:8765. Connect an AI subscription or an API

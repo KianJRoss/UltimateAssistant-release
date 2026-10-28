@@ -1,6 +1,6 @@
 # Source and verification
 
-Version: 0.4.0. The implementation source commit and the download checksums are recorded in `release.json` and
+Version: 0.4.2. The implementation source commit and the download checksums are recorded in `release.json` and
 `SHA256SUMS.txt`.
 
 `apps/` and `components/` match the Windows release bundle exactly. The Linux archive contains the same files,
@@ -24,9 +24,10 @@ The phone app's source is in `companions/android` (Android 8.0+); its signed APK
 Optional daily diagnostic sharing stays off on every fresh installation; consent lives only in user data,
 is bound to the reviewed destination, and can be revoked.
 
-Validation for 0.4.0: the full assistant test suite passed. Both bundles and the Herald packages passed the
+Validation for 0.4.2: the full assistant test suite passed. Both bundles and the Herald packages passed the
 publication check for private markers. Fresh installations were verified from these exact files on a clean
 Windows 11 guest (Python 3.13 provisioned by the installer, app started at sign-in after a reboot, local Router
-serving models) and on a fresh Linux (Omarchy) user account (installer, user service at login, local Router).
+serving models) and on a fresh Linux (Omarchy) user account (installer, user service at login, local Router). An automatic update from the published 0.3.2 to these
+files, and rolling that update back, were verified on the same Windows guest.
 
 License: GNU Affero General Public License v3.0 or later, see `LICENSE`.

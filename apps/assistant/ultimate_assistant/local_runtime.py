@@ -30,6 +30,14 @@ def _runtime_mutex():
     return (kernel, handle), True
 
 
+def _registers_startup(environ, os_name: str = os.name) -> bool:
+    """Whether this launch (re)points the Windows sign-in launcher at itself. Not for explicit opt-outs and
+    isolated preview launchers, and not for a selected update: it runs as a child of the original
+    installation, whose launcher must keep owning sign-in, or a rollback would start this version again."""
+    return os_name == "nt" and not any(environ.get(name) for name in (
+        "ULTIMATE_ASSISTANT_NO_SHORTCUT", "ULTIMATE_ASSISTANT_NO_STARTUP", "ULTIMATE_ASSISTANT_UPDATE_CHILD"))
+
+
 def main() -> None:
     while _run_once():
         os.environ.pop("ULTIMATE_ASSISTANT_UPDATE_CHILD", None)
@@ -47,11 +55,8 @@ def _run_once() -> bool:
     base = os.environ.get("LOCALAPPDATA")
     data = (Path(base) if base else Path.home() / ".ultimate-assistant") / "UltimateAssistant"
     data.mkdir(parents=True, exist_ok=True)
-    # Existing installations gain the same sign-in launcher as new installs.
-    # Respect explicit opt-out and isolated preview launchers.
-    if (os.name == "nt"
-            and not os.environ.get("ULTIMATE_ASSISTANT_NO_SHORTCUT")
-            and not os.environ.get("ULTIMATE_ASSISTANT_NO_STARTUP")):
+    # Existing installations gain the same sign-in launcher as new installs (see _registers_startup).
+    if _registers_startup(os.environ):
         startup_script = Path(__file__).resolve().parents[1] / "configure-startup.ps1"
         if startup_script.exists():
             result = subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",

@@ -458,6 +458,17 @@ store = CanvasStore()
 _overlay: subprocess.Popen | None = None
 
 
+def _desktop_tools(workspace_root: Path) -> Path:
+    """The Windows overlay's environment: where setup-desktop-tools.ps1 recorded it (a short folder, clear of the
+    260-character path limit), or the in-installation folder older installations used."""
+    pointer = workspace_root / ".venvs" / "desktop-tools.path"
+    try:
+        recorded = pointer.read_text(encoding="utf-8-sig").strip()
+    except OSError:
+        recorded = ""
+    return Path(recorded) if recorded else workspace_root / ".venvs" / "desktop-tools"
+
+
 def overlay_command(workspace_root: Path) -> list[str] | None:
     """How to start the PC overlay on this machine, or None when it isn't installed."""
     script = workspace_root / "components" / "canvas-overlay" / "overlay.py"
@@ -467,7 +478,7 @@ def overlay_command(workspace_root: Path) -> list[str] | None:
         if not (os.environ.get("WAYLAND_DISPLAY") and Path("/usr/lib/libLayerShellQtInterface.so.6").exists()):
             return None
     else:
-        python = workspace_root / ".venvs" / "desktop-tools" / "Scripts" / "pythonw.exe"
+        python = _desktop_tools(workspace_root) / "Scripts" / "pythonw.exe"
         if sys.platform != "win32":
             return None
     if not script.is_file() or not python.is_file():

@@ -1,4 +1,64 @@
 {
+  "0.4.2": [
+    {
+      "id": "any-account",
+      "title": "Use any AI account",
+      "summary": "Connect a subscription or just an API key; the assistant picks the right model for each job from what you connected.",
+      "prompt": "Which AI accounts am I connected with, and which one do you use for quick replies versus bigger tasks? Only look; don't change anything.",
+      "expected": "Your connected accounts, and which handles quick replies and which handles heavier work."
+    },
+    {
+      "id": "reminders",
+      "title": "Reminders that know when to speak up",
+      "summary": "Things that matter get earlier, louder reminders and count down to when you need to leave; small things stay quiet, and a busy day arrives as one summary.",
+      "prompt": "I'm trying the new reminders. Pretend I said: 'Dentist tomorrow at 3pm, it takes 30 minutes to get there.' Tell me when and how you'd remind me, but mark it as a practice item and delete it afterwards.",
+      "expected": "An earlier heads-up because it matters, and a reminder timed to when you need to leave."
+    },
+    {
+      "id": "quick-decisions",
+      "title": "Optional quick decisions",
+      "summary": "A mixed mode can add a small decision model for quick yes/no checks, like which specialist handles a message. Your AI model still does the real work.",
+      "prompt": "Explain the Quick decisions setting: what the mixed mode changes, what it costs, and whether it would help with my setup. Don't change the setting.",
+      "expected": "An explanation of the default and mixed modes, and a suggestion for your setup."
+    },
+    {
+      "id": "linux-desktop",
+      "title": "Better on Linux desktops",
+      "summary": "Local speech, microphone fixes and device-aware browser and canvas behavior on Linux.",
+      "prompt": "What can you do on this computer's desktop right now? Only look; don't change anything.",
+      "expected": "A short list of what the assistant can see and do on this desktop."
+    }
+  ],
+  "0.4.1": [
+    {
+      "id": "any-account",
+      "title": "Use any AI account",
+      "summary": "Connect a subscription or just an API key; the assistant picks the right model for each job from what you connected.",
+      "prompt": "Which AI accounts am I connected with, and which one do you use for quick replies versus bigger tasks? Only look; don't change anything.",
+      "expected": "Your connected accounts, and which handles quick replies and which handles heavier work."
+    },
+    {
+      "id": "reminders",
+      "title": "Reminders that know when to speak up",
+      "summary": "Things that matter get earlier, louder reminders and count down to when you need to leave; small things stay quiet, and a busy day arrives as one summary.",
+      "prompt": "I'm trying the new reminders. Pretend I said: 'Dentist tomorrow at 3pm, it takes 30 minutes to get there.' Tell me when and how you'd remind me, but mark it as a practice item and delete it afterwards.",
+      "expected": "An earlier heads-up because it matters, and a reminder timed to when you need to leave."
+    },
+    {
+      "id": "quick-decisions",
+      "title": "Optional quick decisions",
+      "summary": "A mixed mode can add a small decision model for quick yes/no checks, like which specialist handles a message. Your AI model still does the real work.",
+      "prompt": "Explain the Quick decisions setting: what the mixed mode changes, what it costs, and whether it would help with my setup. Don't change the setting.",
+      "expected": "An explanation of the default and mixed modes, and a suggestion for your setup."
+    },
+    {
+      "id": "linux-desktop",
+      "title": "Better on Linux desktops",
+      "summary": "Local speech, microphone fixes and device-aware browser and canvas behavior on Linux.",
+      "prompt": "What can you do on this computer's desktop right now? Only look; don't change anything.",
+      "expected": "A short list of what the assistant can see and do on this desktop."
+    }
+  ],
   "0.4.0": [
     {
       "id": "any-account",

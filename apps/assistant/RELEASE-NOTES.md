@@ -1,3 +1,14 @@
+# 0.4.2 — Rollback on Windows
+
+- Rolling back an update on Windows returns to the previous version at the next sign-in: a selected update no
+  longer takes over the sign-in launcher.
+
+# 0.4.1 — Updates on Windows
+
+- Updating on Windows works: the desktop overlay's environment now lives in a short folder, clear of Windows'
+  260-character path limit, which an update's folder exceeded (and long usernames could on a fresh install).
+- Everything in 0.4.0 below.
+
 # 0.4.0 — Any AI account, reminders that know when to speak up
 
 - Use any AI account: a subscription CLI, an API key or a local model. The assistant picks a model for
