@@ -8,10 +8,10 @@ A personal assistant that runs on your own computer, with its own local Herald R
 already have: a subscription (ChatGPT, Google AI or Claude through their official CLIs), an API key, or a local
 model. Your keys stay encrypted on your device; there is no account with us and no server of ours in between.
 
-## Download: v0.4.2
+## Download: v0.4.3
 
-- **Windows:** [UltimateAssistant-0.4.2-windows-x64.zip](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.2/UltimateAssistant-0.4.2-windows-x64.zip)
-- **Linux:** [UltimateAssistant-0.4.2-linux.tar.gz](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.2/UltimateAssistant-0.4.2-linux.tar.gz)
+- **Windows:** [UltimateAssistant-0.4.3-windows-x64.zip](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.3/UltimateAssistant-0.4.3-windows-x64.zip)
+- **Linux:** [UltimateAssistant-0.4.3-linux.tar.gz](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.3/UltimateAssistant-0.4.3-linux.tar.gz)
 - **Android phone app:** [UltimateAssistant-phone-1.1.0.apk](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/phone-v1.1.0/UltimateAssistant-phone-1.1.0.apk) (pair it from the assistant)
 
 Checksums are in [SHA256SUMS.txt](SHA256SUMS.txt). See the [release notes](RELEASE-NOTES.md) and

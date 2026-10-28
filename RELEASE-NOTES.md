@@ -1,3 +1,9 @@
+# 0.4.3 — G4F accounts marked as a gray area
+
+- The g4f account card now says plainly that G4F reaches providers through their websites rather than their
+  official APIs, and that a provider may limit, block or ban an account used this way, at your own risk.
+- Uses Herald 0.4.1, which shows the same notice in its dashboard and command line.
+
 # 0.4.2 — Rollback on Windows
 
 - Rolling back an update on Windows returns to the previous version at the next sign-in: a selected update no
