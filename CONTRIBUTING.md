@@ -25,3 +25,5 @@ release notes.
 
 Ultimate Assistant is licensed under the GNU Affero General Public License v3.0 or later. By contributing, you
 agree that your contribution is licensed under the same terms ([LICENSE](LICENSE)).
+
+Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
