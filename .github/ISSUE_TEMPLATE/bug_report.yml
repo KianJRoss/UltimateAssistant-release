@@ -1,0 +1,47 @@
+name: Bug report
+description: Something in Ultimate Assistant doesn't work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Security problems go through the private process in SECURITY.md, not an issue.
+        Leave out account details, tokens, login codes, private conversations and screen captures.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: From `apps/assistant/VERSION` in the install folder.
+      placeholder: e.g. 0.4.2
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Operating system
+      options: [Windows 11, Windows 10, Linux, Android phone app]
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Installing, Updating, Connecting an AI account, Conversation, Reminders, Optional module, Phone app, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you asked or clicked, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Optional. Attach the file from *Download diagnostics* in the app; it holds no conversations, prompts, files or credentials.

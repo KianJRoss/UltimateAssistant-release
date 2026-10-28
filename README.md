@@ -1,5 +1,9 @@
 # Ultimate Assistant
 
+[![Latest release](https://img.shields.io/github/v/release/KianJRoss/UltimateAssistant-release?label=release)](https://github.com/KianJRoss/UltimateAssistant-release/releases/latest)
+[![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
+![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-lightgrey)
+
 A personal assistant that runs on your own computer, with its own local Herald Router. Bring any AI account you
 already have: a subscription (ChatGPT, Google AI or Claude through their official CLIs), an API key, or a local
 model. Your keys stay encrypted on your device; there is no account with us and no server of ours in between.
@@ -10,7 +14,17 @@ model. Your keys stay encrypted on your device; there is no account with us and 
 - **Linux:** [UltimateAssistant-0.4.2-linux.tar.gz](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.2/UltimateAssistant-0.4.2-linux.tar.gz)
 - **Android phone app:** [UltimateAssistant-phone-1.1.0.apk](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/phone-v1.1.0/UltimateAssistant-phone-1.1.0.apk) (pair it from the assistant)
 
-Checksums are in [SHA256SUMS.txt](SHA256SUMS.txt). See the [release notes](RELEASE-NOTES.md).
+Checksums are in [SHA256SUMS.txt](SHA256SUMS.txt). See the [release notes](RELEASE-NOTES.md) and
+[all releases](https://github.com/KianJRoss/UltimateAssistant-release/releases).
+
+### Requirements
+
+| | Windows | Linux |
+|---|---|---|
+| System | Windows 11, x64 | A systemd-based distribution (tested on Arch/Omarchy); desktop features are built for Hyprland |
+| Python | 3.13 (installed for you with Windows Package Manager if missing) | 3.13 (`python3.13`, or `mise` to install it) |
+| Other | Internet access during setup | `curl` and internet access during setup |
+| AI account | Any one: a ChatGPT, Google AI or Claude subscription, an API key, or a local model | Same |
 
 ### Install on Windows
 
@@ -63,8 +77,8 @@ license. See [SOURCE.md](SOURCE.md) for how the source relates to the downloads,
 [third-party notices](apps/assistant/THIRD_PARTY_NOTICES.md). The Kokoro speech model's Apache-2.0 license is in
 `apps/assistant/models/kokoro`.
 
-## Feedback
+## Feedback and contributing
 
-Report problems in [Issues](https://github.com/KianJRoss/UltimateAssistant-release/issues) with the version, what
-you asked, and what happened. Keep account details, tokens, login codes and private screen captures out of public
-reports.
+Report problems or suggest features in [Issues](https://github.com/KianJRoss/UltimateAssistant-release/issues/new/choose).
+Keep account details, tokens, login codes and private screen captures out of public reports. Security problems
+go through [SECURITY.md](SECURITY.md) instead. Pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
