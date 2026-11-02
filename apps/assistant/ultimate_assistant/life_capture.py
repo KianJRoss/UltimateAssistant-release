@@ -133,7 +133,7 @@ def describe(saved: dict[str, Any]) -> str:
     return f"{saved['title']}{when}"
 
 
-COMMITMENT = ("The user mentions something still ahead of them that they have to do, attend, pay or submit, "
+COMMITMENT = ("The user mentions something still ahead of them that they have to do, attend, pay, submit or be reminded to do, "
               "a chore they do regularly, or a place they are going now; not something already done, a "
               "question or a wish.")
 
@@ -145,6 +145,8 @@ def worth_extracting(message: str, judge: Callable[[str, str], float | None] | N
     from . import decision_interface as di
 
     def similarity() -> bool:
+        if (message or "").strip().endswith("?"):
+            return False
         cutoff = GATE_SCORE if skills.embed("probe") else LEXICAL_GATE_SCORE
         return gate(message) >= cutoff
 

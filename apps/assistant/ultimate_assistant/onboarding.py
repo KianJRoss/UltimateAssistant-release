@@ -73,6 +73,25 @@ def connect(provider: str, name: str = '') -> str:
     return name
 
 
+LOCAL_SERVERS = (('Ollama', 'http://127.0.0.1:11434', '/api/tags'), ('LM Studio', 'http://127.0.0.1:1234', '/v1/models'))
+
+
+def local_model_servers(timeout=1.5):
+    """Local model apps answering on this device, with their chat models (embedding models left out)."""
+    found = []
+    for label, root, path in LOCAL_SERVERS:
+        try:
+            response = httpx.get(root + path, timeout=timeout)
+            response.raise_for_status()
+            data = response.json()
+        except (httpx.HTTPError, ValueError):
+            continue
+        names = [m.get('name') for m in data.get('models', [])] if path == '/api/tags' else [m.get('id') for m in data.get('data', [])]
+        models = sorted(n for n in names if isinstance(n, str) and n and 'embed' not in n.lower())
+        found.append({'server': label, 'base_url': root + '/v1', 'models': models})
+    return found
+
+
 def save_api_key(name, provider, model, key, base_url=''):
     if not key.strip(): raise ValueError('Enter an API key in this secure form.')
     if base_url:

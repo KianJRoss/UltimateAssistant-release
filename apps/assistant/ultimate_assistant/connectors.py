@@ -16,8 +16,8 @@ def connector_catalog(*, connected: set[str] | None = None) -> list[dict[str, ob
     return [
         {
             "id": "workspace-tools", "name": "Files and device tools", "category": "Built in",
-            "status": "included", "setup": "Already included. Choose the assistant workspace in Settings; files and shell tools are scoped to that folder.",
-            "user_steps": ["Choose the folder Herald may work in."],
+            "status": "included", "setup": "Already included. File and command tools work only inside the assistant's work folder.",
+            "user_steps": [],
         },
         {
             "id": "google-workspace", "name": "Google Workspace", "category": "Google",
@@ -25,21 +25,21 @@ def connector_catalog(*, connected: set[str] | None = None) -> list[dict[str, ob
             "profiles": google_profiles,
             "module_id": "google-workspace",
             "installed": bool(google.get("release")),
-            "setup": "Uses the friend's own Google OAuth consent. No account credentials or tokens are copied from the developer machine.",
+            "setup": "Uses your own Google sign-in and consent. No passwords or tokens come from anyone else's computer.",
             "user_steps": ["Sign in to the intended Google account.", "Approve only the access needed for the requested Google services."],
             "auto_setup": "OAuth application registration is required. Inspect existing setup without reading credentials, consult official Google Workspace CLI/provider documentation, and use supported CLI or authenticated browser tools to prepare the project/client and connection. Handle technical configuration yourself. Keep new connector state in this assistant's per-user folder; do not adopt or overwrite unrelated developer accounts. Request only necessary sign-in/consent or account privileges. If no usable OAuth client or registration access exists, explain that actual blocker; do not claim that an unimplemented shared app login is available.",
         },
         {
             "id": "zotero", "name": "Zotero", "category": "Research",
             "status": "connected" if "ultimate-assistant-zotero" in (connected or set()) else "setup_needed",
-            "setup": "Connects read-only to the user's Zotero library. The API key is verified, then stored in Herald's encrypted local vault; the MCP is registered only to this assistant's project.",
+            "setup": "Reads your Zotero library (read-only). Your API key is checked, then kept in the encrypted vault on this computer.",
             "user_steps": ["Enter the Zotero user ID and a personal API key with read-only library access."],
             "auto_setup": "The app verifies credentials with Zotero, stores the API key in the encrypted Herald vault, and registers read-only library search, collection listing, and item lookup tools. The key is never sent to the model.",
         },
         {
             "id": "obsidian", "name": "Obsidian", "category": "Knowledge", 
             "status": "configured_unverified" if obsidian_config.is_file() else "setup_needed",
-            "setup": "Uses the community Local REST API plugin in the user's own running Obsidian vault.",
+            "setup": "Works with your own Obsidian vault through the community Local REST API plugin.",
             "user_steps": ["Install and enable the Obsidian Local REST API community plugin.", "Copy its local API key; keep Obsidian running while using the connector."],
             "auto_setup": "The app can configure and register the MCP after the plugin is enabled; plugin installation and key creation remain user actions.",
         },

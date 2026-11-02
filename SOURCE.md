@@ -1,6 +1,6 @@
 # Source and verification
 
-Version: 0.4.3. The implementation source commit and the download checksums are recorded in `release.json` and
+Version: 0.4.4. The implementation source commit and the download checksums are recorded in `release.json` and
 `SHA256SUMS.txt`.
 
 `apps/` and `components/` match the Windows release bundle exactly. The Linux archive contains the same files,
@@ -24,10 +24,9 @@ The phone app's source is in `companions/android` (Android 8.0+); its signed APK
 Optional daily diagnostic sharing stays off on every fresh installation; consent lives only in user data,
 is bound to the reviewed destination, and can be revoked.
 
-Validation for 0.4.3: the full assistant test suite passed, and both bundles and the Herald packages passed the
-publication check for private markers. 0.4.3 changes only text (the G4F notice) and the pinned Herald version
-(0.4.1, the same notice) from 0.4.2. 0.4.2's fresh installations were verified on a clean Windows 11 guest and a
-fresh Linux (Omarchy) user account, along with an automatic update from 0.3.2 and its rollback; those tests
-were not repeated for 0.4.3.
+Validation for 0.4.4: the assistant decision, routing, onboarding and release test suites passed, live benchmarks
+verified the 40-question parallel turn surmise (`jev`, OpenRouter `jev-latest`, `perplexity/pplx-decider-v1.2`,
+`liquid/d1.1`) and local `tev1` split, and both bundles and the Herald 0.4.2 packages passed the publication check
+for private markers.
 
 License: GNU Affero General Public License v3.0 or later, see `LICENSE`.

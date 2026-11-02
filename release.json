@@ -1,8 +1,8 @@
 {
-  "version": "0.4.3",
-  "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.3/UltimateAssistant-0.4.3-windows-x64.zip",
-  "sha256": "69d2a4d41110579f8d0bab6cef38d1ed07110c6f8758008fc7289baee06bc8ea",
-  "source_commit": "f7665f5541093f36501c57b1f45a52aae92917f1",
+  "version": "0.4.4",
+  "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.4/UltimateAssistant-0.4.4-windows-x64.zip",
+  "sha256": "efa3a59e1c5b7e3f4efb40fca38680ed4f0a4fc20b0235f0502ff55577e3f615",
+  "source_commit": "041f7d94f917579c52d1b1454d67aa2bec20149e",
   "channel": "release",
   "diagnostics_upload_url": "https://kianserver-2.taile4f97e.ts.net:10000/assistant-diagnostics",
   "phone_app": {
@@ -13,7 +13,7 @@
     "min_android": "8.0"
   },
   "linux": {
-    "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.3/UltimateAssistant-0.4.3-linux.tar.gz",
-    "sha256": "84d3fb4d1b2d1b0c5dcaccdc74d1e3a2c683974243a312608c214c1337544286"
+    "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.4/UltimateAssistant-0.4.4-linux.tar.gz",
+    "sha256": "90a88f4b4bbb6de29b010a512f617834ab4b70625ad906456abaea19fe3711b3"
   }
 }

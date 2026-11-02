@@ -789,6 +789,11 @@ def api_key_setup(request:APIKeyRequest):
         raise HTTPException(409,detail="API-key setup is blocked. Check the provider, model and base URL; the key is never shown in diagnostics.") from None
 
 
+@app.get("/api/onboarding/local-models", dependencies=[Depends(_require_app_token)])
+def local_models():
+    return {"servers": onboarding.local_model_servers()}
+
+
 @app.post("/api/onboarding/verify", dependencies=[Depends(_require_app_token)])
 def verify_provider(request:AccountRequest):
     try:return onboarding.verify_account(request.name)

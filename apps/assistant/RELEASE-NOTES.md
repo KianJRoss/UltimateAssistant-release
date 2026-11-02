@@ -1,3 +1,12 @@
+# 0.4.4 — Conversation-first web app and 40-question parallel turn surmise
+
+- Redesigned the web app around the conversation on desktop and phone, with a one-line header and a tabbed settings panel (Voice, Tasks, Memory, Apps, School when installed, Accounts, About). Setup detects local Ollama or LM Studio models automatically and keeps connected accounts first.
+- Three-tier Quick decisions split:
+  - **Parallel hosted decision APIs (`Jev`, OpenRouter `/api/v1/systemone`, OpenAI `/v1/decisions` `gpt-6-luna`, Perplexity `pplx-decider-v1.2`, Liquid `d1.1`, Cloudflare `clef`)**: `surmise_turn` asks a 40-question wide semantic surmise (`turn_surmise`) in a single ~159–319 ms forward pass, settling specialist routing, tool necessity, the background commitment gate, and a privacy-safe semantic brief in one request with 100% accuracy and zero LLM fallbacks on Jev and `pplx-decider-v1.2`.
+  - **Local sequential decision models (`tev1` on Ollama / `llama.cpp`)**: Keeps the lean 5-question specialist routing module (164 ms when settled) plus the 1-question `commitment_gate` (27 ms, 100% accuracy) so single-GPU latency stays fast.
+  - **Default BYOK (`llm` route)**: Uses your connected AI account and deterministic rules with zero decision-model calls.
+- Uses Herald 0.4.2, which adds native OpenRouter `/api/v1/systemone` support, `batch_mode` (`parallel` vs. `sequential`) discovery, and a 400-question batch limit.
+
 # 0.4.3 — G4F accounts marked as a gray area
 
 - The g4f account card now says plainly that G4F reaches providers through their websites rather than their

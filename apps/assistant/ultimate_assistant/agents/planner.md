@@ -1,6 +1,6 @@
 ---
 name: planner
-description: Recording, changing or planning the user's own commitments and time. Tasks, deadlines, appointments, reminders, recurring schedules, plans for a day or week, and prioritizing. Not looking information up and not operating a device.
+description: Recording, changing or planning the user's own commitments, lists and time. Tasks, lists, deadlines, appointments, meetings, reminders, recurring schedules, plans for a day or week, and prioritizing. Not looking information up and not operating a device.
 tools: [assistant_modules, assistant_tasks, assistant_memory]
 handoffs: [tutor, researcher, operator]
 ---

@@ -48,10 +48,10 @@ DEFAULT_CONFIDENCE = 0.7  # a yes/no between 30% and 70% is unsure: the alternat
 # The points where a decision model belongs: observable yes/no questions, asked often, that measured at
 # least 90% correct and no slower than the normal model (tools/decisions/route_bench.py). Every other
 # point keeps its normal model or rule even on the decision_model route, until it is measured and passes.
-# Not here: conversation_shift (75% measured), farewell (a phrase rule is instant), commitment_gate and
-# model_lane (not measured yet), known_option (not a yes/no).
+# Not here: conversation_shift (75% measured), model_lane (75% measured; agent rule is 0.1 ms), farewell
+# (a phrase rule is instant), known_option (not a yes/no).
 DECISION_MODEL_POINTS = frozenset({"route", "needs_tools", "importance", "leisure", "skill_match",
-                                   "module_need", "toolsets"})
+                                   "module_need", "toolsets", "commitment_gate", "turn_surmise"})
 # Tests switch this off; production reports usage to Herald in a background thread.
 REPORT_USAGE = True
 _LLM_CALLS: ContextVar[list[dict[str, Any]] | None] = ContextVar("decision_llm_calls", default=None)
@@ -116,6 +116,37 @@ def decision_settings() -> dict[str, str]:
     return {"route": route if route in {ROUTE_LLM, ROUTE_DECISION_MODEL} else DEFAULT_ROUTE,
             "provider": str(config.get("decision_provider") or "").strip(),
             "model": str(config.get("decision_model") or "").strip()}
+
+
+_SEQUENTIAL_HINTS = {"ollama", "llama_cpp", "openai_compatible", "tev1", "local"}
+
+
+def provider_is_parallel(provider: str | None = None, model: str | None = None) -> bool:
+    """Return True when the active decision provider evaluates 40+ questions in one parallel forward pass
+    (hosted APIs: Jev, OpenRouter, OpenAI, Perplexity, Cloudflare, Liquid), or False when questions run
+    sequentially on a local GPU (Ollama / llama.cpp running tev1)."""
+    cfg = decision_settings()
+    prov = (provider if provider is not None else cfg["provider"]).strip()
+    mod = (model if model is not None else cfg["model"]).strip()
+    if prov.lower() in _SEQUENTIAL_HINTS or mod.lower() in {"tev1", "tev1:latest"}:
+        return False
+    try:
+        client = _sdk_client()
+        if client is not None and hasattr(client, "list_decision_providers"):
+            items = client.list_decision_providers()
+            if isinstance(items, list):
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    if (prov and item.get("name") == prov) or (not prov and item.get("is_default")):
+                        if item.get("batch_mode") == "sequential":
+                            return False
+                        if item.get("batch_mode") == "parallel":
+                            return True
+                        return str(item.get("provider_type") or "").lower() not in _SEQUENTIAL_HINTS
+    except Exception:  # noqa: BLE001
+        pass
+    return True
 
 
 # ---- answer validation ------------------------------------------------------------------------

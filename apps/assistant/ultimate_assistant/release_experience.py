@@ -49,8 +49,19 @@ def shared_checks() -> dict[str, str]:
     return {key: value for key, value in checks.items() if key in allowed and value in RESULTS}
 
 
+def _first_run(consent: dict) -> bool:
+    # Nothing recorded yet, by the tour or by diagnostics consent: this is a new installation, not an update.
+    return not consent and not (settings.user_settings_file.parent/'update-experience.json').exists()
+
+
 def status() -> dict:
     from .diagnostics import preferences
+    if _first_run(preferences()):
+        # A new user has nothing to compare with, so there is no "what's new"; the optional diagnostics request
+        # waits a day rather than greeting them on their first screen.
+        with _LOCK:
+            _save({'first_version': current_version(), 'versions': {current_version(): {'status': 'done'}},
+                   'sharing': {'snoozed_until': time.time()+86400}})
     saved = _load()
     version = current_version()
     entry = saved.get('versions', {}).get(version, {})

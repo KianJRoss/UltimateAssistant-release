@@ -26,15 +26,15 @@ _DECISION_LOG_LOCK = threading.Lock()
 _WORK_OR_TOOL_RE = re.compile(
     r"\b(?:"
     r"open|launch|close|click|type|press|window|windows|screen|screenshot|monitor|monitors|display|canvas|overlay|"
-    r"omarchy|hyprland|hyprctl|quickshell|waybar|theme|wallpaper|background|font|keybind|keybinding|bind|unbind|shortcut|hotkey|"
+    r"omarchy|hyprland|hyprctl|quickshell|waybar|theme|dark mode|light mode|wallpaper|background|font|keybind|keybinding|bind|unbind|shortcut|hotkey|"
     r"workspace|tile|tiling|float|floating|fullscreen|bar|widget|plugin|hook|scale|scaling|resolution|gap|gaps|border|borders|blur|opacity|animation|animations|"
     r"night light|hyprsunset|idle|lock|screensaver|touchpad|mouse|keyboard|audio|volume|speaker|mic|microphone|bluetooth|wifi|network|tailscale|battery|power|brightness|"
     r"package|pacman|yay|aur|flatpak|systemd|journalctl|coredump|coredumpctl|crash|crashed|segfault|undo|revert|restore|settings|config|"
     r"run|execute|command|powershell|terminal|bash|script|code|file|folder|directory|path|edit|write|create|delete|remove|install|uninstall|setup|configure|connect|fix|debug|restart|service|process|"
-    r"task|todo|to-do|commitment|deadline|due|remind|reminder|schedule|cron|every morning|every day|timer|alarm|plan my|"
+    r"task|todo|to-do|shopping list|grocery list|to-do list|todo list|my list|commitment|deadline|due|remind|reminder|appointment|meeting|schedule|cron|every morning|every day|timer|alarm|plan my|"
     r"remember|forget|save to memory|update memory|earlier conversation|previous conversation|last conversation|"
-    r"search|look up|google|find out|research|zotero|paper|citation|price|latest|news|weather|"
-    r"flashcard|quiz me|study session|practice problem|homework|assignment|portal"
+    r"search|look up|google|find out|research|zotero|paper|citation|price|cost|compare|review|reviews|latest|news|weather|who won|"
+    r"flashcard|flashcards|quiz|study|practice problem|practice problems|step by step|homework|assignment|portal"
     r")\b",
     re.I,
 )
@@ -113,12 +113,12 @@ def parse(text: str, agents: dict[str, Agent]) -> tuple[str, str]:
 # is answerable from the message alone, never about what the assistant knows or can do. An agent the user
 # adds gets a question from its description (agent_statement). All of them saying no is the default agent.
 ROUTING = {
-    "operator": "The message asks to operate a computer or phone directly: open, close, click, type into or "
-                "change an app, window, file or setting.",
-    "researcher": "The message asks for information from outside sources: prices, news, reviews, availability, "
-                  "documentation, or what a source says.",
-    "planner": "The message is about the user's own tasks, deadlines, appointments, reminders or schedule: "
-               "adding, changing or asking about them.",
+    "operator": "The message asks to operate the computer or phone screen, windows or device settings: open, close, "
+                "click or type in a window, take a screenshot, or change the theme, wallpaper, volume or brightness.",
+    "researcher": "The message asks for information from outside sources or compares products: prices, news, reviews, "
+                  "product comparisons, weather, scores, availability, documentation, or what a source says.",
+    "planner": "The message is about the user's own tasks, shopping or to-do lists, deadlines, appointments, "
+               "meetings, reminders or schedule: adding, changing or asking about them.",
     "tutor": "The message asks to be taught, quizzed or helped to study a subject: step-by-step explanations, "
              "practice problems, flashcards or homework help.",
     "builder": "The message asks to write, fix or run code or a script, or to install, connect or set up an "
@@ -143,6 +143,81 @@ class Route(NamedTuple):
     brief: str
     needs: bool  # needs tools or a specialist (not the quick conversational lane)
     by: str      # "decision_model", "fast_model", "keywords" or "default"
+
+
+class Surmise(NamedTuple):
+    """Privacy-safe multi-facet turn surmise for parallel hosted decision APIs (Jev, OpenRouter, OpenAI, etc.).
+    Settles specialist routing, tool necessity, and commitment extraction in one 40-question forward pass
+    while synthesizing a brief from facet IDs alone (never copying user prompt text)."""
+    agent: str
+    brief: str
+    needs: bool
+    commitment: bool | None
+    facets: dict[str, float]
+    by: str
+
+
+SURMISE_COMMITMENT_QUESTION = (
+    "The user mentions something still ahead of them that they have to do, attend, pay, submit or be reminded to do, "
+    "a chore they do regularly, or a place they are going now; not something already done, a question or a wish."
+)
+
+# 35 additional observable yes/no facets (combined with the 5 ROUTING questions = 40 questions total).
+# Designed for parallel hosted System One / Decisions APIs (Jev, OpenRouter, OpenAI, Perplexity, Liquid, Cloudflare),
+# which evaluate all 40 questions in a single ~130-250 ms forward pass. Local sequential providers (Ollama/llama.cpp)
+# keep the lean 5-question routing_module() path.
+SURMISE_FACETS: dict[str, str] = {
+    # Operator sub-facets (5)
+    "op_window_app": "The user wants to open, launch, close, focus, click, or type inside an application or window.",
+    "op_visual_theme": "The user wants to change visual display settings such as dark mode, light mode, theme, wallpaper, or screen brightness.",
+    "op_audio_media": "The user wants to mute, unmute, or change the computer or device audio volume.",
+    "op_screenshot": "The user wants to take a screenshot or capture what is currently on the screen.",
+    "op_device_setting": "The user wants to toggle or adjust a live hardware or operating-system setting on their device.",
+    # Planner sub-facets (5)
+    "pl_todo_shopping": "The user wants to add, remove, or check items on a personal shopping list, grocery list, or to-do list.",
+    "pl_calendar_meeting": "The user wants to schedule, move, cancel, or check a calendar appointment or meeting.",
+    "pl_reminder_timer": "The user wants to set a reminder, alarm, or scheduled notification for a future time.",
+    "pl_schedule_query": "The user is asking what tasks, deadlines, appointments, or events they have coming up.",
+    "pl_deadline_due": "The user mentions a personal deadline, assignment due date, or bill that must be paid by a specific time.",
+    # Researcher sub-facets (5)
+    "re_price_cost": "The user is asking how much a product costs or looking for current prices or deals.",
+    "re_weather_scores": "The user is asking for a weather forecast or sports game scores and results.",
+    "re_news_current": "The user wants to look up current news, recent events, or newly released information.",
+    "re_reviews_compare": "The user wants product reviews, buying recommendations, or a feature comparison between products.",
+    "re_external_facts": "The user is asking to look up facts, availability, or documentation from external sources.",
+    # Tutor sub-facets (5)
+    "tu_explain_concept": "The user wants a step-by-step educational explanation of how an academic or scientific concept works.",
+    "tu_quiz_flashcards": "The user wants to be quizzed or have flashcards generated to test their knowledge.",
+    "tu_practice_problems": "The user is asking for practice problems or exercises to learn a subject.",
+    "tu_homework_essay": "The user is asking for help with school homework, an academic essay, or a class assignment.",
+    "tu_study_session": "The user is studying for a test, exam, or class and wants tutoring assistance.",
+    # Builder sub-facets (5)
+    "bu_write_script": "The user wants a new program, bash script, or Python script written to automate a task.",
+    "bu_fix_debug": "The user has a bug, exception, or broken code/integration and wants help fixing or debugging it.",
+    "bu_install_connect": "The user wants to install, configure, or connect an external app, account, or service integration.",
+    "bu_file_automation": "The user wants code or a script to batch-process, back up, or rename files and folders.",
+    "bu_system_config": "The user wants to build or modify software features, plugins, or assistant integrations.",
+    # Conversational / non-action facets (5)
+    "co_greeting_chat": "The message is casual greeting, small talk, laughter, or friendly conversation.",
+    "co_emotional_mood": "The user is sharing how they feel emotionally, their mood, or a personal experience like going for a walk.",
+    "co_opinion_question": "The user is asking for a casual opinion or personal preference (such as favorite movie or food taste).",
+    "co_passing_mention": "Words related to computers, art, or tools appear only as a passing topic or metaphor, not an action request.",
+    "co_past_completed": "The user is stating that they already finished or completed an activity in the past, with no new action requested.",
+    # Commitment-gate facets (5)
+    "commitment_gate": SURMISE_COMMITMENT_QUESTION,
+    "cm_future_task": "The user states a personal task, errand, or phone call they need to do in the future.",
+    "cm_future_event": "The user states an upcoming appointment, meeting, or event they are attending.",
+    "cm_bill_or_due": "The user states an upcoming bill to pay or an assignment/project due date ahead of them.",
+    "cm_only_question_or_past": "The message is only asking a general question, asking about their schedule, or describing something already completed in the past.",
+}
+
+_SPECIALIST_PREFIX = {
+    "operator": "op_",
+    "planner": "pl_",
+    "researcher": "re_",
+    "tutor": "tu_",
+    "builder": "bu_",
+}
 
 
 def _state(message: str, recent: list[dict[str, Any]], current_agent: str | None, interface: str) -> str:
@@ -234,6 +309,125 @@ def choose(message: str, recent: list[dict[str, Any]], agents: dict[str, Agent],
     chosen = route(message, recent, agents, ask_model, current_agent=current_agent, interface=interface,
                    decide=decide)
     return chosen.agent, chosen.brief
+
+
+def surmise_questions(agents: dict[str, Agent]) -> dict[str, di.Question]:
+    """40-question blind semantic surmise battery for parallel hosted decision APIs."""
+    base = routing_module(agents).questions
+    combined = {**base, **SURMISE_FACETS}
+    return {name: di.Question("noul", text) for name, text in combined.items()}
+
+
+def decode_surmise(answers: dict[str, di.Answer], agents: dict[str, Agent]) -> tuple[str, str, bool, bool | None, dict[str, float]] | None:
+    """Reconstruct (agent, brief, needs_tools, commitment, active_facets) purely from the 40 boolean/probability
+    answers, without ever reading the user's prompt text."""
+    module = routing_module(agents)
+    agent = module.resolve(answers)
+    if agent is None:
+        # Tie-break or borderline resolution using the 5 orthogonal sub-facets per specialist
+        scores: dict[str, int] = {}
+        for spec, prefix in _SPECIALIST_PREFIX.items():
+            if spec not in module.questions:
+                continue
+            sub_yes = sum(1 for k, a in answers.items() if k.startswith(prefix) and a.confident and a.value)
+            canon_yes = 2 if (spec in answers and answers[spec].value and (answers[spec].confidence or 0) >= 0.6) else 0
+            scores[spec] = canon_yes + sub_yes
+        ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+        conv_yes = sum(1 for k, a in answers.items() if k.startswith("co_") and a.confident and a.value)
+        if ranked and ranked[0][1] >= 2 and (len(ranked) == 1 or ranked[0][1] >= ranked[1][1] + 2):
+            agent = ranked[0][0]
+        elif conv_yes >= 1 and all(v == 0 for v in scores.values()):
+            agent = DEFAULT_AGENT
+        else:
+            return None
+
+    # Commitment gate resolution from the same 40-question pass
+    cm_main = answers.get("commitment_gate")
+    pos_keys = ("cm_future_task", "cm_future_event", "cm_bill_or_due")
+    cm_pos = any(answers.get(k) and answers[k].confident and answers[k].value for k in pos_keys)
+    cm_all_neg = all(answers.get(k) and answers[k].confident and not answers[k].value for k in pos_keys)
+    cm_neg = bool(answers.get("cm_only_question_or_past") and answers["cm_only_question_or_past"].confident
+                  and answers["cm_only_question_or_past"].value)
+    commitment: bool | None = None
+    if cm_main is not None and cm_main.confident:
+        commitment = False if (cm_neg and not cm_pos) else bool(cm_main.value)
+    elif cm_pos and not cm_neg:
+        commitment = True
+    elif cm_neg or cm_all_neg or agent in {"operator", "researcher", "tutor", "builder"}:
+        commitment = False
+
+    active_facets: dict[str, float] = {}
+    for key, ans in answers.items():
+        if ans.confidence is not None and ans.value:
+            active_facets[key] = round(ans.confidence, 3)
+
+    facet_tags = [k for k in active_facets if k not in module.questions and k != "commitment_gate"][:4]
+    brief = f"surmise:{agent}" + (f" [{','.join(facet_tags)}]" if facet_tags else "")
+    return agent, brief, agent != DEFAULT_AGENT, commitment, active_facets
+
+
+def surmise_turn(message: str, recent: list[dict[str, Any]], agents: dict[str, Agent],
+                 ask_model: Callable[[str], str], *, current_agent: str | None = None,
+                 interface: str = "",
+                 decide: Callable[[Any, dict[str, Any]], dict[str, Any] | None] | None = None) -> Surmise:
+    """Run the 40-question Wide Semantic Surmise on parallel hosted decision APIs (Jev, OpenRouter, OpenAI, etc.),
+    or automatically split into the lean 5Q route + 1Q commitment_gate on sequential local models (tev1/Ollama)."""
+    from .. import life_capture
+    cfg = di.decision_settings()
+    if decide is None and (cfg["route"] != di.ROUTE_DECISION_MODEL or not di.provider_is_parallel(cfg["provider"], cfg["model"])):
+        lean_route = route(message, recent, agents, ask_model, current_agent=current_agent, interface=interface)
+        if lean_route.agent in {"operator", "researcher", "tutor", "builder"}:
+            commitment = False
+        else:
+            commitment = life_capture.worth_extracting(message)
+        needs = False if (lean_route.agent == DEFAULT_AGENT and not commitment) else lean_route.needs
+        result = Surmise(lean_route.agent, lean_route.brief, needs, commitment, {}, lean_route.by)
+        decision_log("turn_surmise", {
+            "route": "lean_local" if cfg["route"] == di.ROUTE_DECISION_MODEL else "llm",
+            "agent": result.agent,
+            "needs": result.needs,
+            "commitment": result.commitment,
+            "facets": None,
+            "by": result.by,
+            "fallback_reason": None,
+        })
+        return result
+
+    state = _state(message, recent, current_agent, interface)
+    questions = surmise_questions(agents)
+    seen: dict[str, di.Answer] = {}
+
+    def interpret(ans: dict[str, di.Answer]) -> tuple[str, str, bool, bool | None, dict[str, float]] | None:
+        seen.update(ans)
+        return decode_surmise(ans, agents)
+
+    point = di.DecisionPoint("turn_surmise", questions, interpret)
+    outcome = di.run(point, state, backend=decide)
+    if outcome.route == di.ROUTE_DECISION_MODEL and isinstance(outcome.value, tuple):
+        agent, brief, needs, commitment, facets = outcome.value
+        if commitment is None:
+            commitment = False if agent in {"operator", "researcher", "tutor", "builder"} else life_capture.worth_extracting(message)
+        result = Surmise(agent, brief, needs, commitment, facets, "decision_model")
+    else:
+        fallback_route = route(message, recent, agents, ask_model, current_agent=current_agent,
+                               interface=interface, decide=decide)
+        if fallback_route.agent in {"operator", "researcher", "tutor", "builder"}:
+            commitment = False
+        else:
+            commitment = life_capture.worth_extracting(message)
+        needs = False if (fallback_route.agent == DEFAULT_AGENT and not commitment) else fallback_route.needs
+        result = Surmise(fallback_route.agent, fallback_route.brief, needs,
+                         commitment, {}, fallback_route.by)
+    decision_log("turn_surmise", {
+        "route": outcome.route or "none",
+        "agent": result.agent,
+        "needs": result.needs,
+        "commitment": result.commitment,
+        "facets": result.facets or None,
+        "by": result.by,
+        "fallback_reason": outcome.fallback_reason or None,
+    })
+    return result
 
 
 def decision_log(kind: str, record: dict[str, Any]) -> None:

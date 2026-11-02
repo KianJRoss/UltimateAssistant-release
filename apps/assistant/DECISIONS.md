@@ -54,10 +54,11 @@ force another routing call after a confident negative.
 
 | Point | Typed form | Ordinary route / fallback |
 | --- | --- | --- |
-| Agent and needs-tools routing | routing `Module`: noul per specialist (observable); all no is the companion, quick lane | work rules and agent-routing LLM, given the module's hints |
+| Turn surmise (`turn_surmise`, parallel hosted providers) | 40-question `noul` battery (5 specialist questions + 35 sub-intent facets across `planner`, `researcher`, `coder`, `operator`, `tutor`, `commitment`, and `companion`) | falls back to lean 5Q routing + 1Q commitment gate on sequential local providers (`ollama`, `llama_cpp`, `tev1`) or LLM/rules |
+| Agent and needs-tools routing (`agent_and_work_routing`, sequential local providers) | routing `Module`: 5 `noul` questions per specialist (observable); all no is the companion, quick lane | work rules and agent-routing LLM, given the module's hints |
 | Conversation shift | noul continues, noul per earlier conversation; all no is new | conversation-shift LLM |
 | Skill match | noul per close skill; all no is none | matching LLM |
-| Commitment gate | noul | embedding/lexical similarity rule |
+| Commitment gate (`commitment_gate`) | noul (included inside `turn_surmise` on parallel hosted providers, or 1Q gate on local `tev1`) | embedding/lexical similarity rule |
 | Module need | noul | module confirmation LLM |
 | Leisure / importance | noul | LLM classification, then executable/structured-item rules |
 | Model lane | noul heavy work | agent lane rule; conversational turns keep their fast path |
@@ -65,6 +66,14 @@ force another routing call after a confident negative.
 | Voice goodbye | noul for short utterances, on the main backend | farewell phrase rule |
 | Toolsets | noul per connected server | LLM shortlist, then the complete scoped inventory |
 | Known-option tool | none (many options, not a yes/no) | LLM choice, then no match |
+
+### Three-tier split: parallel hosted APIs, sequential local models, and BYOK default
+
+`provider_is_parallel(provider, model)` in `decision_interface.py` separates the `decision_model` route into two execution profiles while keeping `decision_route == "llm"` as the zero-overhead BYOK default:
+
+1. **Parallel hosted System One / Decisions APIs (`typesafe` Jev, `openrouter` `/api/v1/systemone`, `openai` `/v1/decisions` `gpt-6-luna`, `perplexity` `pplx-decider-v1.2`, `liquid` `d1.1`, `cloudflare` `clef`)**: `surmise_turn()` sends a 40-question **wide semantic surmise** (`turn_surmise`) in a single ~159–319 ms forward pass. The 35 sub-facets and 5 canonical specialist questions settle `(agent, needs_tools, commitment_gate, brief)` simultaneously with 100% accuracy and zero LLM routing fallbacks on Jev (`jev-1.14.0` direct and `jev-latest` via OpenRouter) and `perplexity/pplx-decider-v1.2`, while reconstructing a non-extractive semantic brief purely from fixed facet labels without copying raw prompt text.
+2. **Sequential local System One models (`ollama`, `llama_cpp`, `tev1`)**: Local single-GPU servers evaluate questions sequentially (~90–110 ms/question). They run the lean 5-question `agent_and_work_routing` module (164 ms when settled, 100% accuracy after LLM fallback on uncertain ties) plus the 1-question `commitment_gate` (27 ms, 100% accuracy).
+3. **Default BYOK (`decision_route == "llm"`)**: Uses the connected LLM and deterministic rules with zero decision-model calls.
 
 Toolsets select a prompt shortlist within the current part's scope. They do not
 change persistent scope or remove discovery access. `choose_known_option` is an

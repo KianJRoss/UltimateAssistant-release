@@ -2,301 +2,423 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="app-token" content="__APP_TOKEN__">
   <title>Ultimate Assistant</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237b8cff'/%3E%3Cstop offset='1' stop-color='%23a57aff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='18' fill='url(%23g)'/%3E%3Cpath d='M32 13l4.5 14.5L51 32l-14.5 4.5L32 51l-4.5-14.5L13 32l14.5-4.5z' fill='white'/%3E%3C/svg%3E">
   <style>
-    :root { color-scheme: dark; font-family: Inter, "Segoe UI", sans-serif; background: #101319; color: #eef1f7; }
+    :root {
+      color-scheme: dark;
+      --bg: #101319; --surface: #151922; --surface-2: #191e28; --surface-3: #232a37; --surface-4: #2d3545;
+      --border: #2a3140; --border-strong: #3a4558; --text: #eef1f7; --muted: #a4aec0; --faint: #7d889b;
+      --accent: #6d7bf0; --accent-hover: #7c89ff; --accent-soft: #6d7bf026; --danger: #ffc2cb; --danger-border: #a54b58;
+      --radius: 14px;
+      font-family: Inter, "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text);
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at top, #20283a 0, #101319 58%); }
-    .shell { width: min(900px, 100%); height: 100vh; min-height: 520px; margin: auto; padding: 22px; display: flex; flex-direction: column; gap: 16px; }
-    header { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 4px 2px; }
-    .brand { display: flex; align-items: center; gap: 12px; }
-    .mark { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 14px; background: linear-gradient(145deg, #7b8cff, #a57aff); font-size: 22px; box-shadow: 0 8px 28px #7886ff30; }
-    h1 { font-size: 17px; margin: 0 0 3px; letter-spacing: .2px; }
-    .sub { color: #929db1; font-size: 12px; }
-    .controls { display: flex; align-items: center; gap: 10px; }
-    select, button, textarea { font: inherit; }
-    select { max-width: 220px; padding: 9px 30px 9px 11px; border-radius: 10px; border: 1px solid #303848; background: #191e28; color: #e8ebf2; }
-    .status { color: #aab5c8; font-size: 12px; min-width: 80px; text-align: right; }
-    .chat { flex: 1; overflow: auto; padding: 22px clamp(10px, 5vw, 54px); border: 1px solid #272e3a; border-radius: 22px; background: #151922d9; box-shadow: 0 20px 70px #0003; }
-    .welcome { max-width: 520px; margin: 12vh auto 0; text-align: center; }
-    .welcome-icon { font-size: 34px; margin-bottom: 10px; }
-    .welcome h2 { font-size: 22px; margin: 0 0 8px; }
-    .welcome p { color: #9ca7ba; line-height: 1.55; }
-    .message { display: flex; margin: 17px 0; }
-    .message.user { justify-content: flex-end; }
-    .bubble { max-width: min(680px, 90%); padding: 12px 15px; border-radius: 17px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+    [hidden] { display: none !important; }
+    body { margin: 0; min-height: 100dvh; background: radial-gradient(ellipse at top, #20283a 0, var(--bg) 58%) fixed; }
+    a { color: #b8c0ff; }
+    select, button, textarea, input { font: inherit; }
+    button { cursor: pointer; border: 0; color: var(--text); background: var(--surface-4); padding: 8px 13px; border-radius: 10px; line-height: 1.3; }
+    button:hover:not(:disabled) { background: #384256; }
+    button:disabled { opacity: .5; cursor: default; }
+    button.primary { background: var(--accent); color: white; font-weight: 600; }
+    button.primary:hover:not(:disabled) { background: var(--accent-hover); }
+    button.ghost { background: transparent; color: var(--muted); }
+    button.ghost:hover:not(:disabled) { background: var(--surface-3); color: var(--text); }
+    :focus-visible { outline: 2px solid #9aa5ff; outline-offset: 2px; }
+    input[type=text], input[type=url], input[type=number], input[type=date], input[type=password], input:not([type]), select {
+      padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: 10px; color: var(--text); background: #111620; min-width: 0;
+    }
+    input[type=checkbox] { accent-color: #8793ff; }
+    label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+    .sub { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+    .sub:empty { display: none; }
+    .icon { font-size: 16px; line-height: 1; }
+
+    /* Layout: header, notices, chat (takes the room), status, composer */
+    .shell { width: min(960px, 100%); height: 100dvh; margin: 0 auto; padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
+      display: flex; flex-direction: column; gap: 10px; }
+    .shell > .chat { flex: 1 1 auto; min-height: 0; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+    .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+    .mark { flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; background: linear-gradient(145deg, #7b8cff, #a57aff); font-size: 19px; box-shadow: 0 8px 28px #7886ff30; }
+    h1 { font-size: 16px; margin: 0; letter-spacing: .2px; white-space: nowrap; }
+    .tagline { color: var(--faint); font-size: 12px; margin-top: 2px; white-space: nowrap; }
+    .controls { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    #model { max-width: 230px; padding: 8px 28px 8px 11px; background: var(--surface-2); text-overflow: ellipsis; }
+    .controls button { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+
+    #notices:not(:has(> :not([hidden]))) { display: none; }
+    .notice { display: grid; gap: 8px; padding: 13px 15px; border: 1px solid #414d76; border-radius: var(--radius); background: #1a2032; }
+    .notice h2, .notice h3 { margin: 0; font-size: 15px; }
+    .notice p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .notice .actions-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+    .notice button { font-size: 14px; }
+
+    .chat { overflow-y: auto; padding: 18px clamp(10px, 4vw, 40px); border: 1px solid var(--border); border-radius: 20px; background: #151922d9; box-shadow: 0 20px 70px #0003; overscroll-behavior: contain; }
+    .welcome { max-width: 520px; margin: clamp(16px, 9vh, 90px) auto 0; text-align: center; }
+    .welcome-icon { font-size: 30px; margin-bottom: 8px; color: #b3a6ff; }
+    .welcome h2 { font-size: 21px; margin: 0 0 8px; }
+    .welcome p { color: var(--muted); line-height: 1.55; margin: 0 0 16px; }
+    .suggestions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+    .suggestion { background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 999px; padding: 8px 14px; font-size: 13px; color: #d6dbe6; }
+    .notice-line { text-align: center; color: var(--muted); font-size: 13px; margin: 10px 0; }
+    .message { display: flex; flex-direction: column; margin: 14px 0; }
+    .message.user { align-items: flex-end; }
+    .message.assistant { align-items: flex-start; }
+    .bubble { max-width: min(680px, 88%); padding: 11px 15px; border-radius: 17px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
     .assistant .bubble { background: #202633; border: 1px solid #30394a; border-bottom-left-radius: 5px; }
     .user .bubble { background: #596be0; color: white; border-bottom-right-radius: 5px; }
-    .message.error .bubble { border-color: #a54b58; color: #ffc3ca; }
-    .composer { padding: 13px; border: 1px solid #303847; border-radius: 20px; background: #191e28; box-shadow: 0 12px 40px #0003; }
-    .attachment-row { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; color: #aab4c6; font-size: 12px; }
-    .attachment-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 9px; background: #282f3e; }
-    .attachment-chip button { background: transparent; color: #c3ccdc; padding: 0 2px; }
-    textarea { display: block; width: 100%; min-height: 58px; max-height: 150px; resize: vertical; padding: 8px; border: 0; outline: 0; color: #eef1f7; background: transparent; line-height: 1.45; }
-    textarea::placeholder { color: #7f8a9d; }
-    .composer-bottom { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-top: 8px; }
-    .options, .actions { display: flex; align-items: center; gap: 13px; color: #aab4c6; font-size: 12px; }
-    label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-    input[type=checkbox] { accent-color: #8793ff; }
-    button { cursor: pointer; border: 0; color: white; }
-    .icon-button { width: 40px; height: 40px; border-radius: 13px; background: #282f3e; font-size: 17px; }
-    .icon-button:hover { background: #353e51; }
-    #mic.listening { background: #a33e53; animation: pulse 1.3s infinite; }
-    #send { min-width: 86px; height: 40px; padding: 0 16px; border-radius: 13px; background: #6d7bf0; font-weight: 600; }
-    #send:hover { background: #7c89ff; }
-    #send:disabled { opacity: .5; cursor: wait; }
-    .privacy { color: #778296; font-size: 11px; line-height: 1.4; text-align: center; padding: 0 8px; }
-    .voice-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 0 4px; color: #aab4c6; font-size: 12px; }
-    .integrations { color: #aab4c6; font-size: 12px; padding: 0 4px; }
-    .integrations summary { cursor: pointer; }
-    .integrations ul { margin: 8px 0 0; padding-left: 20px; line-height: 1.6; }
-    .connector-list { display: grid; gap: 8px; margin-top: 10px; }
-    .connector-card { padding: 10px; border: 1px solid #303847; border-radius: 12px; background: #191e28; }
-    .connector-card strong { color: #eef1f7; }
-    .connector-card button { margin-top: 8px; padding: 7px 10px; border-radius: 9px; background: #30394a; }
-    .connector-form { display: grid; gap: 7px; margin-top: 8px; max-width: 440px; }
-    .connector-form input { padding: 8px; border: 1px solid #303848; border-radius: 8px; color: #eef1f7; background: #101319; }
-    .portal { display: grid; gap: 8px; padding: 10px; border: 1px solid #303847; border-radius: 14px; background: #191e28; }
-    .portal-controls { display: flex; flex-wrap: wrap; gap: 8px; }
-    .portal input { flex: 1; min-width: 220px; padding: 9px; border: 1px solid #303848; border-radius: 9px; color: #eef1f7; background: #101319; }
-    .portal button { padding: 8px 11px; border-radius: 9px; background: #30394a; }
-    .portal-output { max-height: 230px; overflow: auto; color: #aab4c6; font-size: 12px; white-space: pre-wrap; }
-    .tasks { display: grid; gap: 9px; padding: 12px; border: 1px solid #303847; border-radius: 14px; background: #191e28; }
-    .tasks h2 { margin: 0; font-size: 14px; }
-    .task-add { display: flex; flex-wrap: wrap; gap: 7px; }
-    .task-add input, .task-add select { flex: 1; min-width: 120px; padding: 8px; border: 1px solid #303848; border-radius: 9px; color: #eef1f7; background: #101319; }
-    .task-add button, .task-item button { padding: 7px 10px; border-radius: 9px; background: #30394a; }
-    .math-output { display: grid; gap: 8px; margin-top: 8px; color: #aab4c6; font-size: 12px; }
-    .math-output img { width: min(100%, 520px); border-radius: 10px; background: white; }
-    .task-list { display: grid; gap: 6px; }
-    .task-item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 10px; background: #222a37; }
-    .task-item input[type=date] { padding: 6px; border: 1px solid #303848; border-radius: 8px; color: #eef1f7; background: #101319; }
-    .task-info { min-width: 0; }
-    .task-title { overflow-wrap: anywhere; }
-    .task-meta { color: #9da8bb; font-size: 11px; margin-top: 3px; }
-    .task-empty { color: #9da8bb; font-size: 12px; }
-    .voice-settings input[type=text] { width: 110px; padding: 8px; border: 1px solid #303848; border-radius: 9px; color: #eef1f7; background: #191e28; }
-    .voice-settings select { max-width: 250px; }
-    #micDevice { max-width: 230px; }
-    .typing { color: #9da8bb; font-size: 12px; padding: 5px 13px; }
-    @keyframes pulse { 50% { box-shadow: 0 0 0 7px #a33e5333; } }
-    @media(max-width: 620px) { .shell { padding: 12px; gap: 10px; } .controls { flex-direction: column; align-items: flex-end; gap: 5px; } select { max-width: 175px; } .chat { padding: 16px 9px; border-radius: 17px; } .options { flex-wrap: wrap; gap: 7px; } .composer { padding: 10px; } }
+    .message.error .bubble { border-color: var(--danger-border); color: var(--danger); }
+    .typing-row .bubble { color: var(--muted); }
+    .activity { max-width: min(680px, 88%); margin-top: 5px; color: var(--faint); font-size: 12px; }
+    .activity summary { cursor: pointer; list-style: none; }
+    .activity summary::before { content: "▸ "; }
+    .activity[open] summary::before { content: "▾ "; }
+    .activity ol, .activity ul { margin: 6px 0 0; padding-left: 20px; line-height: 1.6; }
+    .activity pre { white-space: pre-wrap; }
 
-    [hidden] { display:none !important; }
-    .setup-active .shell > :not(header):not(#setupWizard) { display:none !important; }
-    .setup-active header .controls { display:none; }
-    .setup-active .shell { height:auto; min-height:100vh; }
-    #setupWizard { width:min(640px,100%); margin:clamp(24px,7vh,80px) auto; padding:clamp(22px,4vw,40px); background:#191e28; border:1px solid #394357; border-radius:24px; box-shadow:0 20px 70px #0003; }
-    #setupWizard h2:focus { outline:none; }
-    #setupWizard h2 { font-size:28px; line-height:1.25; margin:8px 0 16px; }
-    #setupWizard p { color:#bac4d6; line-height:1.6; }
-    #setupWizard .eyebrow { color:#a9afff; font-size:13px; }
-    #setupWizard button { padding:13px 18px; border-radius:12px; background:#30394a; font:inherit; text-align:left; }
-    #setupWizard button.primary { background:#6d7bf0; text-align:center; }
-    #setupWizard button:disabled { opacity:.5; cursor:wait; }
-    #setupWizard .choices { display:grid; gap:12px; margin:24px 0; }
-    #setupWizard .choices button { padding:20px; border:1px solid #47536a; }
-    #setupWizard .choices strong,#setupWizard .choices small { display:block; }
-    #setupWizard .choices small { color:#c2cbdc; margin-top:7px; line-height:1.5; }
-    #setupWizard label { display:grid; gap:8px; margin:16px 0; cursor:default; }
-    #setupWizard input,#setupWizard select { width:100%; max-width:none; font:inherit; color:#eef1f7; padding:12px; border:1px solid #485268; border-radius:10px; background:#111620; }
-    #setupWizard a { color:#b8c0ff; }
-    #setupWizard .error { color:#ffc2cb; }
-    #setupWizard .back { background:transparent; padding-left:0; color:#b4bfda; }
-    #setupWizard details { margin-top:20px; color:#aab5ca; font-size:13px; }
-    #setupWizard pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:160px; overflow:auto; }
-    .account-manage { align-self:flex-start; background:#30394a; padding:10px 16px; border-radius:10px; }
+    .status { color: var(--faint); font-size: 12px; padding: 0 6px; min-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .composer { padding: 10px 12px; border: 1px solid #303847; border-radius: 18px; background: var(--surface-2); box-shadow: 0 12px 40px #0003; }
+    .composer:focus-within { border-color: #4a5577; }
+    .attachment-row { display: flex; flex-wrap: wrap; gap: 7px; padding: 2px 2px 6px; }
+    .attachment-row:has(#attachmentList:empty) { display: none; }
+    .attachment-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 9px; background: var(--surface-3); color: #c9d1e0; font-size: 12px; }
+    .attachment-chip button { background: transparent; padding: 0 2px; color: #c3ccdc; }
+    textarea { display: block; width: 100%; min-height: 48px; max-height: 160px; resize: none; padding: 6px 4px; border: 0; outline: 0; color: var(--text); background: transparent; line-height: 1.45; }
+    textarea::placeholder { color: var(--faint); }
+    textarea:focus-visible { outline: none; }
+    .composer-bottom { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-top: 6px; }
+    .options, .actions { display: flex; align-items: center; gap: 6px; }
+    .chip { position: relative; padding: 6px 11px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--muted); font-size: 12.5px; white-space: nowrap; user-select: none; }
+    .chip input { position: absolute; opacity: 0; pointer-events: none; }
+    .chip:has(input:checked) { background: var(--accent-soft); border-color: #6d7bf099; color: #dfe3ff; }
+    .chip:has(input:focus-visible) { outline: 2px solid #9aa5ff; outline-offset: 2px; }
+    .icon-button { width: 38px; height: 38px; padding: 0; display: inline-grid; place-items: center; border-radius: 12px; background: var(--surface-3); font-size: 16px; }
+    #mic.listening { background: #a33e53; animation: pulse 1.3s infinite; }
+    #send { height: 38px; padding: 0 18px; border-radius: 12px; }
+    #send:disabled { cursor: wait; }
+    @keyframes pulse { 50% { box-shadow: 0 0 0 7px #a33e5333; } }
+
+    /* Settings drawer */
+    .scrim { position: fixed; inset: 0; background: #05070b99; z-index: 20; }
+    .drawer { font-size: 14px; position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100vw); z-index: 21; display: grid; grid-template-rows: auto auto minmax(0, 1fr);
+      background: #141821; border-left: 1px solid var(--border-strong); box-shadow: -30px 0 80px #0007; }
+    .drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 10px; }
+    .drawer-head h2 { margin: 0; font-size: 18px; }
+    .tabs { display: flex; gap: 4px; padding: 0 14px 10px; overflow-x: auto; border-bottom: 1px solid var(--border); scrollbar-width: none; }
+    .tabs button { background: transparent; color: var(--muted); padding: 7px 11px; border-radius: 9px; white-space: nowrap; font-size: 13.5px; }
+    .tabs button[aria-selected=true] { background: var(--surface-3); color: var(--text); }
+    .panel { overflow-y: auto; padding: 16px 18px 28px; display: grid; gap: 14px; align-content: start; }
+    .group { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+    .group > h3 { margin: 0; font-size: 14px; }
+    .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .field { display: grid; gap: 6px; font-size: 13px; color: var(--muted); cursor: default; }
+    .field input, .field select { width: 100%; color: var(--text); }
+    .panel details > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+    .panel ul { margin: 0; padding-left: 20px; line-height: 1.6; color: var(--muted); font-size: 12.5px; }
+    .connector-list { display: grid; gap: 8px; }
+    .connector-card { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: #151a23; font-size: 13px; color: var(--muted); }
+    .connector-card strong { color: var(--text); }
+    .connector-card > button, .connector-card form button { justify-self: start; }
+    .connector-form { display: grid; gap: 7px; max-width: 440px; }
+    .task-add { display: flex; flex-wrap: wrap; gap: 7px; }
+    .task-add input, .task-add select { flex: 1 1 120px; }
+    .task-add input[type=text]:first-child { flex-basis: 100%; }
+    .task-list { display: grid; gap: 6px; }
+    .task-item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 10px; background: var(--surface-3); }
+    .task-info { flex: 1 1 180px; min-width: 0; }
+    .task-title { overflow-wrap: anywhere; }
+    .task-meta { color: var(--muted); font-size: 12px; margin-top: 3px; overflow-wrap: anywhere; }
+    .task-empty { color: var(--muted); font-size: 13px; }
+    .portal-output { max-height: 260px; overflow: auto; color: var(--muted); font-size: 12px; white-space: pre-wrap; }
+    .math-output { display: grid; gap: 8px; color: var(--muted); font-size: 12px; }
+    .math-output img { width: 100%; border-radius: 10px; background: white; }
+    #rate { width: 140px; }
+    dialog { color: var(--text); background: var(--surface-2); border: 1px solid #414d76; border-radius: var(--radius); }
+    dialog::backdrop { background: #05070bb3; }
+    dialog button { margin: 4px 6px 0 0; }
+
+    /* First-run setup */
+    .setup-active .shell > :not(.topbar):not(#setupWizard) { display: none !important; }
+    .setup-active .controls { display: none; }
+    .setup-active .shell { height: auto; min-height: 100dvh; display: block; }
+    #setupWizard { width: min(640px, 100%); margin: clamp(24px, 7vh, 80px) auto; padding: clamp(22px, 4vw, 40px); background: var(--surface-2); border: 1px solid #394357; border-radius: 24px; box-shadow: 0 20px 70px #0003; }
+    #setupWizard h2:focus { outline: none; }
+    #setupWizard h2 { font-size: 28px; line-height: 1.25; margin: 8px 0 16px; }
+    #setupWizard h3 { font-size: 14px; color: var(--muted); font-weight: 600; margin: 22px 0 0; }
+    #setupWizard p { color: #bac4d6; line-height: 1.6; }
+    #setupWizard .eyebrow { color: #a9afff; font-size: 13px; }
+    #setupWizard button { padding: 13px 18px; border-radius: 12px; background: #30394a; text-align: left; }
+    #setupWizard button.primary { background: var(--accent); text-align: center; }
+    #setupWizard button:disabled { cursor: wait; }
+    #setupWizard .choices { display: grid; gap: 12px; margin: 16px 0 24px; }
+    #setupWizard .choices button { padding: 18px 20px; border: 1px solid #47536a; }
+    #setupWizard .choices strong, #setupWizard .choices small { display: block; }
+    #setupWizard .choices small { color: #c2cbdc; margin-top: 6px; line-height: 1.5; }
+    #setupWizard label { display: grid; gap: 8px; margin: 16px 0; cursor: default; }
+    #setupWizard input, #setupWizard select { width: 100%; padding: 12px; border-color: #485268; }
+    #setupWizard .error { color: var(--danger); }
+    #setupWizard .back { background: transparent; padding-left: 0; color: #b4bfda; }
+    #setupWizard details { margin-top: 20px; color: #aab5ca; font-size: 13px; }
+    #setupWizard pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 160px; overflow: auto; }
+
+    @media (max-width: 640px) {
+      .brand h1 { display: none; }
+      .shell { padding: 10px 10px calc(10px + env(safe-area-inset-bottom)); gap: 8px; }
+      .tagline, .controls .label { display: none; }
+      .mark { width: 34px; height: 34px; font-size: 17px; }
+      #model { max-width: 42vw; }
+      .controls button { width: 38px; height: 38px; padding: 0; justify-content: center; }
+      .chat { padding: 12px 8px; border-radius: 16px; }
+      .bubble { max-width: 92%; }
+      .composer { padding: 8px 9px; border-radius: 16px; }
+      .chip { padding: 6px 9px; }
+      .chip .label { display: none; }
+      #setupWizard h2 { font-size: 24px; }
+    }
   </style>
 </head>
 <body class="setup-active">
   <main class="shell">
-    <header>
-      <div class="brand"><div class="mark" aria-hidden="true">✦</div><div><h1>Ultimate Assistant</h1><div class="sub">A voice-first companion, powered by Herald</div></div></div>
-      <div class="controls"><select id="model" aria-label="Active model"></select><button id="newChat" class="icon-button" title="Start a separate conversation; saved memories remain available">New chat</button><button id="clearHistory" class="icon-button" title="Delete this conversation only; durable memories remain">Clear chat</button><div id="status" class="status">Connecting</div></div>
+    <header class="topbar">
+      <div class="brand"><div class="mark" aria-hidden="true">✦</div><div><h1>Ultimate Assistant</h1><div class="tagline">Your assistant, on your computer</div></div></div>
+      <div class="controls">
+        <select id="model" aria-label="AI account in use"></select>
+        <button id="newChat" class="ghost" title="Start a separate conversation; saved memories stay available"><span class="icon" aria-hidden="true">＋</span><span class="label">New chat</span></button>
+        <button id="openSettings" class="ghost" aria-haspopup="dialog" aria-controls="settingsDrawer" title="Settings"><span class="icon" aria-hidden="true">⚙</span><span class="label">Settings</span></button>
+      </div>
     </header>
     <section id="setupWizard" aria-live="polite" aria-label="Connect your AI account"><p>Getting ready...</p></section>
-    <button id="manageAccounts" class="account-manage">Connect another account</button>
-    <details id="decisionPanel" class="integrations">
-      <summary>Quick decisions (optional)</summary>
-      <div class="connector-card">
-        <label>How small decisions are made
+    <div id="notices"></div>
+    <section id="chat" class="chat" aria-live="polite"></section>
+    <div id="status" class="status" role="status">Connecting…</div>
+    <section class="composer">
+      <input id="fileInput" type="file" hidden multiple accept=".txt,.md,.csv,.tsv,.json,.html,.htm,.xml,.pdf,.docx,.pptx,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.bmp">
+      <div class="attachment-row"><div id="attachmentList" class="row"></div></div>
+      <textarea id="message" rows="2" aria-label="Message" placeholder="Message your assistant…"></textarea>
+      <div class="composer-bottom">
+        <div class="options">
+          <button id="attachFile" class="icon-button" title="Attach documents or images (text and OCR are read on this computer)" aria-label="Attach file">📎</button>
+          <label class="chip" title="Search the web before answering"><input id="web" type="checkbox"><span aria-hidden="true">🌐</span><span class="label">Web search</span></label>
+          <label class="chip" title="Read replies aloud"><input id="speak" type="checkbox"><span aria-hidden="true">🔊</span><span class="label">Speak replies</span></label>
+        </div>
+        <div class="actions"><button id="mic" class="icon-button" title="Talk (Alt+Space)" aria-label="Start voice input">🎙</button><button id="send" class="primary">Send</button></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="drawerScrim" class="scrim" hidden></div>
+  <aside id="settingsDrawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden>
+    <div class="drawer-head"><h2 id="settingsTitle">Settings</h2><button id="closeSettings" class="ghost icon-button" aria-label="Close settings">✕</button></div>
+    <nav class="tabs" role="tablist" aria-label="Settings sections">
+      <button role="tab" data-tab="voice" aria-selected="true">Voice</button>
+      <button role="tab" data-tab="tasks" aria-selected="false">Tasks</button>
+      <button role="tab" data-tab="memory" aria-selected="false">Memory</button>
+      <button role="tab" data-tab="tools" aria-selected="false">Apps</button>
+      <button role="tab" data-tab="school" aria-selected="false" hidden>School</button>
+      <button role="tab" data-tab="accounts" aria-selected="false">Accounts</button>
+      <button role="tab" data-tab="app" aria-selected="false">About</button>
+    </nav>
+
+    <section class="panel" data-panel="voice" role="tabpanel">
+      <div class="group voice-settings">
+        <h3>Talking</h3>
+        <label class="field">Microphone <span class="row"><select id="micDevice" aria-label="Microphone"><option value="default">System default</option></select><button id="refreshMics" title="Refresh the list and allow microphone access">Refresh</button></span></label>
+        <label><input id="continuousVoice" type="checkbox"> Back-and-forth: after a spoken reply, listen again automatically</label>
+        <div class="sub">Tap the microphone (or press Alt+Space) to talk; tap again to send. Speech is transcribed by your local Herald Router.</div>
+      </div>
+      <div class="group">
+        <h3>Wake word</h3>
+        <label class="field">Name to listen for <input id="wakeName" type="text" maxlength="30" value="Herald"></label>
+        <div class="row"><button id="wake" aria-pressed="false">Enable wake listening</button></div>
+        <div class="sub">Wake listening uses your browser's speech recognition, which may process audio online, and always uses the system default microphone.</div>
+      </div>
+      <div class="group">
+        <h3>Reply voice</h3>
+        <label class="field">Speech engine <select id="ttsProvider"><option value="device">Device voice</option><option value="elevenlabs">ElevenLabs</option><option value="kokoro">Kokoro (on this computer)</option></select></label>
+        <label class="field">Voice <select id="voice"><option value="">System default</option></select></label>
+        <label class="field">Speed <input id="rate" type="range" min="0.75" max="1.2" step="0.05" value="1"></label>
+        <div class="row"><button id="previewVoice">Preview voice</button></div>
+      </div>
+    </section>
+
+    <section class="panel" data-panel="tasks" role="tabpanel" hidden>
+      <div class="group tasks" aria-label="Tasks and commitments">
+        <h3>Tasks &amp; commitments</h3>
+        <form id="taskForm" class="task-add">
+          <input id="taskTitle" type="text" maxlength="300" placeholder="Add an assignment, shift or task" aria-label="Task title" required>
+          <input id="taskDue" type="date" aria-label="Due date (optional)">
+          <select id="taskDomain" aria-label="Category"><option value="personal">Personal</option><option value="work">Work</option><option value="academic">School</option></select>
+          <select id="taskKind" aria-label="Type"><option value="commitment">Commitment</option><option value="study_recovery">Study catch-up</option></select>
+          <input id="taskEstimate" type="number" min="1" max="1440" placeholder="Minutes" aria-label="Estimated minutes (optional)">
+          <button type="submit" class="primary">Add</button>
+        </form>
+        <div id="taskList" class="task-list" aria-live="polite"><div class="task-empty">Loading your tasks…</div></div>
+      </div>
+    </section>
+
+    <section class="panel" data-panel="memory" role="tabpanel" hidden>
+      <div class="group">
+        <h3>This chat</h3>
+        <div class="sub">Clearing deletes this conversation only. Saved memories below stay.</div>
+        <div class="row"><button id="clearHistory">Clear this chat</button></div>
+        <details><summary>What the assistant carries forward from this chat</summary><div id="memorySummary" class="sub">No summary stored yet; recent conversation remains verbatim.</div></details>
+      </div>
+      <div id="memoryPanel" class="group">
+        <h3>Memories across chats</h3>
+        <div class="sub">Rules, preferences and useful context the assistant keeps between conversations.</div>
+        <form id="memoryForm" class="task-add">
+          <input id="memoryContent" type="text" maxlength="4000" placeholder="What should the assistant remember?" aria-label="Memory content" required>
+          <select id="memoryCategory" aria-label="Memory type"><option value="rule">Rule</option><option value="preference">Preference</option><option value="context">Ongoing context</option><option value="episode">Past event</option></select>
+          <input id="memoryTitle" type="text" maxlength="200" placeholder="Short label (optional)" aria-label="Memory label">
+          <button type="submit" class="primary">Remember</button>
+        </form>
+        <div id="persistentMemoryList" class="task-list" aria-live="polite">Loading saved memories…</div>
+        <details><summary>Search by meaning (optional)</summary>
+          <div class="task-add" style="margin-top:8px"><input id="memoryEmbeddingModel" type="text" maxlength="120" placeholder="Local Ollama embedding model, e.g. nomic-embed-text" aria-label="Ollama embedding model"><button id="saveMemoryEmbedding" type="button">Save</button></div>
+          <div id="memoryVectorStatus" class="sub">Checking memory search mode…</div>
+        </details>
+      </div>
+    </section>
+
+    <section class="panel" data-panel="tools" role="tabpanel" hidden>
+      <div id="connectorPanel" class="group">
+        <h3>Connect apps and services</h3>
+        <div class="sub">Name what you'd like connected and the assistant sets it up with you: it checks this computer, installs and verifies what it can, and asks you only for sign-ins. Never paste passwords or keys into chat.</div>
+        <form id="appOnboarding" class="task-add">
+          <input id="appOnboardingName" type="text" maxlength="120" placeholder="An app, service or MCP server" aria-label="App or service to set up" required>
+          <button type="submit" class="primary">Set it up with me</button>
+        </form>
+        <div class="connector-card">
+          <strong>Your school portal</strong>
+          <div>The assistant helps find your school's site, opens it and learns its pages with you. You handle sign-in and MFA.</div>
+          <button id="schoolOnboarding" type="button">Set up my school</button>
+        </div>
+        <div id="connectorList" class="connector-list">Loading connector options…</div>
+      </div>
+      <div class="group">
+        <h3>Browser access</h3>
+        <div class="sub">Kapture works in your existing Chrome or Chromium tabs; Playwright uses a separate browser. Use either or both.</div>
+        <a href="https://chromewebstore.google.com/detail/kapture-mcp-browser-autom/ejfnegenodbdcodemkibocefmajjjjbn" target="_blank" rel="noopener noreferrer">Install the Kapture extension</a>
+        <div class="sub">Then open the extension, turn on its connection toggle for the tab you want to share, and verify below.</div>
+        <div class="row"><button id="setupKapture">Connect Kapture</button><button id="verifyKapture">Verify Kapture</button><button id="disconnectKapture" class="ghost">Disconnect</button></div>
+        <div class="row"><button id="setupPlaywright">Connect Playwright</button><button id="verifyPlaywright">Verify Playwright</button><button id="disconnectPlaywright" class="ghost">Disconnect</button></div>
+        <div id="browserSetupStatus" class="sub" role="status"></div>
+      </div>
+      <div id="integrationsPanel" class="group">
+        <h3>What the assistant can use</h3>
+        <div class="sub" id="workspaceStatus">Workspace tools are loading…</div>
+        <label><input id="desktopVision" type="checkbox"> See the screen (screen capture and text recognition)</label>
+        <div class="sub" id="visionStatus">Desktop vision is off for this assistant.</div>
+        <label><input id="desktopControl" type="checkbox"> Control the desktop (focus windows, type, shortcuts, open and close apps)</label>
+        <div class="sub" id="controlStatus">Desktop control is off for this assistant.</div>
+        <details><summary>Tools connected through Herald</summary><ul id="integrationList"><li>Loading…</li></ul></details>
+      </div>
+      <div class="group">
+        <h3>Graph a function</h3>
+        <form id="mathGraphForm" class="task-add">
+          <input id="mathFunction" type="text" maxlength="512" placeholder="e.g. x^3 - 3x" aria-label="Function of x" required>
+          <input id="mathXMin" type="number" value="-10" min="-10000" max="10000" step="any" aria-label="Smallest x">
+          <input id="mathXMax" type="number" value="10" min="-10000" max="10000" step="any" aria-label="Largest x">
+          <button type="submit">Plot</button>
+        </form>
+        <div id="mathGraphResult" class="math-output" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section class="panel" data-panel="school" role="tabpanel" hidden>
+      <div class="group portal" aria-label="School portal">
+        <h3>School portal</h3>
+        <div class="task-add"><input id="portalUrl" type="url" placeholder="https://your-school-portal.example" aria-label="School portal address"><button id="portalOpen">Open in Edge</button></div>
+        <div class="row"><button id="portalInspect">Read this page</button><button id="portalClose" class="ghost">Close portal</button></div>
+        <div class="task-add"><input id="portalGoal" type="text" maxlength="1000" placeholder="Find my current courses, assignments and due dates" aria-label="What to find"><button id="portalExplore" class="primary">Find it</button></div>
+        <div id="portalOutput" class="portal-output">Open your school site in Edge and sign in (including MFA) yourself. Page text goes to your AI model only when you ask it to read or find something.</div>
+      </div>
+    </section>
+
+    <section class="panel" data-panel="accounts" role="tabpanel" hidden>
+      <div class="group" id="accountsGroup">
+        <h3>AI accounts</h3>
+        <div class="sub">Switch the account in use with the picker at the top of the window.</div>
+        <div class="row"><button id="manageAccounts" class="primary">Connect another account</button></div>
+      </div>
+      <details id="decisionPanel" class="group">
+        <summary>Quick decisions (optional)</summary>
+        <label class="field">How small decisions are made
           <select id="decisionRoute" aria-label="Decision route">
             <option value="llm">Your AI model only (default, no extra service)</option>
             <option value="decision_model">Mixed: your AI model plus a decision model where it measured well</option>
           </select></label>
-        <label>Provider (optional) <input id="decisionProvider" list="decisionProviderNames" maxlength="128" placeholder="Empty: the Router's default"></label>
+        <label class="field">Provider (optional) <input id="decisionProvider" list="decisionProviderNames" maxlength="128" placeholder="Empty: the Router's default"></label>
         <datalist id="decisionProviderNames"></datalist>
-        <label>Model (optional) <input id="decisionModel" maxlength="500" placeholder="Empty: the Router's default"></label>
-        <button id="saveDecisionSettings" type="button">Save</button>
+        <label class="field">Model (optional) <input id="decisionModel" maxlength="500" placeholder="Empty: the Router's default"></label>
+        <div class="row"><button id="saveDecisionSettings" type="button" class="primary">Save</button></div>
         <div id="decisionSuggestions" class="sub"></div>
         <div id="decisionMeasured" class="sub" role="status" aria-live="polite"></div>
-        <div class="sub">A separate decision model is optional. You can change this choice later. Decision usage records contain timings, tokens and cost when known.</div>
-      </div>
-    </details>
-    <details id="providerPanel" class="integrations">
-      <summary>Advanced account settings</summary>
-      <div id="providerActive" role="status">Checking your local Router…</div>
-      <div class="connector-card">
-        <label>Subscription CLI or profile <select id="providerChoice"><option value="antigravity">Google Antigravity</option></select></label>
-        <label>Account name (optional) <input id="providerName" maxlength="120" placeholder="Use the existing account, or name a new one"></label>
-        <button id="installProvider">Install provider</button>
-        <button id="connectProvider">Use this provider</button>
-        <button id="loginProvider">Sign in</button>
-        <button id="cancelProviderLogin">Cancel sign-in</button>
-        <button id="checkProvider">Check sign-in</button>
-        <button id="verifyProvider">Verify active account</button>
-        <a id="accountConsole" target="_blank" rel="noopener noreferrer">Open Herald Account Console</a>
-        <div class="sub">Verify sends one small provider request and may use your quota. Choose a connected account using the active model selector above.</div>
-        <div class="sub">Sign-in uses Herald's provider flow. Complete OAuth or MFA in your browser. Starting a new Codex login can replace its existing session.</div>
-        <pre id="providerLoginOutput" class="portal-output" aria-live="polite"></pre>
-        <form id="providerCodeForm"><input id="providerCode" type="password" autocomplete="off" aria-label="Provider authorization code" placeholder="Authorization code, only if prompted"><button>Submit code</button></form>
-        <button id="startAssistantSetup" disabled>Continue setup with assistant</button>
-        <div class="sub">Setup continues in this saved conversation after account steps. Your local Router starts with this app.</div>
-      </div>
-      <details class="connector-card"><summary>Connect an API key</summary>
-        <form id="apiKeyForm" autocomplete="off">
-          <label>Account name <input id="apiAccountName" required maxlength="120"></label>
-          <label>Provider <select id="apiProvider"><option value="openai">OpenAI</option><option value="gemini">Google Gemini API</option><option value="anthropic">Anthropic</option><option value="openrouter">OpenRouter</option><option value="deepseek">DeepSeek</option><option value="xai">xAI</option><option value="custom">Other OpenAI-compatible API</option></select></label>
-          <label>Model ID <input id="apiModel" required maxlength="160" placeholder="Model ID from your provider"></label>
-          <label>API base URL (optional for listed providers) <input id="apiBaseURL" maxlength="2048" placeholder="https://your-api.example/v1"></label>
-          <label>API key <input id="apiSecret" type="password" required autocomplete="off" maxlength="4096"></label>
-          <button type="submit">Save encrypted key and connect</button>
-        </form>
-        <div class="sub">The key stays in this device's encrypted Herald vault. Never paste it into chat. Verify the active account above after saving.</div>
-        <div id="apiKeyStatus" role="status"></div>
+        <div class="sub">A separate decision model is optional; your AI model always does the real work. Decision usage records contain timings, tokens and cost when known.</div>
       </details>
-      <details class="connector-card"><summary>g4f accounts and browser sessions</summary>
-        <div class="sub"><strong>G4F is a gray area:</strong> it reaches providers through their websites rather than their official APIs, which can go against a provider's terms. A provider may limit, block or ban an account used this way, and we aren't responsible if that happens. Use it at your own risk.</div>
-        <form id="g4fAccountForm">
-          <label>Account name <input id="g4fName" required maxlength="120"></label>
-          <label>Installed g4f provider <select id="g4fProvider"></select></label>
-          <label>Model ID <input id="g4fModel" required maxlength="160" placeholder="Model supported by the chosen provider"></label>
-          <label>ChatGPT email or masked email (for protected capture) <input id="g4fEmail" maxlength="320"></label>
-          <button type="submit">Create local g4f account</button>
-        </form>
-        <label>Saved account <select id="g4fAccount"></select></label>
-        <div class="sub">Each account has its own local g4f process. Provider support and session requirements vary; a saved session is unverified until a provider request succeeds.</div>
-        <button id="g4fCapture">Capture ChatGPT session through Kapture</button><button id="g4fCancel">Cancel capture</button>
-        <div class="sub">Protected capture currently supports ChatGPT. Sign in to the intended ChatGPT tab, connect its Kapture extension, start capture here, then send a short message in that tab. Other g4f providers can use their native g4f UI or a local session export.</div>
-        <label>HAR or cookie JSON export <input id="g4fSessionFile" type="file" accept=".har,.json"></label>
-        <button id="g4fImport">Import session locally</button><button id="g4fRestart">Restart / retry local g4f</button>
-        <button id="g4fVerify">Verify selected g4f account</button>
-        <div id="g4fStatus" role="status"></div>
-        <ul id="g4fAccountList"></ul>
-      </details>
-    </details>
-    <section id="chat" class="chat" aria-live="polite">
-      <div class="welcome" id="welcome"><div class="welcome-icon">✦</div><h2>What can I help with?</h2><p>Tap the microphone to talk, or type below. I’ll show the transcript and reply here.</p></div>
-    </section>
-    <section class="composer">
-      <input id="fileInput" type="file" hidden multiple accept=".txt,.md,.csv,.tsv,.json,.html,.htm,.xml,.pdf,.docx,.pptx,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.bmp">
-      <div class="attachment-row"><button id="attachFile" class="icon-button" title="Attach a document or image">Attach file</button><div id="attachmentList"></div><span>Documents and images; text extraction/OCR runs locally.</span></div>
-      <textarea id="message" aria-label="Message" placeholder="Message your assistant… (Enter to send, Shift+Enter for a new line)"></textarea>
-      <div class="composer-bottom">
-        <div class="options">
-          <label title="Search the web before answering"><input id="web" type="checkbox"> Web search</label>
-          <label title="Read the reply aloud using a voice on this device"><input id="speak" type="checkbox" checked> Speak replies</label>
-          <label title="Hands-free verbal conversation: automatically send when you pause and listen again after each spoken reply"><input id="continuousVoice" type="checkbox" checked> Back-and-forth voice</label>
+      <details id="providerPanel" class="group">
+        <summary>Advanced account settings</summary>
+        <div id="providerActive" class="sub" role="status">Checking your local Router…</div>
+        <div class="connector-card">
+          <label class="field">Subscription app or profile <select id="providerChoice"><option value="antigravity">Google Antigravity</option></select></label>
+          <label class="field">Account name (optional) <input id="providerName" maxlength="120" placeholder="Use the existing account, or name a new one"></label>
+          <div class="row"><button id="installProvider">Install app</button><button id="connectProvider">Use this app</button><button id="loginProvider">Sign in</button><button id="cancelProviderLogin" class="ghost">Cancel sign-in</button><button id="checkProvider" class="ghost">Check sign-in</button><button id="verifyProvider">Test the account in use</button></div>
+          <a id="accountConsole" target="_blank" rel="noopener noreferrer">Open the Herald Account Console</a>
+          <div class="sub">Testing sends one small request and may use your quota. Sign-in uses Herald's provider flow; finish OAuth or MFA in your browser. A new Codex sign-in can replace its existing session.</div>
+          <pre id="providerLoginOutput" class="portal-output" aria-live="polite"></pre>
+          <form id="providerCodeForm" class="task-add"><input id="providerCode" type="password" autocomplete="off" aria-label="Provider authorization code" placeholder="Authorization code, only if asked"><button>Submit code</button></form>
+          <div class="row"><button id="startAssistantSetup" disabled>Continue setup with the assistant</button></div>
         </div>
-        <div class="actions"><button id="mic" class="icon-button" title="Start voice input" aria-label="Start voice input">🎙</button><button id="send">Send</button></div>
+        <details class="connector-card"><summary>Add an API key</summary>
+          <form id="apiKeyForm" class="connector-form" autocomplete="off">
+            <label class="field">Account name <input id="apiAccountName" required maxlength="120"></label>
+            <label class="field">Service <select id="apiProvider"><option value="openai">OpenAI</option><option value="gemini">Google Gemini API</option><option value="anthropic">Anthropic</option><option value="openrouter">OpenRouter</option><option value="deepseek">DeepSeek</option><option value="xai">xAI</option><option value="custom">Other OpenAI-compatible API</option></select></label>
+            <label class="field">Model <input id="apiModel" required maxlength="160" placeholder="Model name from your provider"></label>
+            <label class="field">API address (only for other services) <input id="apiBaseURL" maxlength="2048" placeholder="https://your-api.example/v1"></label>
+            <label class="field">API key <input id="apiSecret" type="password" required autocomplete="off" maxlength="4096"></label>
+            <button type="submit" class="primary">Save encrypted key and connect</button>
+          </form>
+          <div class="sub">The key stays in this computer's encrypted Herald vault. Never paste it into chat.</div>
+          <div id="apiKeyStatus" class="sub" role="status"></div>
+        </details>
+        <details class="connector-card"><summary>g4f accounts and browser sessions</summary>
+          <div class="sub"><strong>G4F is a gray area:</strong> it reaches providers through their websites rather than their official APIs, which can go against a provider's terms. A provider may limit, block or ban an account used this way, and we aren't responsible if that happens. Use it at your own risk.</div>
+          <form id="g4fAccountForm" class="connector-form">
+            <label class="field">Account name <input id="g4fName" required maxlength="120"></label>
+            <label class="field">Installed g4f provider <select id="g4fProvider"></select></label>
+            <label class="field">Model <input id="g4fModel" required maxlength="160" placeholder="Model supported by the chosen provider"></label>
+            <label class="field">ChatGPT email or masked email (for protected capture) <input id="g4fEmail" maxlength="320"></label>
+            <button type="submit">Create local g4f account</button>
+          </form>
+          <label class="field">Saved account <select id="g4fAccount"></select></label>
+          <div class="sub">Each account has its own local g4f process. Provider support and session requirements vary; a saved session is unverified until a provider request succeeds.</div>
+          <div class="row"><button id="g4fCapture">Capture ChatGPT session through Kapture</button><button id="g4fCancel" class="ghost">Cancel capture</button></div>
+          <div class="sub">Protected capture supports ChatGPT. Sign in to the intended ChatGPT tab, connect its Kapture extension, start capture here, then send a short message in that tab. Other g4f providers can use their native g4f UI or a local session export.</div>
+          <label class="field">HAR or cookie JSON export <input id="g4fSessionFile" type="file" accept=".har,.json"></label>
+          <div class="row"><button id="g4fImport">Import session</button><button id="g4fRestart">Restart local g4f</button><button id="g4fVerify">Test selected g4f account</button></div>
+          <div id="g4fStatus" class="sub" role="status"></div>
+          <ul id="g4fAccountList"></ul>
+        </details>
+      </details>
+    </section>
+
+    <section class="panel" data-panel="app" role="tabpanel" hidden>
+      <div class="group">
+        <h3>Updates</h3>
+        <label><input id="automaticUpdates" type="checkbox"> Check for and install verified updates when the app starts</label>
+        <div class="row"><button id="checkUpdate">Check now</button><button id="installUpdate">Install update</button><button id="rollbackUpdate" class="ghost">Use previous version</button></div>
+        <div id="updateStatus" class="sub" role="status"></div>
+      </div>
+      <div class="group" id="appTools">
+        <h3>Help and diagnostics</h3>
       </div>
     </section>
-    <section class="voice-settings" aria-label="Voice settings">
-      <label>Microphone <select id="micDevice" aria-label="Microphone input device"><option value="default">System default</option></select></label>
-      <button id="refreshMics" class="icon-button" title="Refresh microphone devices and request microphone access">↻ Mic</button>
-      <label>Assistant name <input id="wakeName" type="text" maxlength="30" value="Herald"></label>
-      <label>Speech engine <select id="ttsProvider"><option value="device">Device voice</option><option value="elevenlabs">ElevenLabs</option><option value="kokoro">Kokoro (local)</option></select></label>
-      <label>Reply voice <select id="voice"><option value="">System default</option></select></label>
-      <label>Speed <input id="rate" type="range" min="0.75" max="1.2" step="0.05" value="1"></label>
-      <button id="previewVoice" class="icon-button" title="Play a short sample using the selected speech engine and voice">Preview voice</button>
-      <button id="wake" class="icon-button" aria-pressed="false">Enable wake listening</button>
-    </section>
-    <details class="integrations">
-      <summary>App updates</summary>
-      <label><input id="automaticUpdates" type="checkbox"> Automatically check and install verified releases at launch</label>
-      <div class="sub">Public releases include this app and its bundled Herald Router. No GitHub account, token, Git, or GitHub CLI is required.</div>
-      <button id="checkUpdate">Check for update</button><button id="installUpdate">Install update</button><button id="rollbackUpdate">Use previous version</button>
-      <div id="updateStatus" role="status"></div>
-    </details>
-    <details id="integrationsPanel" class="integrations">
-      <summary>Connected Herald tools</summary>
-      <div class="sub" id="workspaceStatus">Workspace tools are loading…</div>
-      <label><input id="desktopVision" type="checkbox"> Enable desktop vision (screen capture, OCR, and perception tools)</label>
-      <div class="sub" id="visionStatus">Desktop vision is off for this assistant.</div>
-      <label><input id="desktopControl" type="checkbox"> Enable desktop control (focus, type, hotkeys, launch/close apps)</label>
-      <div class="sub" id="controlStatus">Desktop control is off for this assistant.</div>
-      <ul id="integrationList"><li>Loading scoped integrations…</li></ul>
-    </details>
-    <details id="connectorPanel" class="integrations">
-      <summary>Connect apps and MCPs</summary>
-      <div class="sub">The assistant leads setup: it checks what is already installed, does the safe machine-side work with the connected model’s tools (a subscription CLI’s own tools, or Herald’s for an API key), connects and verifies what it can, then guides you through only account-specific steps. The list is examples, not a whitelist. Google sign-in, MFA, API keys, and local app plugins stay under your control; never paste secrets into chat.</div>
-      <div class="connector-card">
-        <strong>Set up a school portal</strong>
-        <div class="sub">Works with your school’s actual site; the assistant will help identify it, open it, and learn its pages with you. You handle sign-in and MFA.</div>
-        <button id="schoolOnboarding" type="button">Set up my school</button>
-      </div>
-      <form id="appOnboarding" class="task-add">
-        <input id="appOnboardingName" type="text" maxlength="120" placeholder="Another app, MCP, or service" aria-label="App or service to set up" required>
-        <button type="submit">Set it up with assistant</button>
-      </form>
-      <div id="connectorList" class="connector-list">Loading connector options…</div>
-      <div class="connector-card">
-        <strong>Browser access: Kapture and Playwright MCP</strong>
-        <div class="sub">Use either or both. Kapture reads and controls tabs in your existing Chrome or Chromium browser. Playwright automates a separate browser profile. Vision is optional.</div>
-        <a href="https://chromewebstore.google.com/detail/kapture-mcp-browser-autom/ejfnegenodbdcodemkibocefmajjjjbn" target="_blank" rel="noopener noreferrer">Install required Kapture extension in Chrome or a Chromium browser</a>
-        <div class="sub">In your browser, open the Kapture extension and turn on the connection toggle for the tab you want to share. Then verify below.</div>
-        <button id="setupKapture">Connect Kapture</button><button id="verifyKapture">Verify Kapture after extension setup</button>
-        <button id="setupPlaywright">Connect Playwright</button><button id="verifyPlaywright">Verify Playwright</button>
-        <button id="disconnectKapture">Disconnect Kapture</button><button id="disconnectPlaywright">Disconnect Playwright</button>
-        <div id="browserSetupStatus" role="status"></div>
-      </div>
-    </details>
-    <details id="memoryPanel" class="integrations">
-      <summary>Memory across conversations</summary>
-      <div class="sub">Saved rules/preferences and useful context are shared across chats. Clearing chat does not erase these memories. Embedding search uses local Ollama only when configured; otherwise keyword matching is used.</div>
-      <form id="memoryForm" class="task-add">
-        <select id="memoryCategory" aria-label="Memory type"><option value="rule">Rule</option><option value="preference">Preference</option><option value="context">Ongoing context</option><option value="episode">Past event</option></select>
-        <input id="memoryTitle" type="text" maxlength="200" placeholder="Short label (optional)" aria-label="Memory label">
-        <input id="memoryContent" type="text" maxlength="4000" placeholder="What should the assistant remember?" aria-label="Memory content" required>
-        <button type="submit">Remember</button>
-      </form>
-      <div class="task-add"><input id="memoryEmbeddingModel" type="text" maxlength="120" placeholder="Optional local Ollama embedding model (e.g. nomic-embed-text)" aria-label="Ollama embedding model"><button id="saveMemoryEmbedding" type="button">Set vector model</button></div>
-      <div id="memoryVectorStatus" class="sub">Checking memory search mode…</div>
-      <div id="persistentMemoryList" class="task-list" aria-live="polite">Loading saved memories…</div>
-      <details><summary>This conversation's carry-forward summary</summary><div id="memorySummary">No summary stored yet; recent conversation remains verbatim.</div></details>
-    </details>
-    <details class="integrations">
-      <summary>Math graphing</summary>
-      <div class="sub">Plot a function locally and inspect its intercepts, critical points, and inflection points.</div>
-      <form id="mathGraphForm" class="portal-controls">
-        <input id="mathFunction" type="text" maxlength="512" placeholder="e.g. x^3 - 3x" aria-label="Function of x" required>
-        <input id="mathXMin" type="number" value="-10" min="-10000" max="10000" step="any" aria-label="Graph minimum x">
-        <input id="mathXMax" type="number" value="10" min="-10000" max="10000" step="any" aria-label="Graph maximum x">
-        <button type="submit">Plot</button>
-      </form>
-      <div id="mathGraphResult" class="math-output" aria-live="polite"></div>
-    </details>
-    <section class="tasks" aria-label="Tasks and commitments">
-      <h2>Tasks &amp; commitments</h2>
-      <form id="taskForm" class="task-add">
-        <input id="taskTitle" type="text" maxlength="300" placeholder="Add an assignment, shift, or task" aria-label="Task title" required>
-        <input id="taskDue" type="date" aria-label="Due date (optional)">
-        <select id="taskDomain" aria-label="Task category"><option value="academic">College</option><option value="work">Work</option><option value="personal">Personal</option></select>
-        <select id="taskKind" aria-label="Commitment type"><option value="commitment">Commitment</option><option value="study_recovery">Study recovery</option></select>
-        <input id="taskEstimate" type="number" min="1" max="1440" placeholder="Minutes" aria-label="Estimated minutes (optional)">
-        <button type="submit">Add</button>
-      </form>
-      <div id="taskList" class="task-list" aria-live="polite"><div class="task-empty">Loading your tasks…</div></div>
-    </section>
-    <section class="portal" aria-label="Academic portal discovery">
-      <div class="portal-controls"><input id="portalUrl" type="url" placeholder="https://your-school-portal.example" aria-label="School portal URL"><button id="portalOpen">Open portal in Edge</button><button id="portalDemo">Open fake school</button><button id="portalInspect">Inspect page</button><button id="portalClose">Close portal</button></div>
-      <div class="portal-controls"><input id="portalGoal" type="text" maxlength="1000" placeholder="Find my current courses, assignments, and due dates" aria-label="Portal discovery goal"><button id="portalExplore">AI explore</button></div>
-      <div id="portalOutput" class="portal-output">Open your school site in Edge, sign in and complete MFA yourself, then choose Inspect. Page text is sent to your configured Herald model only when you request inspection.</div>
-    </section>
-    <div class="privacy">Choose a microphone and tap the mic to record; tap again to send the clip to the configured Herald Router for transcription. Wake listening uses browser speech recognition and may process audio externally; the selected microphone applies to recorded push-to-talk, not wake-word detection. Press Alt+Space to start or stop recording.</div>
-  </main>
+  </aside>
+
   <script>
     const token = document.querySelector('meta[name="app-token"]').content;
     const chat = document.getElementById('chat');
@@ -313,6 +435,63 @@
     const taskList = document.getElementById('taskList');
     const micDeviceSelect = document.getElementById('micDevice');
     const refreshMicsButton = document.getElementById('refreshMics');
+    const settingsDrawer = document.getElementById('settingsDrawer');
+    const drawerScrim = document.getElementById('drawerScrim');
+    function selectTab(name) {
+      const tab = settingsDrawer.querySelector(`[role=tab][data-tab="${name}"]`);
+      if (!tab || tab.hidden) name = 'voice';
+      for (const button of settingsDrawer.querySelectorAll('[role=tab]')) button.setAttribute('aria-selected', String(button.dataset.tab === name));
+      for (const panel of settingsDrawer.querySelectorAll('[data-panel]')) panel.hidden = panel.dataset.panel !== name;
+      try { localStorage.setItem('assistant-settings-tab', name); } catch {}
+    }
+    function openSettings(tab) {
+      if (tab) selectTab(tab);
+      settingsDrawer.hidden = false; drawerScrim.hidden = false;
+      document.getElementById('closeSettings').focus();
+    }
+    function closeSettings() {
+      if (settingsDrawer.hidden) return;
+      settingsDrawer.hidden = true; drawerScrim.hidden = true;
+      document.getElementById('openSettings').focus();
+    }
+    document.getElementById('openSettings').addEventListener('click', () => openSettings());
+    document.getElementById('closeSettings').addEventListener('click', closeSettings);
+    drawerScrim.addEventListener('click', closeSettings);
+    settingsDrawer.querySelector('.tabs').addEventListener('click', event => {
+      const tab = event.target.closest('[role=tab]');
+      if (tab) selectTab(tab.dataset.tab);
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !settingsDrawer.hidden && !document.querySelector('dialog[open]')) closeSettings();
+    });
+    selectTab(localStorage.getItem('assistant-settings-tab') || 'voice');
+
+    const SUGGESTIONS = ['What can you help me with?', 'Remind me to stretch at 3pm', 'Help me plan my week'];
+    function showWelcome(title = 'What can I help with?', text = 'Type below, or tap the microphone to talk.') {
+      const welcome = document.createElement('div');
+      welcome.className = 'welcome'; welcome.id = 'welcome';
+      const icon = document.createElement('div'); icon.className = 'welcome-icon'; icon.textContent = '✦'; icon.setAttribute('aria-hidden', 'true');
+      const heading = document.createElement('h2'); heading.textContent = title;
+      const hint = document.createElement('p'); hint.textContent = text;
+      const suggestions = document.createElement('div'); suggestions.className = 'suggestions';
+      for (const prompt of SUGGESTIONS) {
+        const chip = document.createElement('button');
+        chip.className = 'suggestion'; chip.type = 'button'; chip.textContent = prompt; chip.dataset.prompt = prompt;
+        suggestions.append(chip);
+      }
+      welcome.append(icon, heading, hint, suggestions);
+      chat.replaceChildren(welcome);
+    }
+    chat.addEventListener('click', event => {
+      const chip = event.target.closest('.suggestion');
+      if (chip) { message.value = chip.dataset.prompt; fitMessage(); message.focus(); }
+    });
+    function fitMessage() {
+      message.style.height = 'auto';
+      message.style.height = Math.min(message.scrollHeight, 160) + 'px';
+    }
+    message.addEventListener('input', fitMessage);
+    showWelcome();
     let recognition = null;
     let mediaRecorder = null;
     let recordedChunks = [];
@@ -334,8 +513,8 @@
 
     wakeNameInput.value = localStorage.getItem('assistant-wake-name') || 'Herald';
     rateInput.value = localStorage.getItem('assistant-voice-rate') || '1';
-    document.getElementById('speak').checked = localStorage.getItem('assistant-speak') !== 'false';
-    document.getElementById('continuousVoice').checked = localStorage.getItem('assistant-continuous-voice') !== 'false';
+    document.getElementById('speak').checked = localStorage.getItem('assistant-speak') === 'true';
+    document.getElementById('continuousVoice').checked = localStorage.getItem('assistant-continuous-voice') === 'true';
     wakeNameInput.addEventListener('change', () => localStorage.setItem('assistant-wake-name', wakeNameInput.value.trim() || 'Herald'));
     rateInput.addEventListener('input', () => localStorage.setItem('assistant-voice-rate', rateInput.value));
     document.getElementById('speak').addEventListener('change', event => localStorage.setItem('assistant-speak', event.target.checked));
@@ -408,7 +587,7 @@
         if (!Object.keys(persisted).length) await persistVoicePreferences();
         wakeNameInput.value = localStorage.getItem('assistant-wake-name') || 'Herald';
         rateInput.value = localStorage.getItem('assistant-voice-rate') || '1';
-        document.getElementById('speak').checked = localStorage.getItem('assistant-speak') !== 'false';
+        document.getElementById('speak').checked = localStorage.getItem('assistant-speak') === 'true';
         ttsOptions = await api('/api/tts');
         const saved = localStorage.getItem('assistant-tts-provider') || 'elevenlabs';
         ttsProviderSelect.value = saved;
@@ -430,8 +609,21 @@
       refreshVoices();
     });
 
+    // The Router reports a model that failed mid-task as text in the reply; say what happened in plain words instead.
+    function describeFailure(text) {
+      const failure = /^\[consultation with (.+?) failed: ([\s\S]+)\]$/.exec(text.trim());
+      if (!failure) return null;
+      const [, model, detail] = failure;
+      if (/timed out|timeout/i.test(detail)) return `${model} didn't answer in time. Try again, or pick a faster model at the top of the window.`;
+      if (/circuit|cooldown|disabled/i.test(detail)) return `${model} is paused after repeated errors. Try again in a minute, or switch to another account at the top of the window.`;
+      if (/\b(401|403)\b|unauthori|forbidden|api key|credential/i.test(detail)) return `${model} turned the request down. Check the account under Settings → Accounts.`;
+      return `${model} couldn't answer this time. Try again, or switch accounts at the top of the window. (${detail.slice(0, 200)})`;
+    }
+
     function addMessage(role, text, error = false, messageId = null) {
       document.getElementById('welcome')?.remove();
+      const failure = role === 'assistant' ? describeFailure(text) : null;
+      if (failure) { text = failure; error = true; }
       const row = document.createElement('div');
       row.className = `message ${role}${error ? ' error' : ''}`;
       if (messageId !== null) row.dataset.messageId = messageId;
@@ -530,7 +722,7 @@
           modelSelect.appendChild(option);
         }
         modelSelect.value = result.selected;
-        statusText.textContent = result.models.length ? `Ready · ${result.runner_host}` : 'Choose a provider to begin';
+        statusText.textContent = result.models.length ? 'Ready' : 'Connect an AI account to begin';
       } catch (error) {
         statusText.textContent = 'Router offline';
         addMessage('assistant', error.message, true);
@@ -668,7 +860,7 @@
     async function refreshUpdates() {
       const state = await api('/api/updates');
       document.getElementById('automaticUpdates').checked = state.automatic;
-      document.getElementById('updateStatus').textContent = `${state.result.status}: ${state.result.detail || state.result.version || ''}`;
+      document.getElementById('updateStatus').textContent = state.result.detail || (state.result.version ? `Version ${state.result.version}` : '');
     }
     document.getElementById('automaticUpdates').onchange = async event => {
       await api('/api/updates/settings', {automatic: event.target.checked}); await refreshUpdates();
@@ -749,13 +941,13 @@
           const card = document.createElement('div');
           card.className = 'connector-card';
           const title = document.createElement('strong');
-          title.textContent = `${connector.name} · ${connector.status.replaceAll('_', ' ')}`;
+          title.textContent = `${connector.name} · ${{included: 'included', connected: 'connected', setup_needed: 'not set up', configured_unverified: 'set up, not yet tested'}[connector.status] || connector.status.replaceAll('_', ' ')}`;
           const description = document.createElement('div');
           description.className = 'sub';
           description.textContent = connector.setup;
           const actions = document.createElement('div');
           actions.className = 'sub';
-          actions.textContent = `You may need to: ${connector.user_steps.join(' ')}`;
+          actions.textContent = connector.user_steps.length ? `You'll be asked to: ${connector.user_steps.join(' ')}` : '';
           if (connector.id === 'zotero' && connector.status !== 'connected') {
             const form = document.createElement('form');
             form.className = 'connector-form';
@@ -789,7 +981,7 @@
           } else {
             const button = document.createElement('button');
             button.type = 'button';
-            button.textContent = connector.status === 'included' ? 'Ask assistant about this' : 'Set up with assistant';
+            button.textContent = connector.status === 'included' ? 'Ask the assistant about this' : 'Set it up with me';
             button.addEventListener('click', () => startOnboarding(`Set up ${connector.name}`, `Set up ${connector.name} for this user on this device.`));
             card.appendChild(button);
           }
@@ -799,7 +991,7 @@
     }
 
     function startOnboarding(title, objective) {
-      document.getElementById('connectorPanel').open = false;
+      closeSettings();
       sendMessage(`ONBOARDING TASK: ${title}\n${objective}\n\nYou are responsible for leading this setup, not merely giving me a checklist. First inspect the current device, assistant settings, available native CLI tools, and relevant scoped Herald tools to determine what is already present and what is missing. Use the selected CLI's own native tools as the primary computer-use interface; use Herald's scoped MCP tools when they add value. Consult official project documentation before installing or changing configuration. Perform safe, relevant setup steps yourself, preserving native CLI tools and user settings. Never print, request in chat, or put credentials in commands/config files; when sign-in, MFA, a secret, or a device-local action is required, tell me exactly where to do it and then continue setup after I finish. Do not make me repeat information already available in this conversation or device. Verify each completed step with a real health check or harmless tool call. Keep the outcome clear: completed and verified, waiting on one specific action from me, or blocked with the actual reason. Continue from the current state when I respond; do not restart discovery.`);
     }
 
@@ -854,6 +1046,7 @@
           chat.replaceChildren();
           for (const [messageIndex, item] of result.messages.entries()) {
             const row = addMessage(item.role, item.content, false, item.id);
+            if (messageIndex === 0 && item.role === 'user' && item.content === 'Help me set up my assistant.') row.hidden = true;
             if (item.activity?.length) {
               const list = activityPanel(row);
               for (const event of item.activity) appendActivity(list, event);
@@ -862,6 +1055,7 @@
               list.parentElement.open = false;
             }
           }
+          if (![...chat.querySelectorAll('.message')].some(row => !row.hidden)) showWelcome();
         }
       } catch (error) { addMessage('assistant', `Could not load saved conversation: ${error.message}`, true); }
       await refreshConversationMemory();
@@ -920,10 +1114,7 @@
       chat.replaceChildren();
       pendingAttachments.splice(0, pendingAttachments.length);
       renderAttachments();
-      const welcome = document.createElement('div');
-      welcome.className = 'welcome'; welcome.id = 'welcome';
-      welcome.innerHTML = '<div class="welcome-icon">✦</div><h2>New conversation</h2><p>Your saved memories are available here too.</p>';
-      chat.appendChild(welcome);
+      showWelcome('New conversation', 'Your saved memories are available here too.');
       await refreshConversationMemory();
     });
     async function refreshConversationMemory() {
@@ -1092,11 +1283,8 @@
         chat.replaceChildren();
         pendingAttachments.splice(0, pendingAttachments.length);
         renderAttachments();
-        const welcome = document.createElement('div');
-        welcome.className = 'welcome';
-        welcome.id = 'welcome';
-        welcome.textContent = 'Conversation cleared. What can I help with?';
-        chat.appendChild(welcome);
+        showWelcome('Chat cleared', 'Your saved memories are still here. What can I help with?');
+        closeSettings();
         document.getElementById('memorySummary').textContent = 'No summary stored yet; recent conversation remains verbatim.';
         document.getElementById('memorySummary').removeAttribute('title');
       } catch (error) { addMessage('assistant', error.message, true); }
@@ -1148,12 +1336,6 @@
       } catch (error) { portalOutput.textContent = error.message; }
     }
     document.getElementById('portalOpen').addEventListener('click', () => portalAction('/api/portal/open', { url: document.getElementById('portalUrl').value.trim() }));
-    document.getElementById('portalDemo').addEventListener('click', () => {
-      const demoUrl = `${window.location.origin}/demo-school`;
-      document.getElementById('portalUrl').value = demoUrl;
-      void portalAction('/api/portal/open', { url: demoUrl });
-      document.getElementById('portalGoal').value = 'Find all courses, assignments and due dates, and current grades for Fall 2026. Cite the pages and evidence.';
-    });
     document.getElementById('portalInspect').addEventListener('click', () => portalAction('/api/portal/inspect', {}));
     document.getElementById('portalExplore').addEventListener('click', () => {
       const goal = document.getElementById('portalGoal').value.trim();
@@ -1164,12 +1346,12 @@
 
     function activityPanel(row) {
       const panel = document.createElement('details');
-      panel.open = true;
+      panel.className = 'activity';
       const title = document.createElement('summary');
-      title.textContent = 'Assistant activity';
+      title.textContent = 'Steps';
       const list = document.createElement('ol');
       panel.append(title, list);
-      row.querySelector('.bubble').append(panel);
+      row.append(panel);
       return list;
     }
     const delegatedPanels = new Map();
@@ -1230,7 +1412,9 @@
       if (!prompt || sendButton.disabled) return;
       speechSynthesis?.cancel();
       const userRow = addMessage('user', prompt);
+      userRow.hidden = setupIntro;
       message.value = '';
+      message.style.height = '';
       sendButton.disabled = true;
       statusText.textContent = 'Thinking…';
       const typing = addMessage('assistant', 'Thinking…');
@@ -1296,7 +1480,7 @@
           // Show the conversation this exchange joined (for a return, its earlier messages too).
           chat.replaceChildren();
           const notice = document.createElement('div');
-          notice.className = 'welcome';
+          notice.className = 'notice-line';
           notice.textContent = (switched.kind === 'new' ? 'New conversation' : `Back to: ${switched.title || 'an earlier conversation'}`)
             + (switched.reason ? ` (${switched.reason})` : '');
           chat.appendChild(notice);
@@ -1306,12 +1490,18 @@
         renderAttachments();
         await refreshConversationMemory();
         await refreshMemories();
-        statusText.textContent = result.model;
+        statusText.textContent = result.model && result.model !== modelSelect.value ? `Answered by ${result.model}` : 'Ready';
         if (document.getElementById('speak').checked) void speakReply(result.reply, { afterFinalReply: true });
       } catch (error) {
         typing.remove();
-        addMessage('assistant', error.message, true);
-        statusText.textContent = 'Request failed';
+        if (setupIntro) {
+          // The account is connected; a greeting that didn't come through shouldn't be the first thing a new user sees.
+          showWelcome('You’re connected', 'What would you like help with first?');
+          statusText.textContent = 'Ready';
+        } else {
+          addMessage('assistant', error.message, true);
+          statusText.textContent = 'Request failed';
+        }
       } finally {
         clearInterval(timer);
         activity.dataset.finished = "1";
@@ -1336,7 +1526,7 @@
           try { activeReplyAudio.pause(); } catch {}
           activeReplyAudio = null;
         }
-        statusText.textContent = `Generating ${ttsProviderSelect.value} speech…`;
+        statusText.textContent = 'Preparing speech…';
         const response = await fetch('/api/tts', {
           method: 'POST',
           headers: { 'X-Ultimate-Assistant-Token': token, 'Content-Type': 'application/json' },
@@ -1356,6 +1546,7 @@
         activeReplyAudio = audio;
         audio.onended = () => {
           URL.revokeObjectURL(audioUrl);
+          statusText.textContent = 'Ready';
           if (activeReplyAudio === audio) activeReplyAudio = null;
           maybeContinueVoiceAfterSpeech(options);
         };
@@ -1364,7 +1555,7 @@
           if (activeReplyAudio === audio) activeReplyAudio = null;
         };
         await audio.play();
-        statusText.textContent = `Speaking · ${response.headers.get('X-TTS-Provider') || ttsProviderSelect.value}`;
+        statusText.textContent = 'Speaking…';
       } catch (error) {
         statusText.textContent = 'Speech fallback · device voice';
         if (!speakWithDevice(text, options)) addMessage('assistant', error.message, true);
@@ -1377,7 +1568,7 @@
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = Number(rateInput.value);
       utterance.voice = speechSynthesis.getVoices().find(voice => voice.name === voiceSelect.value) || null;
-      utterance.onend = () => maybeContinueVoiceAfterSpeech(options);
+      utterance.onend = () => { statusText.textContent = 'Ready'; maybeContinueVoiceAfterSpeech(options); };
       speechSynthesis.speak(utterance);
       return true;
     }
@@ -1698,7 +1889,7 @@
     const sharing = document.createElement('input'); sharing.type = 'checkbox';
     sharingLabel.append(sharing, document.createTextNode(' Share daily diagnostics (optional)'));
     sharingLabel.title = reportDescription;
-    const sharingStatus = document.createElement('small');
+    const sharingStatus = document.createElement('div'); sharingStatus.className = 'sub';
     async function refreshSharing() {
       const info = await api('/api/diagnostics/preferences');
       sharing.checked = info.enabled === true && info.schema_version === 3;
@@ -1742,7 +1933,7 @@
     const restartApp = document.createElement('button');
     restartApp.textContent = 'Restart app';
     const quitApp = document.createElement('button');
-    quitApp.textContent = 'Quit app';
+    quitApp.textContent = 'Quit app'; quitApp.className = 'ghost';
     async function appLifecycle(operation) {
       if (sendButton.disabled) { statusText.textContent = 'Wait for the current action to finish.'; return; }
       try {
@@ -1760,13 +1951,16 @@
     }
     restartApp.onclick = () => appLifecycle('restart');
     quitApp.onclick = () => appLifecycle('quit');
-    document.querySelector('.voice-settings').append(diagnosticButton, uploadDiagnostics, sharingLabel, sharingStatus, inventoryButton, restartApp, quitApp);
-    document.querySelector('.voice-settings').after(inventoryOutput);
+    const toolRow = (...nodes) => { const row = document.createElement('div'); row.className = 'row'; row.append(...nodes); return row; };
+    const appVersion = document.createElement('div'); appVersion.className = 'sub';
+    document.getElementById('appTools').append(appVersion,
+      toolRow(diagnosticButton, uploadDiagnostics), sharingLabel, sharingStatus,
+      toolRow(inventoryButton), inventoryOutput, toolRow(restartApp, quitApp));
     refreshModels();
     const releaseWelcome = document.createElement('section');
     releaseWelcome.id = 'releaseWelcome'; releaseWelcome.hidden = true;
-    releaseWelcome.style.cssText = 'border:1px solid #414d76;border-radius:12px;padding:14px;background:#1a2032';
-    document.querySelector('.shell header').after(releaseWelcome);
+    releaseWelcome.className = 'notice';
+    document.getElementById('notices').append(releaseWelcome);
     let releaseState = null;
     const el = (tag, text) => { const node = document.createElement(tag); if (text) node.textContent = text; return node; };
     const releaseButton = (text, handler) => { const b = el('button', text); b.onclick = async () => { b.disabled = true; try { await handler(); } catch (e) { statusText.textContent = e.message; } finally { b.disabled = false; } }; return b; };
@@ -1779,31 +1973,33 @@
     }
     function renderReleaseWelcome() {
       releaseWelcome.replaceChildren();
+      if (releaseState) appVersion.textContent = 'Version ' + releaseState.version;
       releaseWelcome.hidden = !releaseState || (!releaseState.offer_tour && !releaseState.offer_sharing);
       if (releaseWelcome.hidden) return;
+      const actions = (...buttons) => { const row = el('div'); row.className = 'actions-row'; row.append(...buttons); buttons[0].className = 'primary'; return row; };
+      // One request at a time: what's new first, then the optional diagnostics question.
       if (releaseState.offer_tour) {
         releaseWelcome.append(el('h2', 'New in Ultimate Assistant ' + releaseState.version),
-          el('p', 'Would you like an explanation of the new features and a few optional things to try?'),
-          releaseButton('Show me and let me try', openReleaseTour),
-          releaseButton('Later', () => releaseAction('later')),
-          releaseButton('Skip this version', () => releaseAction('skip')));
-      }
-      if (releaseState.offer_sharing) {
-        releaseWelcome.append(el('h3', 'Help check how this build works for you?'),
-          el('p', 'Optional reports share versions, action status/timings and your feature-test choices with support. No chats, files, prompts, screenshots, account names or credentials. Automatic sharing is off until you agree. You can inspect the report first.'),
-          releaseButton('Review daily sharing', async () => {
-            const destination = await approveReport(true); if (!destination) return;
-            await api('/api/diagnostics/preferences', { enabled: true, destination });
-            await refreshSharing(); await refreshReleaseWelcome();
-          }),
-          releaseButton('Review and send one report', async () => {
-            const destination = await approveReport(false); if (!destination) return;
-            await api('/api/diagnostics/upload', { destination });
-            await releaseAction('sharing_decline');
-            statusText.textContent = 'Report accepted. Daily sharing remains off.';
-          }),
-          releaseButton('No thanks', () => releaseAction('sharing_decline')),
-          releaseButton('Ask later', () => releaseAction('sharing_later')));
+          el('p', 'Want a quick look at what changed, with a few things to try?'),
+          actions(releaseButton('Show me', openReleaseTour),
+            releaseButton('Later', () => releaseAction('later')),
+            releaseButton('Skip this version', () => releaseAction('skip'))));
+      } else {
+        releaseWelcome.append(el('h3', 'Help improve the assistant?'),
+          el('p', 'Optional reports share version numbers and how long actions took. No chats, files, prompts, screenshots, account names or credentials. You can read a report before anything is sent.'),
+          actions(releaseButton('Review daily sharing', async () => {
+              const destination = await approveReport(true); if (!destination) return;
+              await api('/api/diagnostics/preferences', { enabled: true, destination });
+              await refreshSharing(); await refreshReleaseWelcome();
+            }),
+            releaseButton('Send one report', async () => {
+              const destination = await approveReport(false); if (!destination) return;
+              await api('/api/diagnostics/upload', { destination });
+              await releaseAction('sharing_decline');
+              statusText.textContent = 'Report sent. Daily sharing stays off.';
+            }),
+            releaseButton('No thanks', () => releaseAction('sharing_decline')),
+            releaseButton('Ask later', () => releaseAction('sharing_later'))));
       }
     }
     async function openReleaseTour() {
@@ -1841,11 +2037,15 @@
       dialog.onclose = () => dialog.remove(); document.body.append(dialog); dialog.showModal();
     }
     const releaseMenu = releaseButton("What's new / try features", openReleaseTour);
-    document.querySelector('.voice-settings').append(releaseMenu);
+    inventoryButton.after(releaseMenu);
     window.addEventListener('assistant-ready', () => { void refreshReleaseWelcome().catch(e => { statusText.textContent = e.message; }); });
 
     refreshIntegrations();
     refreshTasks();
+    api('/api/modules').then(result => {
+      const school = (result.modules || []).find(module => module.id === 'school');
+      settingsDrawer.querySelector('[data-tab=school]').hidden = !school || school.status === 'not_installed';
+    }).catch(() => {});
     async function refreshDecisionSettings() {
       const status = document.getElementById('decisionMeasured');
       try {
@@ -1885,25 +2085,17 @@
 
   <script>
   (()=>{
-    const shell=document.querySelector('.shell');
-    const options=document.createElement('details');options.id='appSettings';options.className='integrations';
-    const optionsTitle=document.createElement('summary');optionsTitle.textContent='Settings and tools';options.append(optionsTitle);
-    for(const child of [...shell.children]){
-      if(child.tagName==='HEADER'||['setupWizard','manageAccounts','chat','releaseWelcome'].includes(child.id)||child.classList.contains('composer'))continue;
-      options.append(child);
-    }
-    shell.append(options);
     const wizard=document.getElementById('setupWizard');
     const decisionPanel=document.getElementById('decisionPanel');
     const names={antigravity:'Google AI subscription',codex:'ChatGPT subscription',claude:'Claude subscription'};
-    const services={openai:'OpenAI',gemini:'Google Gemini',anthropic:'Anthropic',openrouter:'OpenRouter',deepseek:'DeepSeek',xai:'xAI',custom:'Another compatible service'};
+    const services={openai:'OpenAI',gemini:'Google Gemini',anthropic:'Anthropic',openrouter:'OpenRouter',deepseek:'DeepSeek',xai:'xAI',custom:'Another OpenAI-compatible service'};
     let state={providers:[],accounts:[]}, account='',timer=null,generation=0,handingOff=false;
     const $=id=>document.getElementById(id);
     function screen(html){clearTimeout(timer);generation++;decisionPanel.remove();wizard.innerHTML=html;wizard.append(decisionPanel);wizard.hidden=false;document.body.classList.add('setup-active');wizard.querySelector('h2')?.setAttribute('tabindex','-1');wizard.querySelector('h2')?.focus();}
     function error(message){const e=$('setupError');if(e){e.textContent=message;e.hidden=false;}}
     function button(label,description,action){const b=document.createElement('button');const title=document.createElement('strong');title.textContent=label;b.append(title);if(description){const d=document.createElement('small');d.textContent=description;b.append(d);}b.onclick=action;return b;}
     async function inventory(){state=await api('/api/onboarding');return state;}
-    function enterChat(){clearTimeout(timer);generation++;optionsTitle.after(decisionPanel);wizard.hidden=true;document.body.classList.remove('setup-active');$('providerPanel').open=false;window.dispatchEvent(new Event('assistant-ready'));}
+    function enterChat(){clearTimeout(timer);generation++;$('accountsGroup').after(decisionPanel);wizard.hidden=true;document.body.classList.remove('setup-active');$('providerPanel').open=false;window.dispatchEvent(new Event('assistant-ready'));}
     async function handoff(){
       if(handingOff)return;handingOff=true;
       try{
@@ -1913,13 +2105,15 @@
       }finally{handingOff=false;}
     }
     async function kinds(){
-      screen('<span class="eyebrow">Let’s get you connected</span><h2>How would you like to connect your AI?</h2><p>Choose the kind of access you already have. I’ll guide you through the rest.</p><div class="choices" id="kindChoices"></div><div id="savedChoices"></div><p id="setupError" class="error" hidden></p>');
-      $('kindChoices').append(button('An AI subscription','I use ChatGPT, Google AI, or Claude.',subscriptions),button('An API key','I have a key from an AI service.',apiChoice));
+      screen('<button id="setupBackToChat" class="back" hidden>← Back to chat</button><span class="eyebrow">Let’s get you connected</span><h2>How would you like to connect your AI?</h2><p>Choose the kind of access you already have. I’ll guide you through the rest.</p><div id="savedChoices"></div><div class="choices" id="kindChoices"></div><p id="setupError" class="error" hidden></p>');
+      $('kindChoices').append(button('An AI subscription','I use ChatGPT, Google AI, or Claude.',subscriptions),button('An API key','I have a key from an AI service.',apiChoice),button('A model on this computer','Ollama or LM Studio, running here.',localChoice));
       const run=generation;
+      // Opened from Settings while an account is already in use: leaving without changes is fine.
+      if(modelSelect.options.length){$('setupBackToChat').hidden=false;$('setupBackToChat').onclick=enterChat;}
       try{await inventory();if(run!==generation)return;
-        if(state.accounts.length){const detail=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Use an account already connected on this device';detail.append(summary);const list=document.createElement('div');list.className='choices';
-          for(const a of state.accounts)list.append(button(a.name,a.status==='logged_in'||a.status==='verified'?'Connected':'Needs sign-in or a connection test',()=>resume(a)));
-          detail.append(list);$('savedChoices').append(detail);}
+        if(state.accounts.length){const heading=document.createElement('h3');heading.textContent='Already connected on this computer';const list=document.createElement('div');list.className='choices';
+          for(const a of state.accounts)list.append(button(a.name,a.status==='logged_in'||a.status==='verified'?'Ready to use':'Needs sign-in or a connection test',()=>resume(a)));
+          const other=document.createElement('h3');other.textContent='Or connect something new';$('savedChoices').append(heading,list,other);}
       }catch(e){error('I couldn’t reach the local assistant. Please retry in a moment.');}
     }
     async function resume(a){account=a.name;await api('/api/model',{model:a.model});if(a.kind==='cli_profile' && !['logged_in','verified'].includes(a.status)){loginScreen();await beginLogin();}else await verify();}
@@ -1972,15 +2166,32 @@
     }
     function apiForm(provider){
       screen('<button id="setupBack" class="back">← Back</button><span class="eyebrow">Connect your API key</span><h2 id="setupAPIHeading"></h2><p>Your key is stored encrypted on this device. It won’t be put in the conversation.</p><form id="setupAPIForm" autocomplete="off"><label>API key<input id="setupAPISecret" type="password" required autocomplete="off"></label><label>Which model should I use?<input id="setupAPIModel" required placeholder="Model name from your provider"></label><p class="sub">Use a model available to your API account. You can change it later.</p><details id="setupAPIAdvanced"><summary>Connection address</summary><label>API address<input id="setupAPIURL" type="url" placeholder="https://your-service.example/v1"></label></details><button id="setupAPISave" class="primary">Connect and test</button></form><p>Connecting sends one small test request and may use provider quota.</p><p id="setupStatus" role="status"></p><p id="setupError" class="error" hidden></p>');
-      $('setupAPIHeading').textContent='Connect to '+services[provider];$('setupBack').onclick=apiChoice;
-      if(provider==='custom'){$('setupAPIAdvanced').open=true;$('setupAPIURL').required=true;}
+      $('setupAPIHeading').textContent=provider==='custom'?'Connect a compatible service':'Connect to '+services[provider];$('setupBack').onclick=apiChoice;
+      // A custom service needs its address, so it isn't tucked away where it can be collapsed.
+      if(provider==='custom'){const field=$('setupAPIURL').closest('label');$('setupAPIAdvanced').replaceWith(field);$('setupAPIURL').required=true;}
       $('setupAPIForm').onsubmit=async event=>{event.preventDefault();const key=$('setupAPISecret').value;$('setupAPISecret').value='';$('setupAPISave').disabled=true;$('setupBack').disabled=true;$('setupStatus').textContent='Saving your encrypted key...';
-        try{await inventory();const base=services[provider]+' account';account=base;let n=2;while(state.accounts.some(a=>a.name===account))account=base+' '+n++;
+        try{await inventory();let host='';try{host=new URL($('setupAPIURL').value).host;}catch{}const base=provider==='custom'?(host||'Compatible service')+' account':services[provider]+' account';account=base;let n=2;while(state.accounts.some(a=>a.name===account))account=base+' '+n++;
           await api('/api/onboarding/api-key',{name:account,provider,model:$('setupAPIModel').value,key,base_url:$('setupAPIURL').value});await verify();
         }catch(e){error(e.message);if($('setupAPISave')){$('setupAPISave').disabled=false;$('setupBack').disabled=false;$('setupStatus').textContent='Enter the key again to retry.';}}
       };
     }
-    $('manageAccounts').onclick=kinds;
+    async function localChoice(){
+      screen('<button id="setupBack" class="back">← Back</button><span class="eyebrow">A model on this computer</span><h2>Which local model should I use?</h2><p id="setupStatus">Looking for Ollama and LM Studio…</p><div class="choices" id="localChoices"></div><p id="setupError" class="error" hidden></p><button id="setupRetry" hidden>Look again</button>');
+      $('setupBack').onclick=kinds;$('setupRetry').onclick=localChoice;const run=generation;
+      try{const {servers}=await api('/api/onboarding/local-models');if(run!==generation)return;
+        const models=servers.flatMap(s=>s.models.map(model=>({...s,model})));
+        if(!models.length){$('setupStatus').textContent=servers.length?'Your local model app is running but has no chat models yet. Download one in it (for example: ollama pull qwen3:8b), then look again.':'I couldn’t find Ollama or LM Studio running on this computer. Start one, then look again. A model on another computer can be added with "An API key" → "Another OpenAI-compatible service".';$('setupRetry').hidden=false;return;}
+        $('setupStatus').textContent='Pick a model. Bigger models give better answers but reply more slowly.';
+        for(const m of models)$('localChoices').append(button(m.model,m.server,()=>connectLocal(m)));
+      }catch(e){if(run!==generation)return;error(e.message);$('setupRetry').hidden=false;}
+    }
+    async function connectLocal(m){
+      for(const b of $('localChoices').querySelectorAll('button'))b.disabled=true;$('setupStatus').textContent='Connecting '+m.model+'…';
+      try{await inventory();const base=m.server+' '+m.model;account=base;let n=2;while(state.accounts.some(a=>a.name===account))account=base+' '+n++;
+        await api('/api/onboarding/api-key',{name:account,provider:'custom',model:m.model,key:'local',base_url:m.base_url});await verify();
+      }catch(e){error(e.message);for(const b of $('localChoices').querySelectorAll('button'))b.disabled=false;}
+    }
+    $('manageAccounts').onclick=()=>{closeSettings();kinds();};
     async function initialize(){
       try{const [progress]=await Promise.all([api('/api/onboarding/progress'),inventory()]);
         if(progress.phase==='setup_started' && state.accounts.some(a=>a.name===progress.account && ['logged_in','verified'].includes(a.status))){if(progress.conversation_id){conversationId=progress.conversation_id;localStorage.setItem('assistant-conversation-id',conversationId);await loadConversation();}enterChat();return;}
