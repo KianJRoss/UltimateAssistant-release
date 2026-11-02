@@ -59,7 +59,7 @@
 
 # 0.3.2 — The phone app
 
-- Pair an Android phone (8.0 or newer): ask the assistant to pair your phone, scan the code it shows, and the phone gets the same conversation, voice and the assistant's canvas. The assistant can act on the phone when you allow it (open apps, read and use the screen, files). The phone reaches the computer through Tailscale, so it works away from home too. Get the app from the releases page; the assistant gives you the link when pairing.
+- Pair an Android phone (8.0 or newer): ask the assistant to pair your phone, scan the code it shows, and the phone gets the same conversation, voice and the assistant's canvas. The assistant can act on the phone when you allow it (open apps, read and use the screen, files). On the computer itself, the assistant and its Herald Router run locally on the same machine with no Tailscale required; optional Tailscale lets a paired phone reach the computer away from home too. Get the app from the releases page; the assistant gives you the link when pairing.
 - When the assistant finishes some work but forgets to write the answer, it's asked once to sum up instead of the turn failing.
 
 # 0.3.1 — Your changes survive updates
