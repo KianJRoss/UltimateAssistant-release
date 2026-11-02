@@ -6,7 +6,9 @@ Version: 0.4.4. The implementation source commit and the download checksums are 
 `apps/` and `components/` match the Windows release bundle exactly. The Linux archive contains the same files,
 plus `install.sh` and its own `INSTALL.txt`; its `apps/assistant/VERSION` uses Linux line endings, which is the only
 other difference. Large speech model files download during setup with upstream checksum verification. Developer
-accounts, runtime state, tests, captures and maintainer-only tools are excluded.
+accounts, runtime state, tests, captures and maintainer-only tools are excluded, except the routing
+benchmark in `tools/decisions/` (see its README), which is outside the bundle and published so results can be
+reproduced.
 
 - **Herald** (the Router the assistant runs on) is its own product: setup downloads `herald-router` and
   `herald-sdk` from https://github.com/KianJRoss/herald-release, pinned with SHA-256 in
