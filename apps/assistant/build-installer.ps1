@@ -1,6 +1,6 @@
 param(
     [string]$OutputDirectory = (Join-Path $PSScriptRoot "..\..\dist"),
-    [string]$Version = "0.4.4"
+    [string]$Version = "0.4.5"
 )
 
 $ErrorActionPreference = "Stop"

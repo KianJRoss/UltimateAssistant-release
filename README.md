@@ -8,10 +8,10 @@ A personal assistant that runs on your own computer, with its own local Herald R
 already have: a subscription (ChatGPT, Google AI or Claude through their official CLIs), an API key, or a local
 model. Your keys stay encrypted on your device; there is no account with us and no server of ours in between.
 
-## Download: v0.4.4
+## Download: v0.4.5
 
-- **Windows:** [UltimateAssistant-0.4.4-windows-x64.zip](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.4/UltimateAssistant-0.4.4-windows-x64.zip)
-- **Linux:** [UltimateAssistant-0.4.4-linux.tar.gz](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.4/UltimateAssistant-0.4.4-linux.tar.gz)
+- **Windows:** [UltimateAssistant-0.4.5-windows-x64.zip](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.5/UltimateAssistant-0.4.5-windows-x64.zip)
+- **Linux:** [UltimateAssistant-0.4.5-linux.tar.gz](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.5/UltimateAssistant-0.4.5-linux.tar.gz)
 - **Android phone app:** [UltimateAssistant-phone-1.1.0.apk](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/phone-v1.1.0/UltimateAssistant-phone-1.1.0.apk) (pair it from the assistant)
 
 Checksums are in [SHA256SUMS.txt](SHA256SUMS.txt). See the [release notes](RELEASE-NOTES.md) and
@@ -59,8 +59,8 @@ when you need them. No GitHub account, Git, or developer setup is needed.
 
 Your AI model always does the real work. An optional mixed mode adds a fast decision model where it measured at
 least 90% correct and no slower than your model:
-- **Hosted parallel decision APIs (`Jev`, OpenRouter `/api/v1/systemone`, Perplexity `pplx-decider-v1.2`, Liquid `d1.1`)**: Answer a 40-question wide semantic surmise in a single ~159–319 ms forward pass to settle specialist routing, tool necessity, the background commitment gate, and a privacy-safe semantic brief without storing raw prompt text.
-- **Local sequential model (`tev1` on Ollama / `llama.cpp`)**: Answers lean 1–5 question yes/no gates (164 ms when routing is settled, 27 ms on single gates) on a single GPU.
+- **Hosted parallel decision APIs (`Jev`, OpenRouter `/api/v1/systemone`, Perplexity `pplx-decider-v1.2`, Liquid `d1.1`)**: Answer a 40-question wide semantic surmise in one request to settle specialist routing, tool necessity, the background commitment gate, and a privacy-safe semantic brief without storing raw prompt text. In a synthetic test of 12 prompts run twice, measured medians for Jev, OpenRouter Jev, Liquid, and Perplexity ranged from 159 to 319 ms.
+- **Local sequential model (`tev1` on Ollama / `llama.cpp`)**: Answers lean 1–5 question yes/no gates (a median of 27 ms for the tested commitment gate) on a single GPU.
 
 ## Updates
 
