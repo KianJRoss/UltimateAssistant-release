@@ -20,10 +20,12 @@ if (-not (Get-Command node.exe -ErrorAction SilentlyContinue)) {
     $env:PATH = $nodeDir + ';' + $env:PATH
 }
 $prefix = Join-Path $runtime 'browser-mcp'
+New-Item -ItemType Directory -Path $prefix -Force | Out-Null
+Copy-Item (Join-Path $PSScriptRoot 'browser-mcp\package.json'), (Join-Path $PSScriptRoot 'browser-mcp\package-lock.json') -Destination $prefix -Force
 $nativePreference = $ErrorActionPreference
 try {
     $ErrorActionPreference = 'Continue'
-    & npm.cmd install --prefix $prefix --no-audit --no-fund --no-update-notifier 'kapture-mcp@2.6.1' '@playwright/mcp@0.0.83'
+    & npm.cmd ci --prefix $prefix --no-audit --no-fund --no-update-notifier
     $nativeExit = $LASTEXITCODE
 } finally { $ErrorActionPreference = $nativePreference }
 if ($nativeExit -ne 0) { throw 'Browser MCP package installation failed.' }

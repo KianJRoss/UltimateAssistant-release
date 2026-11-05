@@ -31,7 +31,13 @@ def pair_phone() -> str:
     If the app isn't installed yet, give them phone_app's download link first (Android 8+).
     If the phone can't reach this computer yet, it says what's needed (set_up_phone_access)."""
     from .phone.pairing_invite import invitation
-    return json.dumps(invitation(), ensure_ascii=False)
+    store = services.service("pairing")
+    with store._lock:
+        current = store.status(DEFAULT_DEVICE)
+        if current.get("paired"):
+            return json.dumps({"state":"already_paired", "pairing_revision":current.get("pairing_revision"),
+                "detail":"The phone is already paired; its credential was preserved. Check phone_status and fresh device_status evidence for connectivity or permissions. If the user explicitly wants replacement, use Settings > Devices and its replacement confirmation."})
+        return json.dumps(invitation(), ensure_ascii=False)
 
 
 @mcp.tool()

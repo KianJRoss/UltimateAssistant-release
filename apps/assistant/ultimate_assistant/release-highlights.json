@@ -1,4 +1,20 @@
 {
+  "0.4.6": [
+    {
+      "id": "devices",
+      "title": "Connect your devices",
+      "summary": "Pair a phone from Settings → Devices, and review discovered computers before approving access.",
+      "prompt": "Show me which devices are connected and how I would pair another device. Only look; do not change any pairing.",
+      "expected": "Your current devices and the steps to pair another one."
+    },
+    {
+      "id": "saved-chats",
+      "title": "Find and organize saved chats",
+      "summary": "Search saved chats, pin useful conversations, and move finished conversations out of the active list.",
+      "prompt": "Show me how to find and organize saved conversations. Do not change or remove anything.",
+      "expected": "Instructions for searching, pinning and settling saved conversations."
+    }
+  ],
   "0.4.5": [
     {
       "id": "any-account",
@@ -17,7 +33,7 @@
     {
       "id": "quick-decisions",
       "title": "Parallel turn surmise & local quick decisions",
-      "summary": "Hosted decision APIs (Jev, OpenRouter System One, Perplexity Decider, Liquid d1.1) answer a 40-question turn surmise in one request; local tev1 uses lean 1\u20135 question gates.",
+      "summary": "Hosted decision APIs (Jev, OpenRouter System One, Perplexity Decider, Liquid d1.1) answer a 40-question turn surmise in one request; local tev1 uses lean 1–5 question gates.",
       "prompt": "Explain the Quick decisions setting: what the mixed mode changes for hosted parallel APIs versus local tev1, what it costs, and whether it would help with my setup. Don't change the setting.",
       "expected": "An explanation of the default and mixed modes, parallel turn surmise vs. local sequential gates, and a suggestion for your setup."
     },
@@ -47,7 +63,7 @@
     {
       "id": "quick-decisions",
       "title": "Parallel turn surmise & local quick decisions",
-      "summary": "Hosted decision APIs (Jev, OpenRouter System One, Perplexity Decider, Liquid d1.1) answer a 40-question turn surmise in one request; local tev1 uses lean 1\u20135 question gates.",
+      "summary": "Hosted decision APIs (Jev, OpenRouter System One, Perplexity Decider, Liquid d1.1) answer a 40-question turn surmise in one request; local tev1 uses lean 1–5 question gates.",
       "prompt": "Explain the Quick decisions setting: what the mixed mode changes for hosted parallel APIs versus local tev1, what it costs, and whether it would help with my setup. Don't change the setting.",
       "expected": "An explanation of the default and mixed modes, parallel turn surmise vs. local sequential gates, and a suggestion for your setup."
     },

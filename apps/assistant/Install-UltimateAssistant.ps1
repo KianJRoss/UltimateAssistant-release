@@ -33,6 +33,7 @@ if (-not (Test-Path (Join-Path $assistantSource "setup.ps1")) -or
 }
 
 New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $bundleRoot "LICENSE") -Destination (Join-Path $installRoot "LICENSE") -Force
 New-Item -ItemType Directory -Path (Join-Path $installRoot "apps") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $installRoot "components\canvas-overlay") -Force | Out-Null
 

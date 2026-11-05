@@ -16,11 +16,20 @@ https://huggingface.co/hexgrad/Kokoro-82M
 
 ## Bundled Router and browser dependencies
 
-Herald is distributed under its included MIT license. This is a custom friend build.
+Herald is distributed under AGPL-3.0-or-later. Its provider layer includes
+pal-mcp-server-derived code under Apache-2.0, and its Pi interface uses the upstream
+MIT-licensed Pi runtime. See Herald's included licenses and third-party notices.
 Kapture (MIT): https://github.com/williamkapke/kapture
 Microsoft Playwright MCP (Apache-2.0): https://github.com/microsoft/playwright-mcp
 PyWinpty (MIT): https://github.com/andfoy/pywinpty
 
 Browser MCP packages and Chromium are installed from their upstream distributions during setup; their license files remain in the installed packages. Node.js is used from the device when available, otherwise its official Windows LTS archive is downloaded and checksum checked; its license remains in that archive.
+
+Browser MCP dependencies are pinned in `browser-mcp/package-lock.json`, including
+the patched Zod version. The bundled canvas uses Mermaid (MIT), Lucide (ISC), and
+KaTeX (MIT); their upstream licenses are included beside the vendored files.
+Mermaid is rebuilt from its published dependency-externalized core with patched
+runtime libraries. Its build manifest records the exact bundled versions and
+notices; the reproducible build recipe is in `tools/renderers` in the source.
 
 Optional g4f API/GUI dependency: gpt4free 8.5.9, GPL-3.0, installed from PyPI during setup. Upstream source and license: https://github.com/xtekky/gpt4free. curl_cffi is installed as its browser-compatible HTTP transport.

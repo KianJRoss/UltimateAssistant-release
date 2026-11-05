@@ -1,6 +1,7 @@
-﻿"""User-owned g4f account configuration and local service lifecycle."""
+"""User-owned g4f account configuration and local service lifecycle."""
 from __future__ import annotations
 import hashlib
+import importlib.util
 import json
 import os
 import socket
@@ -35,13 +36,21 @@ def catalog():
     global _catalog_cache
     with _lock:
         if _catalog_cache is not None:return _catalog_cache
+        def unavailable(detail):
+            return {'providers': [], 'unavailable': [], 'catalog_available': False, 'catalog_detail': detail}
+        if importlib.util.find_spec('g4f') is None:
+            return unavailable('Optional g4f is not installed on this node. Existing Router accounts remain available.')
         root=accounts_file().parent/'catalog'
         (root/'har_and_cookies').mkdir(parents=True,exist_ok=True)
-        code="import json; from g4f import Provider; print(json.dumps({'providers':[{'id':p.__name__,'needs_auth':bool(getattr(p,'needs_auth',False)),'working':bool(getattr(p,'working',True))} for p in Provider.__providers__]}))"
-        result=subprocess.run([sys.executable,'-c',code],cwd=root,capture_output=True,text=True,timeout=60,
-                              creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
-        if result.returncode:raise ValueError('Optional g4f provider discovery failed')
-        _catalog_cache=json.loads(result.stdout.strip().splitlines()[-1])
+        code="import json; from g4f import Provider; from ultimate_assistant.g4f_catalog import discover; print(json.dumps(discover(Provider)))"
+        try:
+            result=subprocess.run([sys.executable,'-c',code],cwd=root,capture_output=True,text=True,timeout=60,
+                                  creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+            if result.returncode:
+                raise ValueError('provider discovery failed')
+            _catalog_cache={**json.loads(result.stdout.strip().splitlines()[-1]), 'catalog_available': True}
+        except (OSError, subprocess.TimeoutExpired, ValueError, IndexError):
+            _catalog_cache=unavailable('Optional g4f discovery is unavailable. Existing Router accounts remain available. Restart the assistant after fixing the local g4f installation.')
         return _catalog_cache
 
 
@@ -158,7 +167,9 @@ def start():
                 with socket.socket() as probe:probe.bind(('127.0.0.1',0));worker_port=probe.getsockname()[1]
                 process=_spawn([sys.executable,'-m','ultimate_assistant.g4f_worker','--account',a['name'],'--port',str(worker_port)],env,str(Path(__file__).resolve().parents[1]))
                 url='http://127.0.0.1:'+str(worker_port)+'/v1'
-                _wait(process,url+'/models')
+                # The native model catalog loads unrelated optional adapters. A static
+                # API landing page checks readiness without triggering provider discovery.
+                _wait(process,url)
                 state.append({**a,'url':url})
             state_file=accounts_file().parent/'runtime.json';_write(state_file,{'accounts':state})
             env['ULTIMATE_ASSISTANT_G4F_STATE_FILE']=str(state_file)

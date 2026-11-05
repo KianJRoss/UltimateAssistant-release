@@ -271,6 +271,7 @@ class LifeClock:
             present = any(not doing["idle"] for doing in self.activity().values())
         except Exception:  # noqa: BLE001 - unknown: assume nobody is looking, as before activity existed
             present = False
+        prior_cards = {entry["card"] for entry in state.values() if entry.get("card")}
         shown, ready = [], []
         for key, item in items.items():
             entry = state.setdefault(key, {})
@@ -321,6 +322,12 @@ class LifeClock:
         shown += self.accountability(state, items, now)
         for key in [k for k in state if k.removeprefix("push:") not in items]:
             del state[key]  # closed or no longer upcoming
+        current_cards = {entry["card"] for entry in state.values() if entry.get("card")}
+        for card_id in prior_cards - current_cards:
+            try:
+                self.remove(card_id)
+            except Exception:  # a stale card must not stop reminders or lose state
+                LOG.exception("Could not remove superseded reminder %s", card_id)
         self._save(state)
         return shown
 
@@ -416,9 +423,10 @@ def start_on_main_node() -> LifeClock | None:
     if _CLOCK is not None or not is_main():
         return _CLOCK
     from . import canvas
-    _CLOCK = LifeClock(show=canvas.store.show,
+    from .voice_delivery import show as preferred_delivery, escalation_speech
+    _CLOCK = LifeClock(show=preferred_delivery,
                        events=lambda card_id, after: canvas.store.events(after, element_id=card_id),
-                       remove=lambda card_id: canvas.store.remove(card_id))
+                       remove=lambda card_id: canvas.store.remove(card_id),speak=escalation_speech)
     from .activity import activity
     activity.follow()
     _CLOCK.start()

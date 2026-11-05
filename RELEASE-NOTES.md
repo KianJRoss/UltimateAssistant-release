@@ -1,3 +1,14 @@
+# 0.4.6 — Devices, saved chats and Docker
+
+- Refreshed the web app and settings around the conversation, with saved-chat search, pinning and Active/Settled views.
+- Added Settings → Devices for phone invitations, connected-device status, revocation, and explicit computer approvals. Computer approval requires Herald 0.4.4 on both peers.
+- Returning users keep their existing setup and pairing instead of being sent through first-time onboarding again.
+- Added task attention/review, capability declarations, and optional portable context for supported providers.
+- Linux, Windows and Docker install methods belong to this release. The Android app is released separately.
+- Uses Herald 0.4.4 with updated Pi dependencies and encrypted, directional computer grants.
+
+Known limits: Android saved chats are read-only previews. Dedicated GitHub project chips, tool-selection controls, and swarm/loop controls are still planned. Containers require separate configuration for host desktop access and provider CLI logins.
+
 # 0.4.5 — Herald license attribution
 
 - Setup installs Herald 0.4.3, which includes the Apache 2.0 license and attribution for its pal-mcp-server-derived code.

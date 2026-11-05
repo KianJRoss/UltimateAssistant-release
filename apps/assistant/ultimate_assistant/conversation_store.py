@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
+import base64
+import json
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
@@ -55,6 +57,10 @@ class ConversationStore:
                 )"""
             )
 
+            connection.execute("""CREATE TABLE IF NOT EXISTS conversation_preferences (
+                conversation_id TEXT PRIMARY KEY, pinned INTEGER NOT NULL DEFAULT 0,
+                settled INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL)""")
+
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database, timeout=10)
         connection.row_factory = sqlite3.Row
@@ -71,7 +77,27 @@ class ConversationStore:
                 (conversation_id, role, content, model_content or content, datetime.now(timezone.utc).isoformat(),
                  agent if role == "assistant" else None),
             )
+            connection.execute("UPDATE conversation_preferences SET settled=0 WHERE conversation_id=?", (conversation_id,))
             return int(cursor.lastrowid)
+
+    def append_spoken(self, conversation_id: str, content: str, delivery_key: str) -> dict:
+        """Record an initiated spoken turn once, so the user's reply has its context."""
+        with self._lock, closing(self._connect()) as connection, connection:
+            connection.execute('''CREATE TABLE IF NOT EXISTS spoken_deliveries(
+                delivery_key TEXT PRIMARY KEY, conversation_id TEXT NOT NULL, message_id INTEGER NOT NULL)''')
+            connection.execute('BEGIN IMMEDIATE')
+            old = connection.execute('SELECT conversation_id,message_id FROM spoken_deliveries WHERE delivery_key=?',
+                                     (delivery_key,)).fetchone()
+            if old:
+                if old['conversation_id'] != conversation_id:
+                    raise ValueError('Spoken delivery belongs to a different conversation')
+                return {'recorded':False,'message_id':old['message_id']}
+            cursor = connection.execute('''INSERT INTO messages(conversation_id,role,content,model_content,created_at,agent)
+                VALUES(?,'assistant',?,?,?,'tutor')''',
+                (conversation_id,content,content,datetime.now(timezone.utc).isoformat()))
+            connection.execute('INSERT INTO spoken_deliveries VALUES(?,?,?)',
+                               (delivery_key,conversation_id,cursor.lastrowid))
+            return {'recorded':True,'message_id':cursor.lastrowid}
 
     def last_agent(self, conversation_id: str) -> str | None:
         """The agent that wrote this conversation's latest reply."""
@@ -99,6 +125,22 @@ class ConversationStore:
         for item in result:
             item["activity"] = [dict(event) for event in activity if event["user_message_id"] == item["id"]]
         return result
+
+    def message_page(self, conversation_id: str, *, before_id: int | None = None, limit: int = 100) -> dict:
+        """Display-only history, newest page first, with chronological messages inside each page."""
+        if before_id is not None and (type(before_id) is not int or before_id < 1):
+            raise ValueError("Invalid message cursor")
+        size = max(1, min(limit, 100))
+        with self._lock, closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT id, role, content, created_at, agent FROM messages WHERE conversation_id=? "
+                + ("AND id<? " if before_id is not None else "")
+                + "ORDER BY id DESC LIMIT ?",
+                [conversation_id, *([before_id] if before_id is not None else []), size + 1],
+            ).fetchall()
+        messages = [dict(row) for row in reversed(rows[:size])]
+        return {"conversation_id": conversation_id, "messages": messages,
+                "next_before_id": messages[0]["id"] if len(rows) > size else None}
 
     def bind_activity(self, conversation_id: str, message_id: int, activity_id: str) -> None:
         with self._lock, closing(self._connect()) as connection, connection:
@@ -161,18 +203,20 @@ class ConversationStore:
                 (conversation_id, summary, through_message_id, datetime.now(timezone.utc).isoformat()),
             )
 
-    def conversations(self, limit: int = 100) -> list[dict[str, Any]]:
+    def conversations(self, limit: int = 100, *, organized: bool = False) -> list[dict[str, Any]]:
         """Conversations oldest-first by last activity: id, started_at, last_at,
         message count, a title (the first user message) and any saved summary."""
+        order = "pinned DESC, settled ASC, last_at DESC" if organized else "last_at DESC"
         with self._lock, closing(self._connect()) as connection, connection:
             rows = connection.execute(
-                """SELECT m.conversation_id AS id, MIN(m.created_at) AS started_at, MAX(m.created_at) AS last_at,
+                f"""SELECT m.conversation_id AS id, MIN(m.created_at) AS started_at, MAX(m.created_at) AS last_at,
                           COUNT(*) AS messages,
                           (SELECT content FROM messages f WHERE f.conversation_id = m.conversation_id
                              AND f.role = 'user' ORDER BY f.id LIMIT 1) AS first_message,
-                          cm.summary AS summary
+                          cm.summary AS summary, COALESCE(cp.pinned,0) AS pinned, COALESCE(cp.settled,0) AS settled
                    FROM messages m LEFT JOIN conversation_memory cm ON cm.conversation_id = m.conversation_id
-                   GROUP BY m.conversation_id ORDER BY last_at DESC LIMIT ?""",
+                   LEFT JOIN conversation_preferences cp ON cp.conversation_id=m.conversation_id
+                   GROUP BY m.conversation_id ORDER BY {order} LIMIT ?""",
                 (limit,),
             ).fetchall()
         result = []
@@ -183,6 +227,67 @@ class ConversationStore:
             item["summary"] = item.get("summary") or ""
             result.append(item)
         return result
+
+    def history_page(self, *, limit: int = 50, cursor: str | None = None, settled: bool = False, query: str = "") -> dict:
+        query = query.strip()
+        if len(query) > 200:
+            raise ValueError("Search is too long")
+        anchor = None
+        if cursor:
+            try:
+                if len(cursor) > 2048: raise ValueError()
+                anchor = json.loads(base64.urlsafe_b64decode(cursor + '=' * (-len(cursor) % 4)))
+                if (anchor.get('v') != 1 or anchor.get('settled') is not settled or anchor.get('query') != query
+                    or type(anchor.get('pin')) is not int or anchor['pin'] not in {0,1}
+                    or not isinstance(anchor.get('last'),str) or len(anchor['last']) > 80
+                    or not isinstance(anchor.get('id'),str) or len(anchor['id']) > 200): raise ValueError()
+            except (ValueError, TypeError, KeyError, AttributeError) as exc:
+                raise ValueError("Invalid history cursor") from exc
+        page_size = max(1,min(limit,100))
+        predicate = ""
+        params = [int(settled), query]
+        if anchor:
+            predicate = "AND (pinned < ? OR (pinned = ? AND (last_at < ? OR (last_at = ? AND id < ?))))"
+            params += [anchor['pin'],anchor['pin'],anchor['last'],anchor['last'],anchor['id']]
+        params.append(page_size+1)
+        with self._lock, closing(self._connect()) as connection:
+            rows=connection.execute(f"""WITH history AS (
+                SELECT m.conversation_id AS id, MIN(m.created_at) AS started_at, MAX(m.created_at) AS last_at,
+                    COUNT(*) AS messages, COALESCE(cp.pinned,0) AS pinned, COALESCE(cp.settled,0) AS settled,
+                    (SELECT content FROM messages f WHERE f.conversation_id=m.conversation_id AND f.role='user' ORDER BY f.id LIMIT 1) AS first_message
+                FROM messages m LEFT JOIN conversation_preferences cp ON cp.conversation_id=m.conversation_id
+                GROUP BY m.conversation_id)
+                SELECT * FROM history WHERE settled=? AND instr(lower(COALESCE(first_message,'')), lower(?))>0
+                {predicate} ORDER BY pinned DESC,last_at DESC,id DESC LIMIT ?""", params).fetchall()
+        items=[]
+        for row in rows[:page_size]:
+            item=dict(row);title=' '.join(str(item.pop('first_message') or '').split())
+            item['title']=title if len(title)<=80 else title[:79]+'…'
+            items.append(item)
+        next_cursor=None
+        if len(rows)>page_size:
+            last=items[-1]
+            payload={'v':1,'settled':settled,'query':query,'pin':last['pinned'],'last':last['last_at'],'id':last['id']}
+            next_cursor=base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip('=')
+        return {'conversations':items,'next_cursor':next_cursor}
+
+    def organize(self, conversation_id: str, *, pinned: bool | None = None, settled: bool | None = None) -> dict | None:
+        if pinned is None and settled is None:
+            raise ValueError("Choose a pin or settle change")
+        if pinned and settled:
+            raise ValueError("A settled conversation cannot also be pinned")
+        with self._lock, closing(self._connect()) as connection, connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if not connection.execute("SELECT 1 FROM messages WHERE conversation_id=? LIMIT 1", (conversation_id,)).fetchone():
+                return None
+            connection.execute("INSERT OR IGNORE INTO conversation_preferences VALUES (?,0,0,?)", (conversation_id,datetime.now(timezone.utc).isoformat()))
+            row=connection.execute("SELECT pinned,settled FROM conversation_preferences WHERE conversation_id=?", (conversation_id,)).fetchone()
+            next_pinned = bool(row['pinned']) if pinned is None else pinned
+            next_settled = bool(row['settled']) if settled is None else settled
+            if pinned: next_settled=False
+            if settled: next_pinned=False
+            connection.execute("UPDATE conversation_preferences SET pinned=?,settled=?,updated_at=? WHERE conversation_id=?", (int(next_pinned),int(next_settled),datetime.now(timezone.utc).isoformat(),conversation_id))
+        return {'id':conversation_id,'pinned':next_pinned,'settled':next_settled}
 
     def conversation(self, conversation_id: str) -> dict[str, Any] | None:
         return next((c for c in self.conversations(limit=1000) if c["id"] == conversation_id), None)

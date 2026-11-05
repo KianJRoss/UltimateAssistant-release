@@ -1,19 +1,30 @@
 {
-  "version": "0.4.4",
-  "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.4/UltimateAssistant-0.4.4-windows-x64.zip",
-  "sha256": "6076e5e2e9a7d4d44dd4adc52ef6a5bbf5ccf925665eb46c4e1a9b5af1695dbb",
-  "source_commit": "bc6c43e654a3371501c2f64baf81ea05c36a7b65",
-  "channel": "release",
-  "diagnostics_upload_url": "https://kianserver-2.taile4f97e.ts.net:10000/assistant-diagnostics",
-  "phone_app": {
-    "version": "1.1.0",
-    "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/phone-v1.1.0/UltimateAssistant-phone-1.1.0.apk",
-    "sha256": "70c514aed63d50e26871a773de7f7ba7b522160dacbe83c83eadb71ba6703e7a",
-    "signing_certificate_sha256": "d885263034218adafaa1f96142f2f944c9a89c2d60e7087ea27355449e83df5f",
-    "min_android": "8.0"
-  },
+  "version": "0.4.6",
+  "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.6/UltimateAssistant-0.4.6-windows-x64.zip",
+  "sha256": "afed44feb264dc427ef2524c2ecedd87eeed889add41bc0a828eb2e958980750",
+  "source_commit": "9d2844fc6cdb8f2f78f270c2e3f1b54f10f9751c",
+  "channel": "preview",
   "linux": {
-    "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.4/UltimateAssistant-0.4.4-linux.tar.gz",
-    "sha256": "1623213f034094066ec3b1e7a0f9f0c77121bc00ea6449ed1395632137bf1ed9"
-  }
+    "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.6/UltimateAssistant-0.4.6-linux.tar.gz",
+    "sha256": "4a864035c847f76167df9221853644e320362895614df900e7952b46dba53ddd"
+  },
+  "docker": {
+    "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.6/UltimateAssistant-0.4.6-docker.tar.gz",
+    "sha256": "5ca097bf2b08707b645f52b6a5ea87c36eb5da0c04ae819eaf1862dba07a6999"
+  },
+  "phone_app": {
+    "version": "1.2.0",
+    "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/phone-v1.2.0/UltimateAssistant-phone-1.2.0.apk",
+    "sha256": "0ac7cc934d30f6a90a1ee92577b2bcb7b784fe90458d5a566bed6e2ee6e58551",
+    "source_commit": "a188d086b20e0f3eba62cd32fae517d269c384dd",
+    "source": {
+      "url": "https://github.com/KianJRoss/UltimateAssistant-release/releases/download/phone-v1.2.0/UltimateAssistant-phone-1.2.0-source.tar.gz",
+      "sha256": "3cf61e66ed7fd5eef3d1ca6c352d2847f01600eb3d984259eae55f5154fd31f3"
+    },
+    "signing_certificate_sha256": "4b10dbc672f1c50178c80b9c42d2531fb2e4f0aa9768c20f2fd23057ae6b7119",
+    "min_android": "8.0",
+    "signing_identity_changed": true,
+    "upgrade_note": "A new release signing identity starts at 1.2.0. Older release APKs require a fresh install; debug builds are a separate app."
+  },
+  "diagnostics_upload_url": ""
 }

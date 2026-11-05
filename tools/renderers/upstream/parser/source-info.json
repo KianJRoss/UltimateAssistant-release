@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/mermaid-js/mermaid",
+  "commit": "dcb694ddb58dc5ad3502e7e903cac05fd812eac3",
+  "source_archive": "https://codeload.github.com/mermaid-js/mermaid/tar.gz/dcb694ddb58dc5ad3502e7e903cac05fd812eac3",
+  "sha256": "bf7f92105e0270193900b3a910d2857207e997657b46d67eb876b637ac12d68e",
+  "license": "MIT",
+  "package": "@mermaid-js/parser",
+  "version": "1.2.1"
+}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import closing
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -13,7 +14,7 @@ class TaskStore:
         self.database = database
         self.database.parent.mkdir(parents=True, exist_ok=True)
         self._lock = RLock()
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute(
                 """CREATE TABLE IF NOT EXISTS assistant_tasks (
                     id TEXT PRIMARY KEY,
@@ -72,11 +73,20 @@ class TaskStore:
 
     def list_tasks(self, *, include_done: bool = False, limit: int = 50) -> list[dict[str, Any]]:
         condition = "" if include_done else "WHERE status != 'done'"
-        with self._lock, self._connect() as connection:
+        with self._lock, closing(self._connect()) as connection, connection:
             rows = connection.execute(
                 f"SELECT * FROM assistant_tasks {condition} "
                 "ORDER BY CASE WHEN due_at IS NULL THEN 1 ELSE 0 END, due_at, created_at LIMIT ?",
                 (max(1, min(limit, 200)),),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def attention_tasks(self, limit: int = 200) -> list[dict[str, Any]]:
+        """Active work first, then recent completed records within the bounded inventory."""
+        with self._lock, closing(self._connect()) as connection, connection:
+            rows = connection.execute(
+                "SELECT * FROM assistant_tasks ORDER BY CASE WHEN status='done' THEN 1 ELSE 0 END, "
+                "updated_at DESC, id LIMIT ?", (max(1, min(limit, 200)),),
             ).fetchall()
         return [dict(row) for row in rows]
 
@@ -89,7 +99,7 @@ class TaskStore:
     ) -> dict[str, Any]:
         now = datetime.now(timezone.utc).isoformat()
         task_id = uuid.uuid4().hex
-        with self._lock, self._connect() as connection:
+        with self._lock, closing(self._connect()) as connection, connection:
             if deduplicate:
                 row = connection.execute(
                     "SELECT * FROM assistant_tasks WHERE domain=? AND lower(title)=lower(?) "
@@ -126,7 +136,7 @@ class TaskStore:
         now = datetime.now(timezone.utc).isoformat()
         if status is None and not update_due and not update_estimate:
             return None
-        with self._lock, self._connect() as connection:
+        with self._lock, closing(self._connect()) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")
             current = connection.execute(
                 "SELECT * FROM assistant_tasks WHERE id=?", (task_id,),
@@ -173,7 +183,7 @@ class TaskStore:
         return dict(row) if row else None
 
     def verify_task(
-        self, task_id: str, outcome: str, note: str, verifier: str,
+        self, task_id: str, outcome: str, note: str, verifier: str, *, expected_updated_at: str | None = None,
     ) -> dict[str, Any]:
         if outcome not in {"approved", "changes_requested"}:
             raise ValueError("Outcome must be approved or changes_requested.")
@@ -185,13 +195,15 @@ class TaskStore:
             raise ValueError("A verifier is required.")
 
         now = datetime.now(timezone.utc).isoformat()
-        with self._lock, self._connect() as connection:
+        with self._lock, closing(self._connect()) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")
             task = connection.execute(
                 "SELECT * FROM assistant_tasks WHERE id=?", (task_id,),
             ).fetchone()
             if task is None:
                 raise ValueError("Task not found.")
+            if expected_updated_at is not None and task["updated_at"] != expected_updated_at:
+                raise ValueError("Task changed since it was opened. Reopen it before reviewing.")
             if task["status"] != "awaiting_verification":
                 raise ValueError("Task is not awaiting verification.")
             recorded_doer = (task["doer"] or "").strip()
@@ -221,14 +233,17 @@ class TaskStore:
         return dict(updated)
 
     def list_task_decisions(
-        self, limit: int = 50, outcome: str | None = None,
+        self, limit: int = 50, outcome: str | None = None, *, task_id: str | None = None,
     ) -> list[dict[str, Any]]:
         if outcome is not None and outcome not in {"approved", "changes_requested"}:
             raise ValueError("Outcome must be approved or changes_requested.")
         bounded_limit = max(1, min(limit, 200))
-        condition = "" if outcome is None else "WHERE outcome=?"
-        parameters: tuple[Any, ...] = (bounded_limit,) if outcome is None else (outcome, bounded_limit)
-        with self._lock, self._connect() as connection:
+        filters, values = [], []
+        if outcome is not None: filters.append("outcome=?"); values.append(outcome)
+        if task_id is not None: filters.append("task_id=?"); values.append(task_id)
+        condition = "WHERE " + " AND ".join(filters) if filters else ""
+        parameters = (*values, bounded_limit)
+        with self._lock, closing(self._connect()) as connection, connection:
             rows = connection.execute(
                 f"SELECT * FROM task_decisions {condition} "
                 "ORDER BY created_at DESC, id DESC LIMIT ?",

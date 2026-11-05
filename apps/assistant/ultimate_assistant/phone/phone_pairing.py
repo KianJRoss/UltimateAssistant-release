@@ -59,7 +59,9 @@ class PairingStore:
             raise ValueError("ttl must be positive")
         with self._lock:
             data, challenge = self._load(), secrets.token_urlsafe(24)
-            data["challenges"][challenge] = {"device_id": device_id, "expires": self.clock() + ttl, "used": False}
+            revision = int(data["devices"].get(device_id, {}).get("pairing_revision", 0))
+            data["challenges"][challenge] = {"device_id": device_id, "expires": self.clock() + ttl,
+                                             "used": False, "expected_pairing_revision": revision}
             self._save(data)
             return {"device_id": device_id, "challenge": challenge, "expires_at": data["challenges"][challenge]["expires"]}
 
@@ -86,6 +88,9 @@ class PairingStore:
                 raise ValueError("forged or unsupported phone capability advertisement")
             item["used"] = True
             prior = data["devices"].get(item["device_id"], {})
+            if ("expected_pairing_revision" in item and
+                    item["expected_pairing_revision"] != int(prior.get("pairing_revision", 0))):
+                raise ValueError("pairing changed after this invitation was created")
             credential = secrets.token_urlsafe(32)
             device = {
                 "device_id": item["device_id"],

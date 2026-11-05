@@ -102,12 +102,21 @@ def _wav_has_speech(path: Path) -> bool:
     return False
 
 
+def _runtime_directory() -> Path:
+    configured = os.environ.get("XDG_RUNTIME_DIR")
+    if configured:
+        return Path(configured)
+    if hasattr(os, "getuid"):
+        return Path(f"/run/user/{os.getuid()}")
+    return settings.user_data_dir / "desktop-runtime"
+
+
 def socket_path() -> Path:
-    return Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")) / "ultimate-assistant-desktop.sock"
+    return _runtime_directory() / "ultimate-assistant-desktop.sock"
 
 
 def state_path() -> Path:
-    return Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")) / "ultimate-assistant-state.json"
+    return _runtime_directory() / "ultimate-assistant-state.json"
 
 
 def _speech_chunks(text):
@@ -181,7 +190,9 @@ def _unread_marks(client, base, images=None) -> str:
 
 def _overlay(command: str, wait: float = 0.0) -> bool:
     """Tell the canvas overlay something on its socket (pointing mode); wait for its "ok" when asked."""
-    path = Path(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}") / "ultimate-assistant-canvas.sock"
+    if not hasattr(socket, "AF_UNIX"):
+        return False
+    path = _runtime_directory() / "ultimate-assistant-canvas.sock"
     try:
         with socket.socket(socket.AF_UNIX) as connection:
             connection.settimeout(wait or 2)
@@ -208,6 +219,8 @@ class Desktop:
         self._voxtype_recording = False
         self._timings = {}
         self._preferences = {}  # the last voice preferences from the main node
+        self._deliveries = {}
+        self._pending_announcement = None
         from .teach import Recorder
         self._teach = Recorder(overlay=_overlay, notify=self._notice,
                                pending=settings.user_data_dir / "teach-pending.json")
@@ -251,7 +264,7 @@ class Desktop:
         """True when Omarchy's voxtype daemon is running on this desktop session."""
         if getattr(subprocess.Popen, "__module__", "") != "subprocess":
             return False
-        state = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")) / "voxtype" / "state"
+        state = _runtime_directory() / "voxtype" / "state"
         return bool(shutil.which("voxtype")) and state.is_file()
 
     def status(self):
@@ -452,6 +465,31 @@ class Desktop:
     def command(self, action: str, text: str = ""):
         if action == "status":
             return self.status()
+        if action == 'delivery_status':
+            with self._lock:
+                return dict(self._deliveries.get(text, {'state':'unknown','id':text}))
+        if action == 'announce':
+            payload=json.loads(text)
+            spoken=str(payload.get('text') or '').strip()
+            key=str(payload.get('id') or '')
+            if not spoken or len(spoken)>12000 or not key or len(key)>160:
+                raise ValueError('Announcement needs text (1–12000 characters) and a stable delivery ID')
+            with self._lock:
+                if key in self._deliveries:return dict(self._deliveries[key])
+                if self._capture is not None or (self._busy and (self._state!='thinking' or self._pending_announcement)):
+                    return {'id':key,'state':'busy','delivered':False}
+                if self._busy and self._state=='thinking':
+                    self._deliveries[key]={'id':key,'state':'queued','conversation_id':self._conversation}
+                    self._pending_announcement={**payload,'text':spoken,'id':key}
+                    return dict(self._deliveries[key])
+                self._busy=True;self._state='speaking';self._cancelled.clear()
+                self._conversation_active=bool(payload.get('listen',True))
+                self._barge_in_requested=False
+                self._deliveries[key]={'id':key,'state':'accepted','conversation_id':self._conversation}
+                if len(self._deliveries)>200:
+                    for previous in list(self._deliveries)[:-100]:del self._deliveries[previous]
+                threading.Thread(target=self._announce,args=(spoken,key,payload),daemon=True).start()
+                return dict(self._deliveries[key])
         if action == "conversation":
             with self._lock:
                 self._conversation = str(uuid.UUID(text.strip()))
@@ -690,7 +728,14 @@ class Desktop:
                 self._conversation_file.write_text(json.dumps({"id": self._conversation}) + "\n")
                 self._publish_state()
                 emergency.remember(self._conversation, text, str(result["reply"]))
-                self._speak(client, base, str(result["reply"]), turn_started=started)
+                with self._lock:
+                    pending=self._pending_announcement
+                    self._pending_announcement=None
+                if pending:
+                    self._conversation_active=bool(pending.get('listen',True))
+                    self._play_announcement(client,base,pending['text'],pending['id'],pending)
+                else:
+                    self._speak(client, base, str(result["reply"]), turn_started=started)
             with self._lock:
                 barge_in = self._barge_in_requested
                 self._barge_in_requested = False
@@ -708,6 +753,50 @@ class Desktop:
                     self._conversation_active = False
         except Exception as exc:
             self._failed(exc)
+
+    def _play_announcement(self,client,base,text,key,payload):
+        reply=client.post(base+'/api/voice/announcement',json={
+            'conversation_id':self._conversation,'text':text,'delivery_key':key})
+        reply.raise_for_status()
+        with self._lock:self._deliveries[key]['state']='speaking'
+        try:
+            self._speak(client,base,text)
+            if str(self._preferences.get('assistant-speak','true')).lower()=='false':
+                raise RuntimeError('Spoken interface is disabled')
+            status='interrupted' if self._cancelled.is_set() else 'completed'
+            if payload.get('reading_session'):
+                from .study_tools import brain
+                brain().acknowledge(payload['reading_session'],key,status)
+            with self._lock:self._deliveries[key]['state']=status
+        except Exception as error:
+            with self._lock:self._deliveries[key].update(state='failed',error=type(error).__name__)
+            raise
+
+    def _announce(self, text, key, payload=None):
+        """Speak a backend-initiated turn, then offer one bounded follow-up capture."""
+        base=settings.herald_url.rstrip('/')+'/nodes/main/http'
+        token=os.environ.get('HERALD_API_KEY')
+        headers={'Authorization':'Bearer '+token} if token else {}
+        try:
+            with httpx.Client(headers=headers,timeout=httpx.Timeout(30,read=240)) as client:
+                page=client.get(base+'/');page.raise_for_status()
+                match=re.search(r'<meta name="app-token" content="([^"]+)"',page.text)
+                if not match:raise RuntimeError('Main assistant session token unavailable')
+                client.headers['x-ultimate-assistant-token']=match.group(1)
+                self._play_announcement(client,base,text,key,payload or {})
+            with self._lock:
+                interrupted=self._cancelled.is_set()
+                self._deliveries[key]['state']='interrupted' if interrupted else 'completed'
+                self._state='idle';self._busy=False
+                followup=self._barge_in_requested or (self._conversation_active and not interrupted)
+                self._barge_in_requested=False
+                if followup:
+                    self._cancelled.clear()
+                    self._start_capture_locked(vad=True,followup=True)
+                else:self._conversation_active=False
+        except Exception as error:
+            with self._lock:self._deliveries[key].update(state='failed',error=type(error).__name__)
+            self._failed(error)
 
     def _emergency(self, client, base, text, audio, started):
         """The main node is unreachable: a CLI on this device answers (emergency.py), spoken here."""

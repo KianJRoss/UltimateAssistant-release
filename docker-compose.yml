@@ -1,0 +1,44 @@
+services:
+  router:
+    image: ${ULTIMATE_ASSISTANT_IMAGE:-ultimate-assistant-local:dev}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      HERALD_DATA_DIR: /data/router
+      HERALD_BIND_HOST: 0.0.0.0
+      HERALD_API_KEY: ${HERALD_API_KEY:?Set HERALD_API_KEY in your environment or .env}
+      HERALD_SKIP_BACKEND_DISCOVERY: "1"
+    command: ["python", "-m", "uvicorn", "herald.router.server:app", "--host", "0.0.0.0", "--port", "8790"]
+    volumes:
+      - herald-data:/data/router
+      - herald-secrets:/data/router/vault
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:8790/health',headers={'Authorization':'Bearer '+os.environ['HERALD_API_KEY']}); urllib.request.urlopen(r,timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+  assistant:
+    image: ${ULTIMATE_ASSISTANT_IMAGE:-ultimate-assistant-local:dev}
+    environment:
+      HERALD_URL: http://router:8790
+      HERALD_DATA_DIR: /data/herald
+      HERALD_API_KEY: ${HERALD_API_KEY:?Set HERALD_API_KEY in your environment or .env}
+      ULTIMATE_ASSISTANT_UI_HOST: 0.0.0.0
+      ULTIMATE_ASSISTANT_NO_BROWSER: "1"
+    command: ["python", "-m", "ultimate_assistant.web_ui"]
+    ports:
+      - "127.0.0.1:${ULTIMATE_ASSISTANT_PORT:-8765}:8765"
+    volumes:
+      - assistant-data:/data/assistant
+      - assistant-files:/data/files
+      - herald-secrets:/data/herald/vault
+    depends_on:
+      router:
+        condition: service_healthy
+volumes:
+  herald-data:
+  herald-secrets:
+  assistant-data:
+  assistant-files:

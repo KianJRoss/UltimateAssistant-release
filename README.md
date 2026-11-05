@@ -8,11 +8,12 @@ A personal assistant that runs on your own computer, with its own local Herald R
 already have: a subscription (ChatGPT, Google AI or Claude through their official CLIs), an API key, or a local
 model. Your keys stay encrypted on your device; there is no account with us and no server of ours in between.
 
-## Download: v0.4.5
+## Download: v0.4.6
 
-- **Windows:** [UltimateAssistant-0.4.5-windows-x64.zip](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.5/UltimateAssistant-0.4.5-windows-x64.zip)
-- **Linux:** [UltimateAssistant-0.4.5-linux.tar.gz](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.5/UltimateAssistant-0.4.5-linux.tar.gz)
-- **Android phone app:** [UltimateAssistant-phone-1.1.0.apk](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/phone-v1.1.0/UltimateAssistant-phone-1.1.0.apk) (pair it from the assistant)
+- **Windows:** [UltimateAssistant-0.4.6-windows-x64.zip](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.6/UltimateAssistant-0.4.6-windows-x64.zip)
+- **Linux:** [UltimateAssistant-0.4.6-linux.tar.gz](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.6/UltimateAssistant-0.4.6-linux.tar.gz)
+- **Docker:** [UltimateAssistant-0.4.6-docker.tar.gz](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/v0.4.6/UltimateAssistant-0.4.6-docker.tar.gz)
+- **Android phone app (separate release):** [UltimateAssistant-phone-1.2.0.apk](https://github.com/KianJRoss/UltimateAssistant-release/releases/download/phone-v1.2.0/UltimateAssistant-phone-1.2.0.apk) (pair it from Settings → Devices)
 
 Checksums are in [SHA256SUMS.txt](SHA256SUMS.txt). See the [release notes](RELEASE-NOTES.md) and
 [all releases](https://github.com/KianJRoss/UltimateAssistant-release/releases).
@@ -40,6 +41,12 @@ Checksums are in [SHA256SUMS.txt](SHA256SUMS.txt). See the [release notes](RELEA
 3. The assistant runs as a user service at login; open `http://127.0.0.1:8765` or "Ultimate Assistant" in your
    app launcher.
 
+### Install with Docker
+
+Extract the Docker archive, then follow [docker/README.md](docker/README.md). It runs UA and Herald
+together and exposes the UI at `http://127.0.0.1:8765` on the Docker host. Its persistent volumes keep
+settings, conversations, files and the encrypted credential vault.
+
 ### First run
 
 In the app, connect a subscription or paste an API key. A single API key is enough: the assistant picks a model
@@ -57,10 +64,10 @@ when you need them. No GitHub account, Git, or developer setup is needed.
 
 ## Optional quick decisions
 
-Your AI model always does the real work. An optional mixed mode adds a fast decision model where it measured at
-least 90% correct and no slower than your model:
-- **Hosted parallel decision APIs (`Jev`, OpenRouter `/api/v1/systemone`, Perplexity `pplx-decider-v1.2`, Liquid `d1.1`)**: Answer a 40-question wide semantic surmise in one request to settle specialist routing, tool necessity, the background commitment gate, and a privacy-safe semantic brief without storing raw prompt text. In a synthetic test of 12 prompts run twice, measured medians for Jev, OpenRouter Jev, Liquid, and Perplexity ranged from 159 to 319 ms.
-- **Local sequential model (`tev1` on Ollama / `llama.cpp`)**: Answers lean 1–5 question yes/no gates (a median of 27 ms for the tested commitment gate) on a single GPU.
+Your connected AI model does the assistant's work. An optional decision model can help route a turn
+or choose a workflow. The default works without one. Available choices come from your connected
+Router; enable mixed decisions in Settings if you want to use them.
+
 
 ## Updates
 
@@ -69,8 +76,9 @@ at the next start, with rollback. Your settings and conversations stay in your o
 
 ## Diagnostics
 
-Use *Preview and send diagnostics* to review and send one report, or *Download diagnostics* to keep it. Automatic
-daily sharing is off unless you turn it on. Reports contain versions and fixed status and timing fields, not
+Use *Download diagnostics* to export a report for support. Public downloads do not configure a hosted
+report collection destination. Sending and daily sharing require an explicitly configured, reachable support
+channel; automatic sharing is off by default. Reports contain versions and fixed status and timing fields, not
 chats, prompts, files, paths, account or model names, screenshots, credentials or raw logs.
 
 ## Source and license

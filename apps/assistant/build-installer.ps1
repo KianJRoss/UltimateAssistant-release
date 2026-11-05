@@ -1,6 +1,6 @@
 param(
     [string]$OutputDirectory = (Join-Path $PSScriptRoot "..\..\dist"),
-    [string]$Version = "0.4.5"
+    [string]$Version = "0.4.6"
 )
 
 $ErrorActionPreference = "Stop"
@@ -41,6 +41,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Module catalog validation failed." }
 
     New-Item -ItemType Directory -Path $bundleRoot -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $workspaceRoot "LICENSE") -Destination (Join-Path $bundleRoot "LICENSE")
     $appsTarget = Join-Path $bundleRoot "apps"
     New-Item -ItemType Directory -Path $appsTarget -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $workspaceRoot "apps\assistant") -Destination (Join-Path $appsTarget "assistant") -Recurse

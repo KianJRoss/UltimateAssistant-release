@@ -521,6 +521,7 @@ class VisualReference(BaseModel):
 
 
 class ChatRequest(BaseModel):
+    portable_handoff: bool = False
     message: str = Field(min_length=1, max_length=20000)
     conversation_id: str = Field(pattern=r"^[0-9a-fA-F-]{36}$")
     web_search: bool = False
@@ -615,6 +616,11 @@ class PortalExploreRequest(BaseModel):
     goal: str = Field(min_length=8, max_length=1000)
 
 
+class ConversationHandoffRequest(ConversationRequest):
+    current_request: str = Field(default="", max_length=10000)
+    history_budget_chars: int = Field(default=16000, ge=1000, le=24000)
+
+
 class TaskCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     details: str = Field(default="", max_length=2000)
@@ -641,6 +647,18 @@ class TaskCreateRequest(BaseModel):
             return datetime.fromisoformat(value).isoformat()
         except ValueError as exc:
             raise ValueError("Due date must be an ISO date or datetime.") from exc
+
+
+class ConversationOrganizationRequest(BaseModel):
+    pinned: bool | None = None
+    settled: bool | None = None
+
+
+class TaskReviewRequest(BaseModel):
+    outcome: Literal["approved", "changes_requested"]
+    note: str = Field(min_length=1, max_length=4000)
+    verifier: str = Field(min_length=1, max_length=200)
+    expected_updated_at: str = Field(min_length=1, max_length=80)
 
 
 class TaskUpdateRequest(BaseModel):
@@ -789,6 +807,26 @@ def api_key_setup(request:APIKeyRequest):
         raise HTTPException(409,detail="API-key setup is blocked. Check the provider, model and base URL; the key is never shown in diagnostics.") from None
 
 
+@app.get("/api/provider-capabilities", dependencies=[Depends(_require_app_token)])
+def provider_capabilities(model: str | None = None) -> dict:
+    from herald.client import RouterClient
+    name = model or _assistant.model
+    if len(name) > 200:
+        raise HTTPException(400, "Model name is too long")
+    try:
+        payload = RouterClient(base_url=settings.herald_url).backend_capabilities(name)
+        if payload.get("schema_version") != 1 or payload.get("backend") != name:
+            raise ValueError("Unsupported capability response")
+        features = {}
+        for key in ("native_resume", "streaming_events", "portable_handoff"):
+            feature = payload.get(key) or {}
+            features[key] = {"support": feature.get("support") if feature.get("support") in {"implemented", "unsupported", "unknown"} else "unknown",
+                             "verification": "not_probed"}
+        return {"selected": name, "reported": True, "available": payload.get("available") is True, **features}
+    except (httpx.HTTPError, RuntimeError, AttributeError, ValueError):
+        return {"selected": name, "reported": False}
+
+
 @app.get("/api/onboarding/local-models", dependencies=[Depends(_require_app_token)])
 def local_models():
     return {"servers": onboarding.local_model_servers()}
@@ -863,6 +901,19 @@ def g4f_capture_cancel(session_id:str):
 class SetupProgressRequest(BaseModel):
     account: str = Field(min_length=1,max_length=120)
     conversation_id: str = Field(min_length=1,max_length=120)
+
+
+def _installation_state(preferred=None, explicit=False):
+    from .setup_state import snapshot
+    return snapshot(_conversations, settings.user_settings_file, _phone.service("pairing").status(),
+                    preferred=preferred, explicit=explicit)
+
+
+@app.get("/api/setup-state", dependencies=[Depends(_require_app_token)])
+def installation_state(conversation_id: str | None = None, explicit_selection: bool = False):
+    if conversation_id and len(conversation_id) > 200:
+        raise HTTPException(400, "Conversation identifier is too long")
+    return JSONResponse(_installation_state(conversation_id, explicit_selection), headers={"Cache-Control":"no-store"})
 
 
 @app.get("/api/onboarding/progress", dependencies=[Depends(_require_app_token)])
@@ -1105,6 +1156,23 @@ def list_tasks() -> dict[str, object]:
     return {"tasks": _tasks.list_tasks()}
 
 
+@app.get("/api/attention", dependencies=[Depends(_require_app_token)])
+def attention_inventory() -> dict:
+    import sqlite3
+    from .attention import snapshot
+    tasks, jobs = [], []
+    tasks_available = jobs_available = True
+    try:
+        tasks = _tasks.attention_tasks()
+    except sqlite3.Error:
+        tasks_available = False
+    try:
+        jobs = assistant_work_inventory().get("jobs", [])
+    except (httpx.HTTPError, HTTPException):
+        jobs_available = False
+    return snapshot(tasks, jobs, tasks_available=tasks_available, jobs_available=jobs_available)
+
+
 @app.post("/api/tasks", dependencies=[Depends(_require_app_token)])
 def create_task(request: TaskCreateRequest) -> dict[str, object]:
     task = _tasks.add_task(
@@ -1114,6 +1182,20 @@ def create_task(request: TaskCreateRequest) -> dict[str, object]:
         related_task_id=request.related_task_id,
     )
     return {"task": task}
+
+
+@app.get("/api/tasks/{task_id}/reviews", dependencies=[Depends(_require_app_token)])
+def task_reviews(task_id: str) -> dict:
+    return {"decisions": _tasks.list_task_decisions(limit=50, task_id=task_id)}
+
+
+@app.post("/api/tasks/{task_id}/review", dependencies=[Depends(_require_app_token)])
+def review_task(task_id: str, request: TaskReviewRequest) -> dict:
+    try:
+        return {"task": _tasks.verify_task(task_id, request.outcome, request.note, request.verifier,
+                                          expected_updated_at=request.expected_updated_at)}
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @app.patch("/api/tasks/{task_id}", dependencies=[Depends(_require_app_token)])
@@ -1352,6 +1434,17 @@ async def chat(request: ChatRequest):
     message = request.message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
+    if request.setup_intro:
+        saved = _installation_state(request.conversation_id)
+        if saved["has_chat_history"]:
+            # A stale browser's automatic first-load request must not enroll a
+            # returning user or spend a model call repeating setup.
+            async def retained_setup():
+                cid = saved["resume_conversation_id"] or request.conversation_id
+                yield "event: conversation\ndata: " + json.dumps({"conversation_id":cid,"kind":"resume"}) + "\n\n"
+                yield "event: complete\ndata: " + json.dumps({"conversation_id":cid,
+                    "reply":"Your saved setup is still here. Continue with your existing conversation; no new setup or phone pairing was started."}) + "\n\n"
+            return StreamingResponse(retained_setup(), media_type="text/event-stream", headers={"Cache-Control":"no-store"})
     is_conversational = agent_dispatch.is_conversational_turn(
         message,
         request.agent or agent_defs.DEFAULT_AGENT,
@@ -1539,7 +1632,8 @@ async def _chat_turn(request: ChatRequest):
                 f" If configuration is saved and a fresh native CLI turn is the only thing needed to continue verification, end your reply with {onboarding.NATIVE_SETUP_RELOAD_MARKER}. The app will automatically start one fresh native turn with your progress and the same user request. Do not ask the user to reload or verify tools themselves. Do not use this marker when waiting for a real preference, sign-in, consent, or MFA.")
     # Stable instructions above (they become the agent's own AGENTS.md when it runs as a whole CLI instance);
     # what is only true for this turn goes in turn_notes, sent with the message.
-    turn_notes = []
+    from .setup_state import context as setup_state_context
+    turn_notes = [setup_state_context(_installation_state(request.conversation_id, True))]
     if _assistant.memory_tools_available:
         turn_notes.append(f"Memory provenance for this turn: conversation_id={request.conversation_id}; "
                           f"source_message_id={user_message_id}. Include these when saving a memory based on this turn.")
@@ -1606,10 +1700,10 @@ async def _chat_turn(request: ChatRequest):
             "Use it only when relevant, preserve uncertainty, and verify against recent messages.\n" + str(memory_state["summary"])
         )})
     messages.extend(
-        {"role": item["role"], "content": item.get("model_content") or item["content"]}
+        {"role": item["role"], "content": item.get("model_content") or item["content"], "source_message_id": item["id"]}
         for item in prior_history if int(item["id"]) > int(memory_state["through_message_id"])
     )
-    messages.append({"role": "user", "content": ([{"type": "text", "text": model_message}, *image_parts] if image_parts else model_message)})
+    messages.append({"role": "user", "source_message_id": user_message_id, "content": ([{"type": "text", "text": model_message}, *image_parts] if image_parts else model_message)})
     events: Queue[tuple[str, object]] = Queue()
     if switch:
         # First event of the stream: the UI moves to the conversation this message joined.
@@ -1694,6 +1788,7 @@ async def _chat_turn(request: ChatRequest):
                             f"{router_url}/v1/chat/completions", headers={**headers, "Content-Type": "application/json"},
                             json={"model": model_id, "messages": attempt_messages, "agentic": use_agentic,
                                   "force_harness": use_agentic and selected.get("backend_type") != "cli",
+                                  "portable_handoff": request.portable_handoff,
                                   "project": settings.herald_project, "part": agent.part, "activity_id": activity_id,
                                   # A whole CLI instance per agent, one native session per conversation (Herald resumes it).
                                   "instance": f"{settings.herald_project}-{agent.name}", "session": request.conversation_id},
@@ -2163,10 +2258,40 @@ app.include_router(protocols.responses_router(_require_app_token))
 protocols.mount_a2a(app, lambda token: bool(token) and hmac.compare_digest(token, _APP_TOKEN))
 
 
+@app.post("/api/conversation-handoff", dependencies=[Depends(_require_app_token)])
+def prepare_conversation_handoff(request: ConversationHandoffRequest) -> dict:
+    from .handoff import prepare
+    messages = _conversations.history(request.conversation_id)
+    if not messages:
+        raise HTTPException(404, "No saved conversation to hand off yet")
+    return JSONResponse(prepare(request.conversation_id, messages, current_request=request.current_request,
+                                history_budget_chars=request.history_budget_chars), headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/conversation-history", dependencies=[Depends(_require_app_token)])
+def conversation_history(limit: int = 50, cursor: str | None = None, settled: bool = False, query: str = "") -> dict:
+    try:
+        return _conversations.history_page(limit=limit, cursor=cursor, settled=settled, query=query)
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid history page request") from exc
+
+
 @app.get("/api/conversations", dependencies=[Depends(_require_app_token)])
 def list_conversations() -> dict[str, object]:
     """Conversations oldest-first by last activity, with titles and times."""
-    return {"conversations": _conversations.conversations()}
+    return {"conversations": _conversations.conversations(organized=True)}
+
+
+@app.patch("/api/conversations/{conversation_id}/organization", dependencies=[Depends(_require_app_token)])
+def organize_conversation(conversation_id: str, request: ConversationOrganizationRequest) -> dict:
+    try:
+        validated = ConversationRequest(conversation_id=conversation_id)
+        result = _conversations.organize(validated.conversation_id, pinned=request.pinned, settled=request.settled)
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid conversation organization change") from exc
+    if result is None:
+        raise HTTPException(404, "Saved conversation not found")
+    return result
 
 
 @app.get("/api/conversations/{conversation_id}", dependencies=[Depends(_require_app_token)])
@@ -2205,6 +2330,18 @@ def import_conversation_messages(conversation_id: str, body: dict) -> dict[str, 
         _conversations.append(validated.conversation_id, role, content, model_content=model_content,
                               agent="emergency" if role == "assistant" else None)
     return {"imported": len(clean)}
+
+
+class SpokenTurnRequest(BaseModel):
+    conversation_id: str
+    text: str = Field(min_length=1,max_length=12000)
+    delivery_key: str = Field(min_length=1,max_length=160)
+
+
+@app.post('/api/voice/announcement', dependencies=[Depends(_require_app_token)])
+def record_spoken_turn(request: SpokenTurnRequest) -> dict:
+    validated = ConversationRequest(conversation_id=request.conversation_id)
+    return _conversations.append_spoken(validated.conversation_id,request.text,request.delivery_key)
 
 
 @app.get("/api/conversations/{conversation_id}/memory", dependencies=[Depends(_require_app_token)])
@@ -2554,6 +2691,24 @@ from .phone import services as _phone
 
 _phone.register_routes(app, canvas_event=canvas_card_event)
 
+from . import devices as _devices
+
+
+def _device_router():
+    from herald.client import RouterClient
+    return RouterClient(base_url=settings.herald_url, timeout=3.0)
+
+
+def _device_invitation():
+    from .phone.pairing_invite import invitation
+    return invitation()
+
+
+_devices.register(app, require_operator=_require_app_token,
+                  router_factory=_device_router,
+                  pairing_factory=lambda: _phone.service("pairing"),
+                  invitation=_device_invitation)
+
 
 @app.post("/api/phone/invitation", dependencies=[Depends(_require_app_token)])
 def phone_invitation() -> dict[str, object]:
@@ -2607,7 +2762,7 @@ def main() -> bool:
     global _UI_SERVER, _UI_RESTART
     _UI_RESTART = False
     url = "http://127.0.0.1:8765"
-    if not os.environ.get("ULTIMATE_ASSISTANT_RESTARTING"):
+    if not os.environ.get("ULTIMATE_ASSISTANT_RESTARTING") and not os.environ.get("ULTIMATE_ASSISTANT_NO_BROWSER"):
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     print(f"Ultimate Assistant UI: {url}")
     print(f"Herald Router: {settings.herald_url}; model: {_assistant.model}")
@@ -2625,7 +2780,7 @@ def main() -> bool:
     from .diagnostics import start_reporter
     reporting_stop = start_reporter()
     try:
-        _UI_SERVER = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=8765, log_level="warning"))
+        _UI_SERVER = uvicorn.Server(uvicorn.Config(app, host=os.environ.get("ULTIMATE_ASSISTANT_UI_HOST", "127.0.0.1"), port=8765, log_level="warning"))
         _UI_SERVER.run()
     finally:
         reporting_stop.set()

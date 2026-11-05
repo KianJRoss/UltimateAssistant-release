@@ -381,13 +381,29 @@ def _alternative(name: str, fn: Callable[[], Any], reason: str, ask_route_label:
 
 def pick(answers: dict[str, Answer], keys: Iterable[str], none: Any = None) -> Any:
     """Read several yes/no answers that stand for one choice: the key that got the only confident yes
-    while every other got a confident no; `none` when all are confident noes; None (unsettled) when any is
-    unsure or more than one says yes."""
+    while every other got a confident no (or a clear dominance margin of >= 0.35 with winner >= 0.85 and
+    every other option < 0.50); `none` when all are confident noes (or at most one borderline negative
+    < 0.48 among >= 3 options); None (unsettled) when any is >= 0.50 unsure or more than one says yes."""
     keys = list(keys)
-    if not keys or not all(answers[key].confident for key in keys):
+    if not keys or any(key not in answers or answers[key].value is None or answers[key].confidence is None
+                       for key in keys):
         return None
     chosen = [key for key in keys if answers[key].value]
-    return chosen[0] if len(chosen) == 1 else none if not chosen else None
+    if all(answers[key].confident for key in keys):
+        return chosen[0] if len(chosen) == 1 else none if not chosen else None
+    if len(chosen) == 1:
+        winner = chosen[0]
+        win_ans = answers[winner]
+        if win_ans.confident and win_ans.confidence >= 0.85:
+            max_other = max((1.0 - answers[k].confidence for k in keys if k != winner), default=0.0)
+            if win_ans.confidence - max_other >= 0.35:
+                return winner
+    elif not chosen and len(keys) >= 3:
+        conf_no = sum(1 for k in keys if answers[k].confident)
+        max_yes = max(1.0 - answers[k].confidence for k in keys)
+        if conf_no >= len(keys) - 1 and max_yes < 0.48:
+            return none
+    return None
 
 
 @dataclass(frozen=True)

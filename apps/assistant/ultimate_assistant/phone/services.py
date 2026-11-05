@@ -102,8 +102,12 @@ def register_routes(app, *, canvas_event=None) -> None:
     if any(getattr(route, "path", "").startswith("/api/mobile/v1/") for route in app.routes):
         return
     from .mobile_api import register
+    def shared_conversations():
+        from .. import web_ui
+        return web_ui._conversations
     register(app, pairing_store=_Lazy("pairing"), conversation=_Lazy("mobile_conversation"),
-             commands=_Lazy("phone_commands"), canvas_event=canvas_event)
+             commands=_Lazy("phone_commands"), canvas_event=canvas_event,
+             saved_conversations=shared_conversations)
 
 
 _bridge = None

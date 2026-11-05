@@ -194,6 +194,7 @@ _url_cache: dict[tuple[str, str], str] = {}
 def _browser_url(app: str, title: str) -> str:
     """The URL of the page a Chromium-family browser window shows, from that browser's History."""
     import glob
+    from contextlib import closing
     import shutil
     import sqlite3
     import tempfile
@@ -212,7 +213,7 @@ def _browser_url(app: str, title: str) -> str:
                 with tempfile.TemporaryDirectory() as tmp:  # the browser holds a lock on the live file
                     copy = os.path.join(tmp, "History")
                     shutil.copyfile(history, copy)
-                    with sqlite3.connect(copy) as db:
+                    with closing(sqlite3.connect(copy)) as db:
                         row = db.execute("SELECT url, last_visit_time FROM urls WHERE title = ? "
                                          "ORDER BY last_visit_time DESC LIMIT 1", (page,)).fetchone()
             except (OSError, sqlite3.Error):

@@ -1,0 +1,13 @@
+{
+  "name": "ultimate-assistant-browser-tools",
+  "version": "0.4.6",
+  "private": true,
+  "description": "Pinned browser MCP tools used by the Ultimate Assistant installers",
+  "dependencies": {
+    "kapture-mcp": "2.6.1",
+    "@playwright/mcp": "0.0.83"
+  },
+  "overrides": {
+    "zod": "4.6.6"
+  }
+}

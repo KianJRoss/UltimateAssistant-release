@@ -210,6 +210,8 @@ def build_app(target: str, key: str, *, transport=None, device_token: str = ""):
             except (ValueError, TypeError):
                 return JSONResponse({"detail": "Invalid conversation_id"}, status_code=400)
             try:
+                if not hasattr(_socket, "AF_UNIX"):
+                    raise OSError("Unix desktop transport is unavailable")
                 with _socket.socket(_socket.AF_UNIX) as sock:
                     sock.settimeout(2)
                     sock.connect(str(socket_path()))

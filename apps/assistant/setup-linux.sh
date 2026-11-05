@@ -91,7 +91,9 @@ echo "Kokoro speech ready."
 # Browser tools (setup-browser-tools.ps1): Kapture and Playwright MCP, with Playwright's Chromium.
 if command -v npm >/dev/null; then
   runtime="$workspace_root/.runtime"
-  npm install -s --prefix "$runtime/browser-mcp" --no-audit --no-fund --no-update-notifier kapture-mcp@2.6.1 @playwright/mcp@0.0.83
+  mkdir -p "$runtime/browser-mcp"
+  cp "$app_root/browser-mcp/package.json" "$app_root/browser-mcp/package-lock.json" "$runtime/browser-mcp/"
+  npm ci -s --prefix "$runtime/browser-mcp" --no-audit --no-fund --no-update-notifier
   cli="$runtime/browser-mcp/node_modules/playwright/cli.js"
   [[ -f $cli ]] || cli="$runtime/browser-mcp/node_modules/playwright-core/cli.js"
   PLAYWRIGHT_BROWSERS_PATH="$runtime/browsers" node "$cli" install chromium >/dev/null

@@ -10,17 +10,19 @@ import time
 from starlette.concurrency import run_in_threadpool
 
 from fastapi import Depends, Header, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from . import DEFAULT_DEVICE
 from .mobile_conversation import ConversationConflict, UploadTooLarge
+from . import conversation_id as default_conversation_id
 
 # How far each conversation's phone event stream has read, and when: canvas_bridge.delivery
 STREAMS: dict[str, dict] = {}
 
 
 def register(app, *, pairing_store, conversation, commands, device_id=DEFAULT_DEVICE,
-             asset_records=None, authorize_asset=None, voice=None, canvas_event=None):
+             asset_records=None, authorize_asset=None, voice=None, canvas_event=None,
+             saved_conversations=None):
     """Attach device-credential routes without reusing the administrator token."""
     def get_voice():
         if voice is not None:
@@ -48,6 +50,65 @@ def register(app, *, pairing_store, conversation, commands, device_id=DEFAULT_DE
         if not isinstance(value, dict):
             raise HTTPException(400, "request body must be an object")
         return value
+
+    def saved_store():
+        if saved_conversations is None:
+            raise HTTPException(503, "Shared conversation history is unavailable")
+        return saved_conversations() if callable(saved_conversations) else saved_conversations
+
+    def saved_id(value):
+        try:
+            uuid.UUID(value)
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise HTTPException(400, "Invalid saved conversation ID") from exc
+        return value
+
+    @app.get("/api/mobile/v1/saved-conversations")
+    def saved_history(limit: int = 50, cursor: str | None = None, settled: bool = False,
+                      query: str = "", authorization: str | None = Header(default=None)):
+        device = authenticate(authorization)
+        try:
+            result = saved_store().history_page(limit=limit, cursor=cursor, settled=settled, query=query)
+        except ValueError as exc:
+            raise HTTPException(400, "Invalid saved history page") from exc
+        for item in result["conversations"]:
+            item["pinned"] = bool(item["pinned"])
+            item["settled"] = bool(item["settled"])
+        authenticate(authorization, device["pairing_revision"])
+        return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/mobile/v1/saved-conversations/{conversation_id}")
+    def saved_messages(conversation_id: str, before_id: int | None = None, limit: int = 100,
+                       authorization: str | None = Header(default=None)):
+        device = authenticate(authorization)
+        try:
+            result = saved_store().message_page(saved_id(conversation_id), before_id=before_id, limit=limit)
+        except ValueError as exc:
+            raise HTTPException(400, "Invalid saved message page") from exc
+        if before_id is None and not result["messages"]:
+            raise HTTPException(404, "Saved conversation no longer exists")
+        authenticate(authorization, device["pairing_revision"])
+        return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/mobile/v1/saved-conversations/{conversation_id}/organization")
+    async def saved_organization(conversation_id: str, request: Request,
+                                 authorization: str | None = Header(default=None)):
+        authenticate(authorization)
+        body = await payload(request)
+        revision = body.pop("expected_pairing_revision", None)
+        if (type(revision) is not int or revision < 1 or not body
+                or set(body) - {"pinned", "settled"}
+                or any(type(value) is not bool for value in body.values())):
+            raise HTTPException(400, "Choose a boolean pin/settle change and the pairing revision")
+        store = saved_store()
+        authenticate(authorization, revision)
+        try:
+            result = await run_in_threadpool(store.organize, saved_id(conversation_id), **body)
+        except ValueError as exc:
+            raise HTTPException(400, "Invalid saved conversation change") from exc
+        if result is None:
+            raise HTTPException(404, "Saved conversation no longer exists")
+        return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
     # Use the same custom speech providers as desktop, authenticated as this device.
     @app.post("/api/mobile/v1/voice/transcribe")
@@ -110,7 +171,7 @@ def register(app, *, pairing_store, conversation, commands, device_id=DEFAULT_DE
                 "device_credential": paired["device_credential"],
                 "pairing_revision": paired["pairing_revision"],
                 "state": paired["state"], "capabilities": paired["capabilities"],
-                "protocol": "phone.v1"}
+                "protocol": "phone.v1", "conversation_id": default_conversation_id()}
 
     @app.post("/api/mobile/v1/pairing/redeem")
     async def redeem_invitation(request: Request):
@@ -129,6 +190,7 @@ def register(app, *, pairing_store, conversation, commands, device_id=DEFAULT_DE
             "state": paired["state"],
             "capabilities": paired["capabilities"],
             "protocol": "phone.v1",
+            "conversation_id": default_conversation_id(),
         }
 
     @app.get("/api/mobile/v1/conversations/{conversation_id}/history")

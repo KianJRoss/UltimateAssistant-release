@@ -114,11 +114,14 @@ def parse(text: str, agents: dict[str, Agent]) -> tuple[str, str]:
 # adds gets a question from its description (agent_statement). All of them saying no is the default agent.
 ROUTING = {
     "operator": "The message asks to operate the computer or phone screen, windows or device settings: open, close, "
-                "click or type in a window, take a screenshot, or change the theme, wallpaper, volume or brightness.",
+                "click or type in a window, take a screenshot, or change the theme, wallpaper, volume or brightness; "
+                "not installing or connecting an app, account or integration, or mentioning a word like wallpaper in a painting.",
     "researcher": "The message asks for information from outside sources or compares products: prices, news, reviews, "
-                  "product comparisons, weather, scores, availability, documentation, or what a source says.",
+                  "product comparisons, weather, scores, availability, documentation, or what a source says; "
+                  "not the user's own personal schedule or appointments, or a casual question about a personal favorite or opinion.",
     "planner": "The message is about the user's own tasks, shopping or to-do lists, deadlines, appointments, "
-               "meetings, reminders or schedule: adding, changing or asking about them.",
+               "meetings, reminders or schedule: adding, changing or asking about them; "
+               "not installing or connecting an app, account or integration.",
     "tutor": "The message asks to be taught, quizzed or helped to study a subject: step-by-step explanations, "
              "practice problems, flashcards or homework help.",
     "builder": "The message asks to write, fix or run code or a script, or to install, connect or set up an "
@@ -207,7 +210,7 @@ SURMISE_FACETS: dict[str, str] = {
     "commitment_gate": SURMISE_COMMITMENT_QUESTION,
     "cm_future_task": "The user states a personal task, errand, or phone call they need to do in the future.",
     "cm_future_event": "The user states an upcoming appointment, meeting, or event they are attending.",
-    "cm_bill_or_due": "The user states an upcoming bill to pay or an assignment/project due date ahead of them.",
+    "cm_bill_or_due": "The user states a specific upcoming bill to pay or assignment/project due date ahead of them, not merely asking what is due.",
     "cm_only_question_or_past": "The message is only asking a general question, asking about their schedule, or describing something already completed in the past.",
 }
 
@@ -348,8 +351,15 @@ def decode_surmise(answers: dict[str, di.Answer], agents: dict[str, Agent]) -> t
     cm_all_neg = all(answers.get(k) and answers[k].confident and not answers[k].value for k in pos_keys)
     cm_neg = bool(answers.get("cm_only_question_or_past") and answers["cm_only_question_or_past"].confident
                   and answers["cm_only_question_or_past"].value)
+    sched_query = bool(answers.get("pl_schedule_query") and answers["pl_schedule_query"].confident
+                       and answers["pl_schedule_query"].value)
+    no_task_or_event = all(
+        answers.get(k) and not answers[k].value for k in ("cm_future_task", "cm_future_event")
+    )
     commitment: bool | None = None
-    if cm_main is not None and cm_main.confident:
+    if cm_neg and sched_query and no_task_or_event:
+        commitment = False
+    elif cm_main is not None and cm_main.confident:
         commitment = False if (cm_neg and not cm_pos) else bool(cm_main.value)
     elif cm_pos and not cm_neg:
         commitment = True

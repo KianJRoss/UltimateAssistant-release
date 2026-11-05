@@ -936,9 +936,10 @@
     const el = h('div', 'ua-mermaid');
     el.textContent = code;
     el.dataset.keep = code;  // drawn asynchronously: re-renders leave it alone
-    loadScript(asset('mermaid@11.4.1/dist/mermaid.min.js'), 'mermaid').then((m) => {
+    loadStyle(asset('katex@0.19.0/dist/katex.min.css'));
+    loadScript(asset('mermaid@11.17.2/dist/mermaid.min.js'), 'mermaid').then((m) => {
       if (!m || !el.isConnected) return;
-      m.initialize({ startOnLoad: false, theme: 'dark' });
+      m.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'strict' });
       m.render('ua-m' + Math.random().toString(36).slice(2), code).then((out) => { el.innerHTML = out.svg; }).catch(() => {});
     });
     return el;
@@ -1071,8 +1072,8 @@
     if (global.katex) {
       try { global.katex.render(tex, el, { displayMode: display, throwOnError: false }); } catch (e) { /* stays as text */ }
     } else {
-      loadStyle(asset('katex@0.16.11/dist/katex.min.css'));
-      loadScript(asset('katex@0.16.11/dist/katex.min.js'), 'katex').then((k) => {
+      loadStyle(asset('katex@0.19.0/dist/katex.min.css'));
+      loadScript(asset('katex@0.19.0/dist/katex.min.js'), 'katex').then((k) => {
         if (k) document.querySelectorAll('.ua-math').forEach((m) => { if (!m.querySelector('.katex')) try { k.render(m.dataset.tex, m, { displayMode: m.classList.contains('ua-math-display'), throwOnError: false }); } catch (e) { /* text */ } });
       });
     }

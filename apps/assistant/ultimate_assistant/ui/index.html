@@ -5,72 +5,72 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="app-token" content="__APP_TOKEN__">
   <title>Ultimate Assistant</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237b8cff'/%3E%3Cstop offset='1' stop-color='%23a57aff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='18' fill='url(%23g)'/%3E%3Cpath d='M32 13l4.5 14.5L51 32l-14.5 4.5L32 51l-4.5-14.5L13 32l14.5-4.5z' fill='white'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23a9dac7'/%3E%3Cstop offset='1' stop-color='%23a9dac7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='18' fill='url(%23g)'/%3E%3Cpath d='M32 13l4.5 14.5L51 32l-14.5 4.5L32 51l-4.5-14.5L13 32l14.5-4.5z' fill='%23112e25'/%3E%3C/svg%3E">
   <style>
     :root {
       color-scheme: dark;
-      --bg: #101319; --surface: #151922; --surface-2: #191e28; --surface-3: #232a37; --surface-4: #2d3545;
-      --border: #2a3140; --border-strong: #3a4558; --text: #eef1f7; --muted: #a4aec0; --faint: #7d889b;
-      --accent: #6d7bf0; --accent-hover: #7c89ff; --accent-soft: #6d7bf026; --danger: #ffc2cb; --danger-border: #a54b58;
+      --bg: #111718; --surface: #172021; --surface-2: #1c2627; --surface-3: #263334; --surface-4: #324142;
+      --border: #2b393a; --border-strong: #455858; --text: #f0f3ed; --muted: #b3c1bd; --faint: #96aaa5;
+      --accent: #a9dac7; --accent-hover: #c3ecdb; --accent-soft: #a9dac71a; --danger: #ffc2cb; --danger-border: #a54b58;
       --radius: 14px;
       font-family: Inter, "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text);
     }
     * { box-sizing: border-box; }
     [hidden] { display: none !important; }
-    body { margin: 0; min-height: 100dvh; background: radial-gradient(ellipse at top, #20283a 0, var(--bg) 58%) fixed; }
-    a { color: #b8c0ff; }
+    body { margin: 0; min-height: 100dvh; background: var(--bg); }
+    a { color: #bde7d7; }
     select, button, textarea, input { font: inherit; }
     button { cursor: pointer; border: 0; color: var(--text); background: var(--surface-4); padding: 8px 13px; border-radius: 10px; line-height: 1.3; }
-    button:hover:not(:disabled) { background: #384256; }
+    button:hover:not(:disabled) { background: #405454; }
     button:disabled { opacity: .5; cursor: default; }
-    button.primary { background: var(--accent); color: white; font-weight: 600; }
+    button.primary { background: var(--accent); color: #112e25; font-weight: 600; }
     button.primary:hover:not(:disabled) { background: var(--accent-hover); }
     button.ghost { background: transparent; color: var(--muted); }
     button.ghost:hover:not(:disabled) { background: var(--surface-3); color: var(--text); }
-    :focus-visible { outline: 2px solid #9aa5ff; outline-offset: 2px; }
-    input[type=text], input[type=url], input[type=number], input[type=date], input[type=password], input:not([type]), select {
-      padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: 10px; color: var(--text); background: #111620; min-width: 0;
+    :focus-visible { outline: 2px solid #a9dac7; outline-offset: 2px; }
+    input[type=search], input[type=text], input[type=url], input[type=number], input[type=date], input[type=password], input:not([type]), select {
+      padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: 10px; color: var(--text); background: var(--bg); min-width: 0;
     }
-    input[type=checkbox] { accent-color: #8793ff; }
+    input[type=checkbox] { accent-color: #a9dac7; }
     label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
     .sub { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
     .sub:empty { display: none; }
     .icon { font-size: 16px; line-height: 1; }
 
     /* Layout: header, notices, chat (takes the room), status, composer */
-    .shell { width: min(960px, 100%); height: 100dvh; margin: 0 auto; padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
+    .shell { width: min(1120px, 100%); height: 100dvh; margin: 0 auto; padding: 24px 32px calc(22px + env(safe-area-inset-bottom));
       display: flex; flex-direction: column; gap: 10px; }
     .shell > .chat { flex: 1 1 auto; min-height: 0; }
-    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
     .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
-    .mark { flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; background: linear-gradient(145deg, #7b8cff, #a57aff); font-size: 19px; box-shadow: 0 8px 28px #7886ff30; }
-    h1 { font-size: 16px; margin: 0; letter-spacing: .2px; white-space: nowrap; }
+    .mark { flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; background: var(--accent); color: #112e25; font-size: 22px; }
+    h1 { font-size: 17px; margin: 0; letter-spacing: .2px; white-space: nowrap; }
     .tagline { color: var(--faint); font-size: 12px; margin-top: 2px; white-space: nowrap; }
     .controls { display: flex; align-items: center; gap: 6px; min-width: 0; }
     #model { max-width: 230px; padding: 8px 28px 8px 11px; background: var(--surface-2); text-overflow: ellipsis; }
     .controls button { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
 
     #notices:not(:has(> :not([hidden]))) { display: none; }
-    .notice { display: grid; gap: 8px; padding: 13px 15px; border: 1px solid #414d76; border-radius: var(--radius); background: #1a2032; }
+    .notice { display: grid; gap: 8px; padding: 13px 15px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface-2); }
     .notice h2, .notice h3 { margin: 0; font-size: 15px; }
     .notice p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
     .notice .actions-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
     .notice button { font-size: 14px; }
 
-    .chat { overflow-y: auto; padding: 18px clamp(10px, 4vw, 40px); border: 1px solid var(--border); border-radius: 20px; background: #151922d9; box-shadow: 0 20px 70px #0003; overscroll-behavior: contain; }
-    .welcome { max-width: 520px; margin: clamp(16px, 9vh, 90px) auto 0; text-align: center; }
-    .welcome-icon { font-size: 30px; margin-bottom: 8px; color: #b3a6ff; }
-    .welcome h2 { font-size: 21px; margin: 0 0 8px; }
+    .chat { overflow-y: auto; padding: 24px clamp(10px, 5vw, 64px); border: 0; border-radius: 0; background: transparent; overscroll-behavior: contain; }
+    .welcome { max-width: 660px; margin: clamp(24px, 10vh, 110px) auto 0; text-align: center; }
+    .welcome-icon { font-size: 42px; margin-bottom: 24px; color: var(--accent); }
+    .welcome h2 { font-size: clamp(28px, 4vw, 42px); font-weight: 500; letter-spacing: -1.2px; line-height: 1.15; margin: 0 0 16px; }
     .welcome p { color: var(--muted); line-height: 1.55; margin: 0 0 16px; }
-    .suggestions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-    .suggestion { background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 999px; padding: 8px 14px; font-size: 13px; color: #d6dbe6; }
+    .suggestions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 32px; }
+    .suggestion { background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 14px; padding: 18px; font-size: 13px; color: var(--text); text-align: left; line-height: 1.5; }
     .notice-line { text-align: center; color: var(--muted); font-size: 13px; margin: 10px 0; }
-    .message { display: flex; flex-direction: column; margin: 14px 0; }
+    .message { display: flex; flex-direction: column; margin: 24px 0; }
     .message.user { align-items: flex-end; }
     .message.assistant { align-items: flex-start; }
-    .bubble { max-width: min(680px, 88%); padding: 11px 15px; border-radius: 17px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
-    .assistant .bubble { background: #202633; border: 1px solid #30394a; border-bottom-left-radius: 5px; }
-    .user .bubble { background: #596be0; color: white; border-bottom-right-radius: 5px; }
+    .bubble { max-width: min(680px, 88%); padding: 11px 15px; border-radius: 17px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .assistant .bubble { background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 5px; }
+    .user .bubble { background: #304b44; color: var(--text); border-bottom-right-radius: 5px; }
     .message.error .bubble { border-color: var(--danger-border); color: var(--danger); }
     .typing-row .bubble { color: var(--muted); }
     .activity { max-width: min(680px, 88%); margin-top: 5px; color: var(--faint); font-size: 12px; }
@@ -81,8 +81,8 @@
     .activity pre { white-space: pre-wrap; }
 
     .status { color: var(--faint); font-size: 12px; padding: 0 6px; min-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .composer { padding: 10px 12px; border: 1px solid #303847; border-radius: 18px; background: var(--surface-2); box-shadow: 0 12px 40px #0003; }
-    .composer:focus-within { border-color: #4a5577; }
+    .composer { padding: 16px 18px; border: 1px solid var(--border-strong); border-radius: 22px; background: var(--surface-2); box-shadow: 0 12px 40px #0003; }
+    .composer:focus-within { border-color: var(--accent); }
     .attachment-row { display: flex; flex-wrap: wrap; gap: 7px; padding: 2px 2px 6px; }
     .attachment-row:has(#attachmentList:empty) { display: none; }
     .attachment-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 9px; background: var(--surface-3); color: #c9d1e0; font-size: 12px; }
@@ -94,8 +94,8 @@
     .options, .actions { display: flex; align-items: center; gap: 6px; }
     .chip { position: relative; padding: 6px 11px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--muted); font-size: 12.5px; white-space: nowrap; user-select: none; }
     .chip input { position: absolute; opacity: 0; pointer-events: none; }
-    .chip:has(input:checked) { background: var(--accent-soft); border-color: #6d7bf099; color: #dfe3ff; }
-    .chip:has(input:focus-visible) { outline: 2px solid #9aa5ff; outline-offset: 2px; }
+    .chip:has(input:checked) { background: var(--accent-soft); border-color: #a9dac780; color: #d8efe5; }
+    .chip:has(input:focus-visible) { outline: 2px solid #a9dac7; outline-offset: 2px; }
     .icon-button { width: 38px; height: 38px; padding: 0; display: inline-grid; place-items: center; border-radius: 12px; background: var(--surface-3); font-size: 16px; }
     #mic.listening { background: #a33e53; animation: pulse 1.3s infinite; }
     #send { height: 38px; padding: 0 18px; border-radius: 12px; }
@@ -105,12 +105,12 @@
     /* Settings drawer */
     .scrim { position: fixed; inset: 0; background: #05070b99; z-index: 20; }
     .drawer { font-size: 14px; position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100vw); z-index: 21; display: grid; grid-template-rows: auto auto minmax(0, 1fr);
-      background: #141821; border-left: 1px solid var(--border-strong); box-shadow: -30px 0 80px #0007; }
+      background: var(--surface); border-left: 1px solid var(--border-strong); box-shadow: -30px 0 80px #0007; }
     .drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 10px; }
     .drawer-head h2 { margin: 0; font-size: 18px; }
     .tabs { display: flex; gap: 4px; padding: 0 14px 10px; overflow-x: auto; border-bottom: 1px solid var(--border); scrollbar-width: none; }
     .tabs button { background: transparent; color: var(--muted); padding: 7px 11px; border-radius: 9px; white-space: nowrap; font-size: 13.5px; }
-    .tabs button[aria-selected=true] { background: var(--surface-3); color: var(--text); }
+    .tabs button[aria-selected=true] { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 -2px var(--accent); }
     .panel { overflow-y: auto; padding: 16px 18px 28px; display: grid; gap: 14px; align-content: start; }
     .group { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
     .group > h3 { margin: 0; font-size: 14px; }
@@ -120,9 +120,11 @@
     .panel details > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
     .panel ul { margin: 0; padding-left: 20px; line-height: 1.6; color: var(--muted); font-size: 12.5px; }
     .connector-list { display: grid; gap: 8px; }
-    .connector-card { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: #151a23; font-size: 13px; color: var(--muted); }
+    .connector-card { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); font-size: 13px; color: var(--muted); }
     .connector-card strong { color: var(--text); }
     .connector-card > button, .connector-card form button { justify-self: start; }
+    [data-panel="devices"], [data-panel="devices"] .group, [data-panel="devices"] .connector-card { min-width: 0; overflow-wrap: anywhere; }
+    [data-panel="devices"] button { min-height: 44px; max-width: 100%; }
     .connector-form { display: grid; gap: 7px; max-width: 440px; }
     .task-add { display: flex; flex-wrap: wrap; gap: 7px; }
     .task-add input, .task-add select { flex: 1 1 120px; }
@@ -137,7 +139,7 @@
     .math-output { display: grid; gap: 8px; color: var(--muted); font-size: 12px; }
     .math-output img { width: 100%; border-radius: 10px; background: white; }
     #rate { width: 140px; }
-    dialog { color: var(--text); background: var(--surface-2); border: 1px solid #414d76; border-radius: var(--radius); }
+    dialog { color: var(--text); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius); }
     dialog::backdrop { background: #05070bb3; }
     dialog button { margin: 4px 6px 0 0; }
 
@@ -145,28 +147,33 @@
     .setup-active .shell > :not(.topbar):not(#setupWizard) { display: none !important; }
     .setup-active .controls { display: none; }
     .setup-active .shell { height: auto; min-height: 100dvh; display: block; }
-    #setupWizard { width: min(640px, 100%); margin: clamp(24px, 7vh, 80px) auto; padding: clamp(22px, 4vw, 40px); background: var(--surface-2); border: 1px solid #394357; border-radius: 24px; box-shadow: 0 20px 70px #0003; }
+    #setupWizard { width: min(640px, 100%); margin: clamp(24px, 7vh, 80px) auto; padding: clamp(22px, 4vw, 40px); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 24px; box-shadow: 0 20px 70px #0003; }
     #setupWizard h2:focus { outline: none; }
     #setupWizard h2 { font-size: 28px; line-height: 1.25; margin: 8px 0 16px; }
     #setupWizard h3 { font-size: 14px; color: var(--muted); font-weight: 600; margin: 22px 0 0; }
-    #setupWizard p { color: #bac4d6; line-height: 1.6; }
-    #setupWizard .eyebrow { color: #a9afff; font-size: 13px; }
-    #setupWizard button { padding: 13px 18px; border-radius: 12px; background: #30394a; text-align: left; }
+    #setupWizard p { color: var(--muted); line-height: 1.6; }
+    #setupWizard .eyebrow { color: var(--accent); font-size: 13px; }
+    #setupWizard button { padding: 13px 18px; border-radius: 12px; background: var(--surface-3); text-align: left; }
     #setupWizard button.primary { background: var(--accent); text-align: center; }
     #setupWizard button:disabled { cursor: wait; }
     #setupWizard .choices { display: grid; gap: 12px; margin: 16px 0 24px; }
-    #setupWizard .choices button { padding: 18px 20px; border: 1px solid #47536a; }
+    #setupWizard .choices button { padding: 18px 20px; border: 1px solid var(--border-strong); }
     #setupWizard .choices strong, #setupWizard .choices small { display: block; }
-    #setupWizard .choices small { color: #c2cbdc; margin-top: 6px; line-height: 1.5; }
+    #setupWizard .choices small { color: var(--muted); margin-top: 6px; line-height: 1.5; }
     #setupWizard label { display: grid; gap: 8px; margin: 16px 0; cursor: default; }
     #setupWizard input, #setupWizard select { width: 100%; padding: 12px; border-color: #485268; }
     #setupWizard .error { color: var(--danger); }
     #setupWizard .back { background: transparent; padding-left: 0; color: #b4bfda; }
-    #setupWizard details { margin-top: 20px; color: #aab5ca; font-size: 13px; }
+    #setupWizard details { margin-top: 20px; color: var(--muted); font-size: 13px; }
     #setupWizard pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 160px; overflow: auto; }
 
     @media (max-width: 640px) {
       .brand h1 { display: none; }
+      .topbar { padding-bottom: 10px; }
+      .welcome { margin-top: 28px; }
+      .welcome-icon { margin-bottom: 16px; }
+      .suggestions { grid-template-columns: 1fr; gap: 8px; margin-top: 22px; }
+      .suggestion { padding: 12px 16px; }
       .shell { padding: 10px 10px calc(10px + env(safe-area-inset-bottom)); gap: 8px; }
       .tagline, .controls .label { display: none; }
       .mark { width: 34px; height: 34px; font-size: 17px; }
@@ -179,16 +186,65 @@
       .chip .label { display: none; }
       #setupWizard h2 { font-size: 24px; }
     }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; } }
+    .workspace { display: flex; height: 100dvh; max-width: 1520px; margin: auto; }
+    .workspace .shell { flex: 1; min-width: 0; }
+    .history-sidebar { flex: 0 0 250px; padding: 24px 16px; border-right: 1px solid var(--border); overflow-y: auto; }
+    .history-sidebar h2 { font-size: 14px; margin: 0 0 18px; }
+    #historySearch { width: 100%; margin-bottom: 12px; }
+    #conversationList { display: grid; gap: 5px; }
+    .history-item { background: transparent; text-align: left; padding: 12px; width: 100%; overflow-wrap: anywhere; }
+    .history-item[aria-current=true] { background: var(--accent-soft); color: var(--accent); }
+    .history-heading { margin: 14px 0 3px; color: var(--muted); font-size: 12px; }
+    .history-entry { min-width: 0; }
+    .history-menu { font-size: 12px; padding: 0 12px 5px; }
+    .history-menu summary { cursor: pointer; color: var(--muted); }
+    .history-menu button { margin: 5px 4px 0 0; padding: 5px 8px; font-size: 12px; }
+    .history-item small { display: block; color: var(--muted); margin-top: 5px; font-size: 11px; }
+    #historyStatus { margin-top: 12px; }
+    .attention-section { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--border); }
+    .attention-section h3 { font-size: 12px; color: var(--muted); margin: 14px 0 6px; }
+    #attentionInspector { width: min(640px, 94vw); max-height: 85dvh; overflow: auto; }
+    #attentionInspector pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.6; }
+    #reviewNote { border: 1px solid var(--border-strong); border-radius: 10px; padding: 10px; }
+    #attentionInspector h2 { font-size: 19px; overflow-wrap: anywhere; }
+    #attentionList .history-item { padding: 9px 12px; font-size: 13px; }
+    #toggleHistory { display: none; }
+    .setup-active .history-sidebar, .setup-active #toggleHistory { display: none; }
+    @media (max-width: 900px) {
+      #toggleHistory { display: inline-grid; }
+      .history-sidebar { display: none; position: fixed; top: 0; bottom: 0; left: 0; width: min(300px, 90vw); background: var(--surface); z-index: 19; box-shadow: 20px 0 60px #0008; }
+      .history-open .history-sidebar { display: block; }
+      .history-close { display: block; margin-bottom: 16px; }
+    }
+    @media (min-width: 901px) { .history-close { display: none; } }
   </style>
 </head>
 <body class="setup-active">
+  <div class="workspace">
+  <nav class="history-sidebar" aria-label="Conversation history">
+    <button id="closeHistory" class="ghost history-close" aria-label="Close history">Close history</button>
+    <h2>Your conversations</h2>
+    <input id="historySearch" type="search" placeholder="Find a conversation" aria-label="Find a conversation">
+    <label class="sub"><input id="showSettled" type="checkbox">Browse settled chats</label>
+    <div id="conversationList"></div>
+    <p id="historyStatus" class="sub" role="status"></p>
+    <button id="loadMoreHistory" class="ghost" hidden>Load older conversations</button>
+    <button id="refreshHistory" class="ghost">Refresh history</button>
+    <section class="attention-section" aria-label="Tasks and activity">
+      <h2>Tasks &amp; activity</h2>
+      <div id="attentionList"></div>
+      <p id="attentionStatus" class="sub" role="status">Open the assistant to load activity.</p>
+      <button id="refreshAttention" class="ghost">Refresh activity</button>
+    </section>
+  </nav>
   <main class="shell">
     <header class="topbar">
-      <div class="brand"><div class="mark" aria-hidden="true">✦</div><div><h1>Ultimate Assistant</h1><div class="tagline">Your assistant, on your computer</div></div></div>
+      <div class="brand"><button id="toggleHistory" class="ghost icon-button" aria-label="Open conversation history" aria-expanded="false" aria-controls="conversationList">☰</button><div class="mark" aria-hidden="true">✦</div><div><h1>Ultimate Assistant</h1><div class="tagline">Your assistant, on your computer</div></div></div>
       <div class="controls">
         <select id="model" aria-label="AI account in use"></select>
-        <button id="newChat" class="ghost" title="Start a separate conversation; saved memories stay available"><span class="icon" aria-hidden="true">＋</span><span class="label">New chat</span></button>
-        <button id="openSettings" class="ghost" aria-haspopup="dialog" aria-controls="settingsDrawer" title="Settings"><span class="icon" aria-hidden="true">⚙</span><span class="label">Settings</span></button>
+        <button id="newChat" class="ghost" aria-label="New chat" title="Start a separate conversation; saved memories stay available"><span class="icon" aria-hidden="true">＋</span><span class="label">New chat</span></button>
+        <button id="openSettings" class="ghost" aria-haspopup="dialog" aria-controls="settingsDrawer" aria-label="Settings" title="Settings"><span class="icon" aria-hidden="true">⚙</span><span class="label">Settings</span></button>
       </div>
     </header>
     <section id="setupWizard" aria-live="polite" aria-label="Connect your AI account"><p>Getting ready...</p></section>
@@ -209,7 +265,40 @@
       </div>
     </section>
   </main>
+  </div>
 
+  <dialog id="handoffDialog" aria-labelledby="handoffTitle" style="width:min(720px,94vw);max-height:90dvh;overflow:auto">
+    <form method="dialog"><button aria-label="Close handoff preview" class="ghost">Close</button></form>
+    <h2 id="handoffTitle">Prepare a conversation handoff</h2>
+    <p class="sub">Preview selected conversation text before sharing. This does not transfer running tools, attachments, permissions or provider sessions.</p>
+    <form id="handoffForm" style="display:grid;gap:12px">
+      <label class="field">Next request, kept unchanged<textarea id="handoffRequest" maxlength="10000" rows="3"></textarea></label>
+      <label class="field">History character limit<input id="handoffBudget" type="number" value="16000" min="1000" max="24000" required></label>
+      <button id="prepareHandoff" type="submit">Build preview</button>
+    </form>
+    <p id="handoffStatus" class="sub" role="status"></p>
+    <pre id="handoffPreview" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:40dvh;overflow:auto"></pre>
+    <button id="downloadHandoff" disabled>Download handoff JSON</button>
+  </dialog>
+  <dialog id="attentionInspector" aria-labelledby="attentionTitle">
+    <form method="dialog"><button class="ghost" aria-label="Close task inspector">Close</button></form>
+    <h2 id="attentionTitle"></h2>
+    <p id="attentionMeta" class="sub"></p>
+    <pre id="attentionDetails"></pre>
+    <form id="taskReviewForm" hidden>
+      <h3>Review this result</h3>
+      <p id="reviewDoer" class="sub"></p>
+      <fieldset id="reviewFields" style="border:0;padding:0;display:grid;gap:12px">
+        <label class="field">Reviewer name <input id="reviewerName" required maxlength="200" autocomplete="name"></label>
+        <label class="field">What did you check? <textarea id="reviewNote" required maxlength="4000" rows="3" placeholder="Record the evidence or the changes still needed"></textarea></label>
+        <div class="row"><button type="submit" value="approved" class="primary">Approve result</button><button type="submit" value="changes_requested">Request changes</button></div>
+      </fieldset>
+      <p id="reviewStatus" class="sub" role="status"></p>
+    </form>
+    <details id="taskReviewHistory" hidden><summary>Recorded reviews</summary><div id="taskReviewHistoryList" class="sub"></div></details>
+    <button id="cancelInspectedJob" hidden>Cancel job and child work</button>
+    <p id="attentionActionStatus" class="sub" role="status"></p>
+  </dialog>
   <div id="drawerScrim" class="scrim" hidden></div>
   <aside id="settingsDrawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden>
     <div class="drawer-head"><h2 id="settingsTitle">Settings</h2><button id="closeSettings" class="ghost icon-button" aria-label="Close settings">✕</button></div>
@@ -220,8 +309,31 @@
       <button role="tab" data-tab="tools" aria-selected="false">Apps</button>
       <button role="tab" data-tab="school" aria-selected="false" hidden>School</button>
       <button role="tab" data-tab="accounts" aria-selected="false">Accounts</button>
+      <button role="tab" data-tab="devices" aria-selected="false">Devices</button>
       <button role="tab" data-tab="app" aria-selected="false">About</button>
     </nav>
+
+    <section class="panel" data-panel="devices" role="tabpanel" hidden>
+      <div class="group">
+        <h3>Your devices</h3>
+        <p class="sub">Manage your phone and computers here. Devices keep separate permissions. Discovery alone does not grant access.</p>
+        <button id="refreshDevices">Refresh devices</button>
+        <p id="devicesStatus" class="sub" role="status"></p>
+        <div id="devicesIdentity" class="sub" style="overflow-wrap:anywhere"></div>
+      </div>
+      <div class="group">
+        <h3>Phone</h3>
+        <p class="sub">This assistant currently supports one paired phone. Replacing it disconnects the previous app when the new invitation is redeemed.</p>
+        <div id="devicesPhone" class="connector-card"></div>
+        <button id="inviteDevicePhone">Pair phone</button>
+        <div id="devicesInvitation" hidden style="overflow-wrap:anywhere"></div>
+      </div>
+      <div class="group">
+        <h3>Computers</h3>
+        <p class="sub">Run Herald with discovery enabled on both computers on the same trusted local network. Compare the code on the other computer before approving. Approval grants access to this Router. Reverse access requires approval on the other computer. Both computers need Herald 0.4.4 or later; Android permissions are separate.</p>
+        <div id="devicesComputers" style="display:grid;gap:12px"></div>
+      </div>
+    </section>
 
     <section class="panel" data-panel="voice" role="tabpanel">
       <div class="group voice-settings">
@@ -264,7 +376,9 @@
       <div class="group">
         <h3>This chat</h3>
         <div class="sub">Clearing deletes this conversation only. Saved memories below stay.</div>
-        <div class="row"><button id="clearHistory">Clear this chat</button></div>
+        <div class="row"><button id="clearHistory">Clear this chat</button><button id="openHandoff">Prepare handoff</button></div>
+        <label class="field"><span><input id="portableHandoff" type="checkbox" disabled> Keep context when returning to an account</span></label>
+        <p class="sub">When supported, this can resend saved text and use additional provider context. Long histories may be incomplete. Running work and approvals are not transferred.</p>
         <details><summary>What the assistant carries forward from this chat</summary><div id="memorySummary" class="sub">No summary stored yet; recent conversation remains verbatim.</div></details>
       </div>
       <div id="memoryPanel" class="group">
@@ -340,6 +454,12 @@
     </section>
 
     <section class="panel" data-panel="accounts" role="tabpanel" hidden>
+      <div class="group">
+        <h3>Selected provider features</h3>
+        <div id="capabilityAccount" class="sub"></div>
+        <div id="capabilityStatus" class="sub" role="status">Loading provider information…</div>
+        <button id="refreshCapabilities" class="ghost">Refresh provider features</button>
+      </div>
       <div class="group" id="accountsGroup">
         <h3>AI accounts</h3>
         <div class="sub">Switch the account in use with the picker at the top of the window.</div>
@@ -443,6 +563,7 @@
       for (const button of settingsDrawer.querySelectorAll('[role=tab]')) button.setAttribute('aria-selected', String(button.dataset.tab === name));
       for (const panel of settingsDrawer.querySelectorAll('[data-panel]')) panel.hidden = panel.dataset.panel !== name;
       try { localStorage.setItem('assistant-settings-tab', name); } catch {}
+      if (name === 'devices') queueMicrotask(() => void refreshDevices());
     }
     function openSettings(tab) {
       if (tab) selectTab(tab);
@@ -452,6 +573,7 @@
     function closeSettings() {
       if (settingsDrawer.hidden) return;
       settingsDrawer.hidden = true; drawerScrim.hidden = true;
+      clearDeviceInvitation();
       document.getElementById('openSettings').focus();
     }
     document.getElementById('openSettings').addEventListener('click', () => openSettings());
@@ -648,6 +770,126 @@
       return result;
     }
 
+    let devicesSnapshot = null;
+    let devicesRefresh = 0;
+    let invitationGeneration = 0;
+    let invitationTimer = null;
+    const devicesStatus = document.getElementById('devicesStatus');
+    const phoneInviteButton = document.getElementById('inviteDevicePhone');
+    function clearDeviceInvitation() {
+      invitationGeneration++;
+      clearTimeout(invitationTimer);
+      const box = document.getElementById('devicesInvitation');
+      box.replaceChildren(); box.hidden = true;
+    }
+    function deviceText(parent, tag, text) {
+      const element = document.createElement(tag);
+      element.textContent = text; parent.append(element); return element;
+    }
+    function deviceButton(parent, label, action) {
+      const button = deviceText(parent, 'button', label);
+      button.type = 'button';
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        try { await action(); } catch (error) { devicesStatus.textContent = error.message; }
+        finally { button.disabled = false; }
+      });
+    }
+    async function refreshDevices() {
+      const generation = ++devicesRefresh;
+      devicesStatus.textContent = 'Refreshing devices…';
+      phoneInviteButton.disabled = true;
+      try {
+        const snapshot = await api('/api/devices');
+        if (generation !== devicesRefresh) return;
+        devicesSnapshot = snapshot;
+        devicesStatus.textContent = snapshot.router_available
+          ? 'Trust is shown separately from connection status.'
+          : 'Herald is unavailable or needs an update. Phone pairing remains available.';
+        const identity = document.getElementById('devicesIdentity');
+        identity.textContent = snapshot.self
+          ? `This Router: ${snapshot.self.display_name} · compare code ${snapshot.self.short_code}` : '';
+        const phone = snapshot.phone;
+        const box = document.getElementById('devicesPhone'); box.replaceChildren();
+        deviceText(box, 'strong', 'Android app');
+        deviceText(box, 'span', phone.paired ? 'Paired' : phone.revoked ? 'Access revoked' : 'Not paired');
+        deviceText(box, 'span', phone.last_verified
+          ? `Last phone evidence: ${new Date(phone.last_verified * 1000).toLocaleString()}. This does not confirm it is online now.`
+          : 'No connection evidence received.');
+        if (phone.paired) deviceButton(box, 'Revoke phone access', async () => {
+          if (!confirm('Revoke this phone’s access? It will need a new invitation to connect again.')) return;
+          await api('/api/devices/revoke', {kind: 'phone', device_id: phone.device_id,
+            expected_pairing_revision: phone.pairing_revision});
+          clearDeviceInvitation(); await refreshDevices();
+        });
+        phoneInviteButton.textContent = phone.paired ? 'Replace paired phone…' : 'Pair phone';
+        const computers = document.getElementById('devicesComputers'); computers.replaceChildren();
+        if (!snapshot.computers.length) deviceText(computers, 'p', snapshot.router_available
+          ? 'No discovered or trusted computers.' : 'Computer inventory unavailable.');
+        for (const computer of snapshot.computers) {
+          const card = document.createElement('div'); card.className = 'connector-card'; computers.append(card);
+          deviceText(card, 'strong', computer.display_name || computer.hostname || computer.node_id);
+          deviceText(card, 'span', `${computer.status === 'pending' ? 'Awaiting approval' : 'Trusted · connection not checked'} · ${computer.short_code}`);
+          deviceText(card, 'small', `Identity: ${computer.node_id}`);
+          if (computer.status === 'pending' && snapshot.identity_approval) deviceButton(card, 'Compare code and approve…', async () => {
+            if (!confirm(`Does the other computer show ${computer.short_code}? Approve ${computer.display_name || computer.node_id} to access this Router?`)) return;
+            const result = await api('/api/devices/approve', {kind: 'computer', device_id: computer.node_id, code: computer.short_code});
+            await refreshDevices();
+            devicesStatus.textContent = result.delivery === 'unconfirmed'
+              ? 'Trusted locally, but delivery to the computer was not confirmed. Check the other computer before using it.'
+              : 'Computer approved. Connection has not been checked.';
+          });
+          else if (computer.status === 'pending') deviceText(card, 'p', 'Update Herald to approve this identity safely here.');
+          if (computer.status === 'trusted') deviceButton(card, 'Revoke computer access', async () => {
+            if (!confirm(`Revoke ${computer.display_name || computer.node_id}’s access to this Router?`)) return;
+            await api('/api/devices/revoke', {kind: 'computer', device_id: computer.node_id});
+            await refreshDevices();
+          });
+        }
+      } catch (error) {
+        if (generation === devicesRefresh) { devicesSnapshot = null; devicesStatus.textContent = error.message; }
+      } finally {
+        if (generation === devicesRefresh) phoneInviteButton.disabled = !devicesSnapshot;
+      }
+    }
+    document.getElementById('refreshDevices').addEventListener('click', () => void refreshDevices());
+    phoneInviteButton.disabled = true;
+    phoneInviteButton.addEventListener('click', async () => {
+      if (!devicesSnapshot) return;
+      const phone = devicesSnapshot.phone;
+      if (phone.paired && !confirm('Replace the current paired phone? It keeps access until this invitation is redeemed, then its credential stops working.')) return;
+      clearDeviceInvitation();
+      const generation = invitationGeneration;
+      phoneInviteButton.disabled = true;
+      try {
+        const result = await api('/api/devices/phone-invitation', {replace_existing: !!phone.paired,
+          expected_pairing_revision: phone.pairing_revision ?? null});
+        if (generation !== invitationGeneration || settingsDrawer.hidden) return;
+        const box = document.getElementById('devicesInvitation'); box.hidden = false;
+        if (result.state !== 'ready') { deviceText(box, 'p', result.detail || 'Set up phone access first.'); return; }
+        deviceText(box, 'p', 'Scan this with the phone camera, or open the invitation on the phone. It grants access once and expires in five minutes.');
+        if (result.qr_svg) {
+          const qr = document.createElement('img'); qr.alt = 'One-time phone pairing QR code';
+          qr.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(result.qr_svg);
+          qr.style.cssText = 'display:block;width:240px;max-width:100%;height:auto'; box.append(qr);
+        }
+        if (String(result.link).startsWith('ultimateassistant://')) {
+          const link = deviceText(box, 'a', 'Open pairing invitation'); link.href = result.link;
+          deviceButton(box, 'Copy invitation', async () => {
+            await navigator.clipboard.writeText(result.link);
+            devicesStatus.textContent = 'Invitation copied. Send it only to the phone you want to pair.';
+          });
+          const manual = deviceText(box, 'textarea', result.link); manual.readOnly = true;
+          manual.setAttribute('aria-label', 'One-time pairing invitation'); manual.style.width = '100%';
+        }
+        invitationTimer = setTimeout(() => {
+          if (generation !== invitationGeneration) return;
+          clearDeviceInvitation(); devicesStatus.textContent = 'Invitation expired. Create a new one to pair.';
+        }, Math.max(0, result.expires_at * 1000 - Date.now()));
+      } catch (error) { devicesStatus.textContent = error.message; }
+      finally { phoneInviteButton.disabled = !devicesSnapshot; }
+    });
+
     document.getElementById('mathGraphForm').addEventListener('submit', async event => {
       event.preventDefault();
       const resultNode = document.getElementById('mathGraphResult');
@@ -722,6 +964,7 @@
           modelSelect.appendChild(option);
         }
         modelSelect.value = result.selected;
+        void refreshCapabilities();
         statusText.textContent = result.models.length ? 'Ready' : 'Connect an AI account to begin';
       } catch (error) {
         statusText.textContent = 'Router offline';
@@ -729,6 +972,32 @@
       }
     }
 
+    let capabilityGeneration = 0;
+    async function refreshCapabilities() {
+      const generation = ++capabilityGeneration;
+      document.getElementById('portableHandoff').disabled = true;
+      const model = modelSelect.value;
+      const account = document.getElementById('capabilityAccount');
+      const status = document.getElementById('capabilityStatus');
+      account.textContent = model || 'No provider selected';
+      status.textContent = model ? 'Checking provider features…' : 'Connect an account to view its features.';
+      if (!model) return;
+      try {
+        const data = await api('/api/provider-capabilities?model=' + encodeURIComponent(model));
+        if (generation !== capabilityGeneration || modelSelect.value !== model) return;
+        if (!data.reported || data.selected !== model) { status.textContent = 'Feature information is unavailable for this selection. Its account has not been tested here.'; return; }
+        document.getElementById('portableHandoff').disabled = !(data.available && data.portable_handoff?.support === 'implemented');
+        const labels = {implemented:'Supported by this integration; account not tested',unsupported:'Not supported by this integration',unknown:'Support unknown'};
+        status.replaceChildren();
+        for (const [key, title] of [['native_resume','Conversation continuity'],['streaming_events','Live progress'],['portable_handoff','Saved context on account return']]) {
+          const row = document.createElement('p'); row.textContent = title + ': ' + (labels[data[key]?.support] || labels.unknown); status.append(row);
+        }
+        if (!data.available) { const row = document.createElement('p'); row.textContent = 'This account is disabled or its circuit is open.'; status.append(row); }
+      } catch (error) {
+        if (generation === capabilityGeneration && modelSelect.value === model) status.textContent = 'Provider feature information could not refresh.';
+      }
+    }
+    document.getElementById('refreshCapabilities').addEventListener('click', () => void refreshCapabilities());
     let loginAccount = '';
     let loginTimer;
     async function refreshProvider() {
@@ -802,6 +1071,10 @@
     const g4fResult=result=>{document.getElementById('g4fStatus').textContent=`${result.status || result.session?.status || ''}: ${result.detail || result.instruction || result.session?.error || ''}`;};
     async function refreshG4F(){
       const state=await api('/api/g4f');
+      if(state.catalog_available===false) g4fResult({status:'Unavailable',detail:state.catalog_detail});
+      document.getElementById('g4fProvider').disabled=state.catalog_available===false;
+      const createAccount=document.querySelector('#g4fAccountForm button[type="submit"]');
+      if(createAccount) createAccount.disabled=state.catalog_available===false;
       for(const [id,entries] of [['g4fProvider',state.providers],['g4fAccount',state.accounts]]){
         const select=document.getElementById(id),previous=select.value;select.replaceChildren();
         for(const entry of entries){const option=document.createElement('option');option.value=entry.id || entry.name;option.textContent=entry.id || `${entry.name} (${entry.provider})`;select.append(option);}
@@ -1039,9 +1312,12 @@
       } finally { toggle.disabled = false; }
     });
 
-    async function loadConversation() {
+    async function loadConversation(preloaded = null) {
+      const requestedId = conversationId;
       try {
-        const result = await api(`/api/conversations/${encodeURIComponent(conversationId)}`);
+        const result = preloaded || await api(`/api/conversations/${encodeURIComponent(requestedId)}`);
+        if (requestedId !== conversationId) return;
+        if (!result.messages.length) showWelcome();
         if (result.messages.length) {
           chat.replaceChildren();
           for (const [messageIndex, item] of result.messages.entries()) {
@@ -1057,9 +1333,313 @@
           }
           if (![...chat.querySelectorAll('.message')].some(row => !row.hidden)) showWelcome();
         }
-      } catch (error) { addMessage('assistant', `Could not load saved conversation: ${error.message}`, true); }
+      } catch (error) { if (requestedId === conversationId) addMessage('assistant', `Could not load saved conversation: ${error.message}`, true); }
       await refreshConversationMemory();
+      void refreshConversationList();
     }
+    let conversationRows = [];
+    const organizationBusy = new Set();
+    let historyGeneration = 0;
+    let historyCursor = null;
+    let historySearchTimer;
+    const knownConversations = new Map();
+    let switchingConversation = false;
+    const conversationDrafts = new Map();
+    function historyOpen(open) {
+      document.body.classList.toggle('history-open', open);
+      document.getElementById('toggleHistory').setAttribute('aria-expanded', String(open));
+      if (open) document.getElementById('historySearch').focus();
+    }
+    function saveConversationDraft() {
+      conversationDrafts.set(conversationId, {text: message.value, attachments: [...pendingAttachments]});
+    }
+    function renderConversationList() {
+      const list = document.getElementById('conversationList');
+      const query = document.getElementById('historySearch').value.trim().toLowerCase();
+      list.replaceChildren();
+      const rows = [...conversationRows].reverse();
+      for (const [id, draft] of document.getElementById('showSettled').checked ? [] : conversationDrafts) {
+        if ((draft.text || draft.attachments.length) && !rows.some(row => row.id === id)) rows.unshift({id, title: draft.text.slice(0, 80) || 'Draft with attachments'});
+      }
+      if (!document.getElementById('showSettled').checked && !rows.some(row => row.id === conversationId) && !knownConversations.has(conversationId)) rows.unshift({id: conversationId, title: 'Current conversation'});
+      rows.sort((a,b) => (a.settled ? 2 : a.pinned ? 0 : 1) - (b.settled ? 2 : b.pinned ? 0 : 1));
+      let section = null;
+      for (const item of rows) {
+        if (item.settled && item.id !== conversationId && !query && !document.getElementById('showSettled').checked) continue;
+        if (query && !String(item.title).toLowerCase().includes(query)) continue;
+        const group = item.settled ? 'Settled' : item.pinned ? 'Pinned' : 'Recent';
+        if (section !== group) { const heading = document.createElement('h3'); heading.className = 'history-heading'; heading.textContent = group; list.append(heading); section = group; }
+        const entry = document.createElement('div'); entry.className = 'history-entry';
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'history-item';
+        button.setAttribute('aria-current', String(item.id === conversationId));
+        const title = document.createElement('span'); title.textContent = item.title || 'Conversation'; button.append(title);
+        const detail = document.createElement('small');
+        detail.textContent = item.id === conversationId ? 'Current conversation' : (item.last_at ? new Date(item.last_at).toLocaleDateString() : '');
+        button.append(detail); button.addEventListener('click', () => void selectConversation(item.id)); entry.append(button);
+        if (item.messages) {
+          const menu = document.createElement('details'); menu.className = 'history-menu';
+          const summary = document.createElement('summary'); summary.textContent = 'Organize'; summary.setAttribute('aria-label', 'Organize ' + (item.title || 'conversation')); menu.append(summary);
+          for (const [label, change] of [[item.pinned ? 'Unpin' : 'Pin', {pinned: !item.pinned}], [item.settled ? 'Restore' : 'Settle chat', {settled: !item.settled}]]) {
+            const action = document.createElement('button'); action.type = 'button'; action.textContent = label; action.disabled = organizationBusy.has(item.id);
+            action.title = label === 'Settle chat' ? 'Move out of active history; tasks keep running' : label;
+            action.addEventListener('click', () => void organizeConversation(item.id, change)); menu.append(action);
+          }
+          entry.append(menu);
+        }
+        list.append(entry);
+      }
+      if (!list.childElementCount) { const empty = document.createElement('p'); empty.className = 'sub'; empty.textContent = 'No matching conversations'; list.append(empty); }
+    }
+    async function organizeConversation(id, change) {
+      if (organizationBusy.has(id)) return;
+      organizationBusy.add(id); renderConversationList();
+      try {
+        const saved = await api('/api/conversations/' + encodeURIComponent(id) + '/organization', change, 'PATCH');
+        knownConversations.set(id, {...knownConversations.get(id), ...saved});
+        await refreshConversationList();
+      } catch (error) { document.getElementById('historyStatus').textContent = 'Could not save the conversation change. Refresh history and try again.'; }
+      finally { organizationBusy.delete(id); renderConversationList(); }
+    }
+    async function refreshConversationList(loadMore = false) {
+      if (loadMore && !historyCursor) return;
+      const generation = ++historyGeneration;
+      const settled = document.getElementById('showSettled').checked;
+      const query = document.getElementById('historySearch').value.trim();
+      const more = document.getElementById('loadMoreHistory'); more.disabled = true;
+      const params = new URLSearchParams({settled: String(settled), query});
+      if (loadMore) params.set('cursor', historyCursor);
+      try {
+        const data = await api('/api/conversation-history?' + params);
+        if (generation !== historyGeneration || document.getElementById('showSettled').checked !== settled || document.getElementById('historySearch').value.trim() !== query) return;
+        const incoming = [...(data.conversations || [])].reverse();
+        const seen = new Set(incoming.map(row => row.id));
+        conversationRows = loadMore ? [...incoming, ...conversationRows.filter(row => !seen.has(row.id))] : incoming;
+        for (const row of conversationRows) knownConversations.set(row.id, row);
+        historyCursor = data.next_cursor || null; more.hidden = !historyCursor;
+        renderConversationList(); document.getElementById('historyStatus').textContent = '';
+      } catch (error) {
+        if (generation === historyGeneration) {
+          historyCursor = null; more.hidden = true;
+          document.getElementById('historyStatus').textContent = 'History could not refresh. Showing the last loaded list.';
+        }
+      } finally { if (generation === historyGeneration) more.disabled = false; }
+    }
+    async function selectConversation(id) {
+      if (id === conversationId || switchingConversation) { historyOpen(false); return; }
+      if (sendButton.disabled || listening) { document.getElementById('historyStatus').textContent = 'Finish the current reply or recording before switching.'; return; }
+      switchingConversation = true; sendButton.disabled = true;
+      try {
+        const data = await api(`/api/conversations/${encodeURIComponent(id)}`);
+        saveConversationDraft();
+        conversationId = id; localStorage.setItem('assistant-conversation-id', id);localStorage.setItem('assistant-conversation-choice',id);
+        const draft = conversationDrafts.get(id);
+        message.value = draft?.text || ''; message.style.height = '';
+        pendingAttachments.splice(0, pendingAttachments.length, ...(draft?.attachments || [])); renderAttachments();
+        chat.replaceChildren(); await loadConversation(data);
+        void syncDesktopConversation(id); renderConversationList(); historyOpen(false);
+      } catch (error) { document.getElementById('historyStatus').textContent = 'Could not open that conversation. Try again.'; }
+      finally { switchingConversation = false; sendButton.disabled = false; message.focus(); }
+    }
+    document.getElementById('toggleHistory').addEventListener('click', () => historyOpen(!document.body.classList.contains('history-open')));
+    document.getElementById('closeHistory').addEventListener('click', () => { historyOpen(false); document.getElementById('toggleHistory').focus(); });
+    document.getElementById('historySearch').addEventListener('input', () => {
+      ++historyGeneration; historyCursor = null; document.getElementById('loadMoreHistory').hidden = true;
+      clearTimeout(historySearchTimer); renderConversationList();
+      historySearchTimer = setTimeout(() => void refreshConversationList(), 200);
+    });
+    document.getElementById('showSettled').addEventListener('change', () => void refreshConversationList());
+    document.getElementById('loadMoreHistory').addEventListener('click', () => void refreshConversationList(true));
+    document.getElementById('refreshHistory').addEventListener('click', () => void refreshConversationList());
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') historyOpen(false); });
+    renderConversationList(); void refreshConversationList();
+    let attentionItems = [];
+    let attentionSources = {};
+    let attentionBusy = false;
+    let inspectedAttentionId = null;
+    const cancellationRequests = new Set();
+    let reviewTarget = null;
+    const reviewRequests = new Set();
+    const attentionLabels = {needs_review:'Needs review',working:'Agent working',queued:'Queued',in_progress:'In progress',planned:'Planned',completed:'Finished',unknown:'Unknown state'};
+    function inspectAttention(item, fromRefresh = false) {
+      inspectedAttentionId = item.id;
+      document.getElementById('attentionTitle').textContent = item.title;
+      const stale = attentionSources[item.source]?.available !== true;
+      document.getElementById('attentionMeta').textContent = (attentionLabels[item.state] || 'Unknown state')
+        + (stale ? ' · last known state; source unavailable' : '')
+        + (item.updated_at ? ' · Updated ' + new Date(item.updated_at).toLocaleString() : '')
+        + (item.due_at ? ' · Due ' + item.due_at : '');
+      document.getElementById('attentionDetails').textContent = [item.details, item.error ? 'Error: ' + item.error : '', item.evidence ? 'Evidence: ' + item.evidence : ''].filter(Boolean).join('\n\n') || 'No additional details recorded.';
+      const cancellable = item.source === 'jobs' && ['queued','working'].includes(item.state);
+      const button = document.getElementById('cancelInspectedJob');
+      button.hidden = !cancellable;
+      button.disabled = stale || cancellationRequests.has(item.id);
+      document.getElementById('attentionActionStatus').textContent = cancellationRequests.has(item.id) && cancellable
+        ? 'Cancellation requested. Waiting for the Router to confirm the outcome.'
+        : (stale && cancellable ? 'Refresh this job before requesting cancellation.' : '');
+      const reviewing = item.source === 'tasks' && item.status === 'awaiting_verification';
+      document.getElementById('taskReviewForm').hidden = !reviewing;
+      document.getElementById('taskReviewHistory').hidden = item.source !== 'tasks';
+      if (!fromRefresh) {
+        reviewTarget = {id:item.id, version:item.updated_at};
+        document.getElementById('reviewNote').value = '';
+        document.getElementById('reviewerName').value = '';
+        document.getElementById('taskReviewHistory').open = false;
+        document.getElementById('taskReviewHistoryList').textContent = '';
+      }
+      const changed = reviewTarget?.id !== item.id || reviewTarget?.version !== item.updated_at;
+      document.getElementById('reviewFields').disabled = stale || changed || reviewRequests.has(item.id);
+      document.getElementById('reviewDoer').textContent = item.doer ? 'Work recorded by ' + item.doer + '. The reviewer must be different.' : 'No doer recorded.';
+      document.getElementById('reviewStatus').textContent = stale ? 'Refresh this task before reviewing.' : changed ? 'Task changed. Reopen it and check the updated result before reviewing.' : reviewRequests.has(item.id) ? 'Saving review…' : '';
+      const dialog = document.getElementById('attentionInspector');
+      if (!dialog.open) dialog.showModal();
+    }
+    function renderAttention() {
+      const list = document.getElementById('attentionList'); list.replaceChildren();
+      for (const state of ['needs_review','working','queued','in_progress','planned','unknown','completed']) {
+        const rows = attentionItems.filter(item => item.state === state);
+        if (!rows.length) continue;
+        const heading = document.createElement('h3'); heading.textContent = attentionLabels[state] + ' · ' + rows.length; list.append(heading);
+        for (const item of rows) {
+          const button = document.createElement('button'); button.type = 'button'; button.className = 'history-item';
+          button.textContent = item.title;
+          if (attentionSources[item.source]?.available !== true) { const note = document.createElement('small'); note.textContent = 'Last known state'; button.append(note); }
+          button.addEventListener('click', () => inspectAttention(item)); list.append(button);
+        }
+      }
+      if (!attentionItems.length) { const empty = document.createElement('p'); empty.className = 'sub'; empty.textContent = 'No tracked tasks or delegated work loaded.'; list.append(empty); }
+      const dialog = document.getElementById('attentionInspector');
+      if (dialog.open && inspectedAttentionId) {
+        const item = attentionItems.find(item => item.id === inspectedAttentionId);
+        if (item) inspectAttention(item, true);
+        else {
+          document.getElementById('attentionMeta').textContent = 'This item is no longer in the current inventory.';
+          document.getElementById('reviewFields').disabled = true;
+          document.getElementById('cancelInspectedJob').hidden = true;
+        }
+      }
+    }
+    async function refreshAttention() {
+      if (attentionBusy) return;
+      attentionBusy = true;
+      try {
+        const data = await api('/api/attention');
+        attentionSources = data.sources || {};
+        const retained = attentionItems.filter(item => attentionSources[item.source]?.available !== true);
+        attentionItems = [...retained, ...(data.items || []).filter(item => attentionSources[item.source]?.available === true)];
+        const unavailable = ['tasks','jobs'].filter(source => attentionSources[source]?.available !== true);
+        document.getElementById('attentionStatus').textContent = unavailable.length ? 'Some sources are unavailable. Retained items show their last known state.' : 'Activity updated';
+        renderAttention();
+      } catch (error) {
+        attentionSources = {tasks:{available:false},jobs:{available:false}}; renderAttention();
+        document.getElementById('attentionStatus').textContent = 'Activity could not refresh. Showing last known state.';
+      } finally { attentionBusy = false; }
+    }
+    document.getElementById('taskReviewForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      const item = attentionItems.find(item => item.id === inspectedAttentionId);
+      if (!item || item.source !== 'tasks' || item.status !== 'awaiting_verification' || attentionSources.tasks?.available !== true
+          || reviewTarget?.id !== item.id || reviewTarget.version !== item.updated_at || reviewRequests.has(item.id)) return;
+      const outcome = event.submitter?.value;
+      if (!['approved','changes_requested'].includes(outcome)) return;
+      reviewRequests.add(item.id); inspectAttention(item, true);
+      try {
+        await api('/api/tasks/' + encodeURIComponent(item.source_id) + '/review', {
+          outcome, note:document.getElementById('reviewNote').value, verifier:document.getElementById('reviewerName').value,
+          expected_updated_at:reviewTarget.version
+        });
+        await refreshAttention();
+      } catch (error) {
+        await refreshAttention();
+        if (inspectedAttentionId === item.id) document.getElementById('reviewStatus').textContent = error.message + ' Reopen the task before trying again.';
+      } finally {
+        reviewRequests.delete(item.id);
+        if (inspectedAttentionId === item.id) document.getElementById('reviewFields').disabled = true;
+      }
+    });
+    document.getElementById('taskReviewHistory').addEventListener('toggle', async event => {
+      if (!event.target.open) return;
+      const item = attentionItems.find(item => item.id === inspectedAttentionId);
+      if (!item || item.source !== 'tasks') return;
+      const target = document.getElementById('taskReviewHistoryList'); target.textContent = 'Loading reviews…';
+      try {
+        const data = await api('/api/tasks/' + encodeURIComponent(item.source_id) + '/reviews');
+        if (inspectedAttentionId !== item.id) return;
+        target.replaceChildren();
+        for (const decision of data.decisions || []) {
+          const row = document.createElement('p'); row.textContent = (decision.outcome === 'approved' ? 'Approved' : 'Changes requested') + ' · ' + decision.verifier + '\n' + decision.note; target.append(row);
+        }
+        if (!target.childElementCount) target.textContent = 'No reviews recorded.';
+      } catch (error) { if (inspectedAttentionId === item.id) target.textContent = 'Review history could not load.'; }
+    });
+    document.getElementById('cancelInspectedJob').addEventListener('click', async () => {
+      const item = attentionItems.find(item => item.id === inspectedAttentionId);
+      if (!item || item.source !== 'jobs' || !['queued','working'].includes(item.state)
+          || attentionSources.jobs?.available !== true || cancellationRequests.has(item.id)) return;
+      cancellationRequests.add(item.id); inspectAttention(item);
+      try {
+        const result = await api('/api/assistant-work/' + encodeURIComponent(item.source_id) + '/cancel', {});
+        if (!result.cancellation_requested) throw new Error('Cancellation was not acknowledged. Refresh the job before trying again.');
+        void refreshAttention();
+      } catch (error) {
+        cancellationRequests.delete(item.id);
+        if (inspectedAttentionId === item.id && document.getElementById('attentionInspector').open) {
+          const current = attentionItems.find(row => row.id === item.id);
+          if (current) inspectAttention(current); document.getElementById('attentionActionStatus').textContent = 'Cancellation could not be confirmed. Refresh the job to check its state.';
+        }
+      }
+    });
+    document.getElementById('refreshAttention').addEventListener('click', () => void refreshAttention());
+    window.addEventListener('assistant-ready', () => void refreshAttention());
+    setInterval(() => { if (!document.hidden && !document.body.classList.contains('setup-active')) void refreshAttention(); }, 15000);
+    document.getElementById('portableHandoff').checked = localStorage.getItem('assistant-portable-handoff') === '1';
+    document.getElementById('portableHandoff').addEventListener('change', event => localStorage.setItem('assistant-portable-handoff', event.target.checked ? '1' : '0'));
+    let handoffSourceId = null;
+    let preparedHandoff = null;
+    let handoffGeneration = 0;
+    document.getElementById('openHandoff').addEventListener('click', () => {
+      if (sendButton.disabled || switchingConversation || listening) { statusText.textContent = 'Finish the current reply or recording before preparing a handoff.'; return; }
+      ++handoffGeneration; handoffSourceId = conversationId; preparedHandoff = null;
+      document.getElementById('handoffRequest').value = message.value;
+      document.getElementById('handoffPreview').textContent = '';
+      document.getElementById('handoffStatus').textContent = '';
+      document.getElementById('downloadHandoff').disabled = true;
+      document.getElementById('prepareHandoff').disabled = false;
+      document.getElementById('handoffDialog').showModal(); document.getElementById('handoffRequest').focus();
+    });
+    document.getElementById('handoffForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      if (conversationId !== handoffSourceId) { preparedHandoff = null; document.getElementById('downloadHandoff').disabled = true; document.getElementById('handoffPreview').textContent = ''; document.getElementById('handoffStatus').textContent = 'The selected conversation changed. Reopen the handoff preview.'; return; }
+      const generation = ++handoffGeneration;
+      preparedHandoff = null; document.getElementById('downloadHandoff').disabled = true;
+      document.getElementById('handoffPreview').textContent = '';
+      document.getElementById('prepareHandoff').disabled = true;
+      try {
+        const data = await api('/api/conversation-handoff', {conversation_id:handoffSourceId,
+          current_request:document.getElementById('handoffRequest').value,
+          history_budget_chars:Number(document.getElementById('handoffBudget').value)});
+        if (generation !== handoffGeneration || conversationId !== handoffSourceId) return;
+        preparedHandoff = data;
+        document.getElementById('handoffPreview').textContent = JSON.stringify(data,null,2);
+        document.getElementById('handoffStatus').textContent = data.history.length + ' messages selected; ' + data.omitted_message_count + ' omitted. Source references remain in the preview.';
+        document.getElementById('downloadHandoff').disabled = false;
+      } catch (error) { if (generation === handoffGeneration) document.getElementById('handoffStatus').textContent = error.message; }
+      finally { if (generation === handoffGeneration) document.getElementById('prepareHandoff').disabled = false; }
+    });
+    for (const id of ['handoffRequest','handoffBudget']) document.getElementById(id).addEventListener('input', () => {
+      ++handoffGeneration; preparedHandoff = null;
+      document.getElementById('downloadHandoff').disabled = true;
+      document.getElementById('prepareHandoff').disabled = false;
+      document.getElementById('handoffPreview').textContent = '';
+      document.getElementById('handoffStatus').textContent = 'Build a new preview to include these changes.';
+    });
+    document.getElementById('handoffDialog').addEventListener('close', () => { ++handoffGeneration; });
+    document.getElementById('downloadHandoff').addEventListener('click', () => {
+      if (!preparedHandoff || conversationId !== handoffSourceId) return;
+      const url = URL.createObjectURL(new Blob([JSON.stringify(preparedHandoff,null,2)],{type:'application/json'}));
+      const link = document.createElement('a'); link.href = url; link.download = 'ua-conversation-handoff.json'; link.click();
+      setTimeout(() => URL.revokeObjectURL(url),1000);
+    });
     let lastDesktopUpdated = 0;
     let lastDesktopState = 'idle';
     async function syncDesktopConversation(id) {
@@ -1072,11 +1652,12 @@
       } catch {}
     }
     async function pollDesktopVoiceState() {
-      if (sendButton.disabled || listening) return;
+      if (sendButton.disabled || listening || switchingConversation) return;
       try {
         const res = await fetch('/api/desktop/state', { cache: 'no-store' });
         if (!res.ok) return;
         const d = await res.json();
+        if (switchingConversation) return;
         const st = d.state || 'idle';
         const cid = d.conversation_id || '';
         const updated = Number(d.updated_at || 0);
@@ -1092,10 +1673,13 @@
           statusText.textContent = d.conversation_active ? 'Listening for follow-up…' : 'Ready';
         }
         const convChanged = cid && cid !== conversationId;
-        const turnUpdated = updated > lastDesktopUpdated && (st === 'thinking' || st === 'speaking' || (lastDesktopState !== 'idle' && st === 'idle'));
+        const liveStates=['listening','recording','transcribing','thinking','speaking'];
+        const voiceTurn=liveStates.includes(st) || (liveStates.includes(lastDesktopState) && st==='idle');
+        const turnUpdated = updated > lastDesktopUpdated && voiceTurn;
         lastDesktopState = st;
         if (updated > lastDesktopUpdated) lastDesktopUpdated = updated;
-        if (convChanged || turnUpdated) {
+        // An idle device's old conversation pointer is not a new voice turn.
+        if (turnUpdated) {
           if (convChanged) {
             conversationId = cid;
             localStorage.setItem('assistant-conversation-id', conversationId);
@@ -1108,13 +1692,17 @@
     void pollDesktopVoiceState();
     document.getElementById('newChat').addEventListener('click', async () => {
       if (sendButton.disabled) { statusText.textContent = 'Wait for the current reply before starting a new chat'; return; }
+      saveConversationDraft();
       conversationId = crypto.randomUUID();
+      message.value = '';
+      message.style.height = '';
       localStorage.setItem('assistant-conversation-id', conversationId);
       void syncDesktopConversation(conversationId);
       chat.replaceChildren();
       pendingAttachments.splice(0, pendingAttachments.length);
       renderAttachments();
       showWelcome('New conversation', 'Your saved memories are available here too.');
+      renderConversationList();
       await refreshConversationMemory();
     });
     async function refreshConversationMemory() {
@@ -1190,6 +1778,7 @@
     async function refreshTasks() {
       try {
         const result = await api('/api/tasks');
+        void refreshAttention();
         taskList.replaceChildren();
         if (!result.tasks.length) {
           const empty = document.createElement('div');
@@ -1425,7 +2014,7 @@
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'X-Ultimate-Assistant-Token': token, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: prompt, setup_intro: setupIntro, conversation_id: conversationId, web_search: document.getElementById('web').checked, attachments: pendingAttachments })
+          body: JSON.stringify({ message: prompt, setup_intro: setupIntro, conversation_id: conversationId, portable_handoff: !document.getElementById('portableHandoff').disabled && document.getElementById('portableHandoff').checked, web_search: document.getElementById('web').checked, attachments: pendingAttachments })
         });
         if (!response.ok) {
           const error = await response.json();
@@ -1506,6 +2095,7 @@
         clearInterval(timer);
         activity.dataset.finished = "1";
         sendButton.disabled = false;
+        void refreshConversationList();
         message.focus();
       }
     }
@@ -1583,6 +2173,7 @@
       if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }
     });
     modelSelect.addEventListener('change', async () => {
+      void refreshCapabilities();
       try {
         const result = await api('/api/model', { model: modelSelect.value });
         statusText.textContent = `Using ${result.selected}`;
@@ -2089,7 +2680,7 @@
     const decisionPanel=document.getElementById('decisionPanel');
     const names={antigravity:'Google AI subscription',codex:'ChatGPT subscription',claude:'Claude subscription'};
     const services={openai:'OpenAI',gemini:'Google Gemini',anthropic:'Anthropic',openrouter:'OpenRouter',deepseek:'DeepSeek',xai:'xAI',custom:'Another OpenAI-compatible service'};
-    let state={providers:[],accounts:[]}, account='',timer=null,generation=0,handingOff=false;
+    let state={providers:[],accounts:[]}, account='',timer=null,generation=0,handingOff=false,returningUser=false;
     const $=id=>document.getElementById(id);
     function screen(html){clearTimeout(timer);generation++;decisionPanel.remove();wizard.innerHTML=html;wizard.append(decisionPanel);wizard.hidden=false;document.body.classList.add('setup-active');wizard.querySelector('h2')?.setAttribute('tabindex','-1');wizard.querySelector('h2')?.focus();}
     function error(message){const e=$('setupError');if(e){e.textContent=message;e.hidden=false;}}
@@ -2099,6 +2690,7 @@
     async function handoff(){
       if(handingOff)return;handingOff=true;
       try{
+        if(returningUser){enterChat();await refreshModels();await refreshProvider();return;}
         await api('/api/onboarding/progress',{account,conversation_id:conversationId});
         enterChat();await refreshModels();await refreshProvider();
         sendMessage('Help me set up my assistant.', true);
@@ -2193,6 +2785,15 @@
     }
     $('manageAccounts').onclick=()=>{closeSettings();kinds();};
     async function initialize(){
+      try{
+        const selected=localStorage.getItem('assistant-conversation-choice')===conversationId;
+        const saved=await api('/api/setup-state?conversation_id='+encodeURIComponent(conversationId)+'&explicit_selection='+selected);
+        returningUser=saved.has_chat_history===true;
+        if(returningUser){
+          if(saved.resume_conversation_id){conversationId=saved.resume_conversation_id;localStorage.setItem('assistant-conversation-id',conversationId);await loadConversation();}
+          enterChat();return;
+        }
+      }catch(e){}
       try{const [progress]=await Promise.all([api('/api/onboarding/progress'),inventory()]);
         if(progress.phase==='setup_started' && state.accounts.some(a=>a.name===progress.account && ['logged_in','verified'].includes(a.status))){if(progress.conversation_id){conversationId=progress.conversation_id;localStorage.setItem('assistant-conversation-id',conversationId);await loadConversation();}enterChat();return;}
       }catch(e){}await kinds();
